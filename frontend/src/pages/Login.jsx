@@ -28,29 +28,29 @@ const Login = () => {
     try {
       if (isRegister) {
         await signup(form)
-        toast.success('Compte créé, vérifiez vos emails pour confirmer.')
+        toast.success('Compte créé, vérifiez vos emails pour confirmer.', { icon: '✅' })
         setIsRegister(false)
       } else {
         await login(form)
-        toast.success('Bienvenue sur Kadi ✨')
+        toast.success('Bienvenue sur Kadi ✨', { icon: '🙌' })
       }
       setForm({ email: '', password: '', company: '' })
     } catch (error) {
-      toast.error(error.message)
+      toast.error(error.message, { icon: '⚠️' })
     } finally {
       setIsSubmitting(false)
     }
   }
 
   return (
-    <div className='flex min-h-screen flex-col justify-center bg-neutre px-4'>
-      <div className='mx-auto w-full max-w-md rounded-3xl border border-slate-200 bg-white p-8 shadow-sm'>
+    <div className='flex min-h-screen flex-col justify-center bg-[var(--bg-base)] px-4 py-6'>
+      <div className='surface mx-auto w-full max-w-md p-10 shadow-card'>
         <div className='mb-6'>
-          <span className='inline-flex h-12 w-12 items-center justify-center rounded-full bg-accent/20 text-xl font-semibold text-accent'>
+          <span className='inline-flex h-12 w-12 items-center justify-center rounded-full bg-[var(--primary-soft)] text-xl font-semibold text-[var(--primary)] shadow-soft'>
             K
           </span>
-          <h1 className='mt-4 text-2xl font-semibold text-nuit'>Kadi</h1>
-          <p className='text-sm text-slate-500'>
+          <h1 className='mt-4 text-2xl font-semibold text-[var(--text-dark)]'>Kadi</h1>
+          <p className='text-sm text-[var(--text-muted)]'>
             {isRegister
               ? 'Créez votre compte pour gérer vos factures.'
               : 'Connectez-vous pour accéder à votre espace.'}
@@ -59,7 +59,7 @@ const Login = () => {
         <form onSubmit={handleSubmit} className='space-y-4'>
           {isRegister && (
             <div className='flex flex-col gap-2'>
-              <label className='text-xs font-medium uppercase tracking-wide text-slate-500'>
+              <label className='label'>
                 Nom de votre entreprise
               </label>
               <input
@@ -67,32 +67,32 @@ const Login = () => {
                 value={form.company}
                 onChange={handleChange}
                 placeholder='Ex. Gocongo'
-                className='rounded-2xl border border-slate-200 px-4 py-2 text-sm focus:border-nuit focus:outline-none focus:ring-2 focus:ring-nuit/20'
+                className='input'
                 required
               />
             </div>
           )}
           <div className='flex flex-col gap-2'>
-            <label className='text-xs font-medium uppercase tracking-wide text-slate-500'>Email</label>
+            <label className='label'>Email</label>
             <input
               type='email'
               name='email'
               value={form.email}
               onChange={handleChange}
               placeholder='vous@entreprise.com'
-              className='rounded-2xl border border-slate-200 px-4 py-2 text-sm focus:border-nuit focus:outline-none focus:ring-2 focus:ring-nuit/20'
+              className='input'
               required
             />
           </div>
           <div className='flex flex-col gap-2'>
-            <label className='text-xs font-medium uppercase tracking-wide text-slate-500'>Mot de passe</label>
+            <label className='label'>Mot de passe</label>
             <input
               type='password'
               name='password'
               value={form.password}
               onChange={handleChange}
               placeholder='••••••••'
-              className='rounded-2xl border border-slate-200 px-4 py-2 text-sm focus:border-nuit focus:outline-none focus:ring-2 focus:ring-nuit/20'
+              className='input'
               required
               minLength={6}
             />
@@ -100,16 +100,16 @@ const Login = () => {
           <button
             type='submit'
             disabled={isSubmitting}
-            className='w-full rounded-2xl bg-nuit px-4 py-3 text-sm font-semibold text-white transition hover:bg-nuit/90 disabled:cursor-not-allowed disabled:bg-slate-400'
+            className='btn-primary w-full justify-center'
           >
             {isSubmitting ? 'Patientez…' : isRegister ? 'Créer mon compte' : 'Se connecter'}
           </button>
         </form>
-        <div className='mt-6 text-center text-sm text-slate-500'>
+        <div className='mt-6 text-center text-sm text-[var(--text-muted)]'>
           {isRegister ? 'Déjà un compte ?' : "Pas encore de compte ?"}{' '}
           <button
             onClick={() => setIsRegister((prev) => !prev)}
-            className='font-semibold text-accent hover:text-accent/80'
+            className='font-semibold text-[var(--primary)] hover:underline'
           >
             {isRegister ? 'Se connecter' : "S'inscrire"}
           </button>

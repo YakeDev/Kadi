@@ -1,20 +1,31 @@
 {
-  "extends": ["eslint:recommended", "plugin:react/recommended", "plugin:react-hooks/recommended"],
-  "plugins": ["react", "react-hooks"],
-  "parserOptions": {
-    "ecmaVersion": "latest",
-    "sourceType": "module"
-  },
-  "env": {
-    "browser": true,
-    "es2022": true
-  },
-  "settings": {
-    "react": {
-      "version": "detect"
-    }
-  },
-  "rules": {
-    "react/prop-types": "off"
-  }
+	"env": {
+		"browser": true,
+		"es2022": true
+	},
+	"extends": [
+		"eslint:recommended",
+		"plugin:react/recommended",
+		"plugin:react-hooks/recommended",
+		"plugin:react-refresh/recommended",
+		"plugin:tailwindcss/recommended",
+		"prettier"
+	],
+	"plugins": ["react", "react-hooks", "react-refresh", "tailwindcss"],
+	"parserOptions": {
+		"ecmaFeatures": {
+			"jsx": true
+		},
+		"ecmaVersion": "latest",
+		"sourceType": "module"
+	},
+	"settings": {
+		"react": {
+			"version": "detect"
+		}
+	},
+	"rules": {
+		"react/react-in-jsx-scope": "off",
+		"react/prop-types": "off"
+	}
 }
