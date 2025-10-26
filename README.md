@@ -1,133 +1,239 @@
-# 🧾 KADI – SaaS de Facturation pour PME Locales
+# 🧾 KADI – MVP SaaS de facturation pour PME locales
 
-## 🎯 Objectif
+KADI est une solution de facturation moderne pour petites entreprises.  
+⚡️ Fonctionnalités principales :
 
-**KADI** est un SaaS simple et moderne qui permet aux PME locales de créer, gérer et envoyer leurs factures en ligne, avec génération automatique par IA (Codex / GPT-5).  
-Il vise à digitaliser la facturation dans les entreprises africaines, en proposant une interface intuitive et adaptée aux usages locaux.
+- authentification sécurisée via Supabase (signup, login, logout) ;
+- gestion clients, produits et factures (CRUD complet) ;
+- génération automatique d’une facture à partir d’un texte grâce à OpenAI GPT‑5 ;
+- export des factures au format PDF ;
+- interface responsive minimaliste inspirée des SaaS contemporains (Notion, Linear).
 
 ---
 
 ## 🧩 Stack technique
 
-| Côté               | Techno                               | Description                         |
-| ------------------ | ------------------------------------ | ----------------------------------- |
-| **Frontend**       | React + TailwindCSS                  | Interface rapide et responsive      |
-| **Backend**        | Node.js (Express)                    | API REST principale                 |
-| **DB/Auth**        | Supabase                             | Stockage + Authentification         |
-| **IA**             | OpenAI (GPT-5 / Codex)               | Génération automatique des factures |
-| **PDF**            | pdfkit                               | Export et téléchargement            |
-| **Déploiement**    | Vercel (Frontend) + Render (Backend) | Gratuits pour le MVP                |
-| **Gestion d'état** | React Query / Zustand                | Simplicité et performance           |
+| Couche        | Technologie                    | Rôle                                                                                |
+| ------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
+| Frontend      | React 18 + Vite + TailwindCSS  | UI responsive, routing client‐side, toasts et formulaires intuitifs                |
+| Backend       | Node.js 20 + Express           | API REST, génération PDF, appels OpenAI, proxy vers Supabase                       |
+| Auth & Données| Supabase                       | Authentification email/mot de passe, stockage des entités (clients, produits…)     |
+| IA            | OpenAI GPT‑5 (Codex)           | Parsing d’un texte libre en structure JSON de facture                              |
+| PDF           | pdfkit                          | Génération d’un PDF stylisé directement depuis le backend                          |
+| Déploiement   | Vercel (front) / Render (API)  | Plateformes gratuites/rapides adaptées à un MVP                                    |
 
 ---
 
-## 📁 Structure du projet
+## 📁 Architecture
 
 ```
 kadi/
 ├── frontend/
-│   ├── src/
-│   │   ├── pages/
-│   │   │   ├── Login.jsx
-│   │   │   ├── Dashboard.jsx
-│   │   │   ├── Facture.jsx
-│   │   │   └── Clients.jsx
-│   │   ├── components/
-│   │   │   ├── InvoiceForm.jsx
-│   │   │   ├── InvoiceList.jsx
-│   │   │   └── Navbar.jsx
-│   │   ├── hooks/
-│   │   └── services/api.js
+│   ├── index.html
+│   ├── package.json
+│   ├── postcss.config.js
 │   ├── tailwind.config.js
-│   └── package.json
+│   └── src/
+│       ├── App.jsx
+│       ├── main.jsx
+│       ├── index.css
+│       ├── components/
+│       │   ├── InvoiceForm.jsx
+│       │   ├── InvoiceList.jsx
+│       │   └── Navbar.jsx
+│       ├── hooks/
+│       │   └── useAuth.jsx
+│       ├── pages/
+│       │   ├── Clients.jsx
+│       │   ├── Dashboard.jsx
+│       │   ├── Facture.jsx
+│       │   └── Login.jsx
+│       └── services/
+│           ├── api.js
+│           └── supabase.js
 └── backend/
+    ├── package.json
     ├── server.js
-    ├── routes/
-    │   ├── invoices.js
-    │   └── ai.js
-    ├── controllers/
+    ├── .env (exemple)
     ├── models/
-    ├── .env
-    └── package.json
+    │   └── supabaseClient.js
+    ├── controllers/
+    │   ├── aiController.js
+    │   ├── authController.js
+    │   ├── clientController.js
+    │   ├── invoiceController.js
+    │   └── productController.js
+    └── routes/
+        ├── ai.js
+        ├── auth.js
+        ├── clients.js
+        ├── invoices.js
+        └── products.js
 ```
 
 ---
 
-## 🧠 Modules fonctionnels MVP
+## ⚙️ Pré‑requis
 
-| Module               | Description                         | API                     |
-| -------------------- | ----------------------------------- | ----------------------- |
-| **Authentification** | Login / Signup via Supabase         | `/api/auth`             |
-| **Clients**          | CRUD clients                        | `/api/clients`          |
-| **Produits**         | CRUD produits / services            | `/api/products`         |
-| **Factures**         | Créer / Lister / Supprimer          | `/api/invoices`         |
-| **Génération AI**    | Générer une facture depuis un texte | `/api/ai/facture`       |
-| **PDF Export**       | Télécharger facture PDF             | `/api/invoices/pdf/:id` |
+- Node.js 20+
+- Compte Supabase (clé service role + clé publique)
+- Clé API OpenAI (accès au modèle GPT‑5 / Codex)
+- (Optionnel) comptes Vercel et Render pour le déploiement
 
 ---
 
-## 🧾 Exemple d'appel IA (Codex)
+## 🚀 Lancer le projet en local
 
-```js
-import OpenAI from 'openai'
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
+### 1. Configuration Supabase
 
-export async function generateInvoiceFromText(req, res) {
-	const { texte } = req.body
-	const response = await openai.chat.completions.create({
-		model: 'gpt-5',
-		messages: [
-			{
-				role: 'system',
-				content: 'Tu es un assistant qui crée des factures JSON.',
-			},
-			{
-				role: 'user',
-				content: `Analyse ce texte et renvoie une facture JSON : ${texte}`,
-			},
-		],
-		response_format: { type: 'json_object' },
-	})
-	res.json(JSON.parse(response.choices[0].message.content))
-}
+1. Créer un projet Supabase.
+2. Activer l’authentification Email/Password.
+3. Créer les tables suivantes (SQL simplifié) :
+
+```sql
+create table profiles (
+  id uuid primary key default uuid_generate_v4(),
+  email text unique not null,
+  company text,
+  created_at timestamp default now()
+);
+
+create table clients (
+  id uuid primary key default uuid_generate_v4(),
+  company_name text not null,
+  contact_name text,
+  email text,
+  phone text,
+  address text,
+  created_at timestamp default now()
+);
+
+create table products (
+  id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  description text,
+  unit_price numeric default 0,
+  currency text default 'USD',
+  created_at timestamp default now()
+);
+
+create table invoices (
+  id uuid primary key default uuid_generate_v4(),
+  client_id uuid references clients(id) on delete set null,
+  invoice_number text unique not null,
+  issue_date date,
+  due_date date,
+  status text default 'draft',
+  notes text,
+  items jsonb default '[]'::jsonb,
+  subtotal_amount numeric default 0,
+  total_amount numeric default 0,
+  currency text default 'USD',
+  created_at timestamp default now()
+);
 ```
 
----
+> Adapter les règles RLS à vos besoins. Pour un MVP interne, vous pouvez les désactiver le temps du développement.
 
-## ⚙️ Configuration des variables d'environnement
+### 2. Backend
 
-Ajouter un fichier `.env` à la racine du backend :
+```bash
+cd backend
+cp .env .env.local
+# Compléter .env.local :
+# SUPABASE_URL=...
+# SUPABASE_KEY=... (clé service role)
+# OPENAI_API_KEY=...
+# PORT=4000
+# ALLOWED_ORIGINS=http://localhost:5173
 
+npm install   # utilise automatiquement les dernières versions stables
+# Si un conflit ERESOLVE apparaît, relancer avec : npm install --legacy-peer-deps
+# Pour forcer une mise à jour : npm install <package>@latest
+npm run dev
 ```
-SUPABASE_URL=
-SUPABASE_KEY=
-OPENAI_API_KEY=
+
+### 3. Frontend
+
+```bash
+cd frontend
+cp .env.example .env.local   # créer ce fichier si besoin
+# VITE_SUPABASE_URL=...
+# VITE_SUPABASE_ANON_KEY=...
+# VITE_BACKEND_URL=http://localhost:4000
+
+npm install   # installe les versions stables les plus récentes
+# En cas d'erreur de peer deps : npm install --legacy-peer-deps
+# Mise à jour ciblée : npm install <package>@latest
+npm run dev
 ```
 
----
-
-## 📦 Déploiement (gratuit)
-
-| Composant           | Plateforme                       | Action                                      |
-| ------------------- | -------------------------------- | ------------------------------------------- |
-| **Frontend**        | [Vercel](https://vercel.com)     | Déploiement du client React                 |
-| **Backend**         | [Render](https://render.com)     | API Express (free tier)                     |
-| **Base de données** | [Supabase](https://supabase.com) | Créer le projet et configurer Auth + Tables |
-
-Une fois le tout connecté, tu obtiens un MVP SaaS 100 % fonctionnel et gratuit.
+Le proxy Vite redirige automatiquement `/api` vers `http://localhost:4000`.
 
 ---
 
-## 🚀 Objectifs futurs
+## 🔌 API REST disponible
 
-- Ajout de **paiement pawaPay / Stripe**
-- Ajout de **tableau de bord analytique** (CA, clients, produits)
-- Intégration multilingue (FR / SW / EN)
-- Version mobile PWA
+| Méthode | Endpoint                 | Description                                      |
+| ------- | ------------------------ | ------------------------------------------------ |
+| GET     | `/api/health`            | Ping santé du backend                            |
+| POST    | `/api/auth/signup`       | Création utilisateur Supabase (admin)           |
+| POST    | `/api/auth/login`        | Connexion (retourne session Supabase)           |
+| POST    | `/api/auth/logout`       | Invalidation de session côté backend            |
+| POST    | `/api/auth/profile`      | Création/MAJ du profil entreprise               |
+| GET     | `/api/clients`           | Liste des clients                                |
+| POST    | `/api/clients`           | Création client                                  |
+| PATCH   | `/api/clients/:id`       | Mise à jour client                               |
+| DELETE  | `/api/clients/:id`       | Suppression client                               |
+| GET     | `/api/products`          | Liste produits/services                          |
+| POST    | `/api/products`          | Création produit                                 |
+| PATCH   | `/api/products/:id`      | Mise à jour produit                              |
+| DELETE  | `/api/products/:id`      | Suppression produit                              |
+| GET     | `/api/invoices`          | Liste des factures                               |
+| GET     | `/api/invoices/summary`  | KPI tableau de bord (revenus, statut…)          |
+| POST    | `/api/invoices`          | Création facture (calcul automatique des totaux) |
+| PATCH   | `/api/invoices/:id`      | Mise à jour facture (statut, contenu, …)        |
+| DELETE  | `/api/invoices/:id`      | Suppression facture                              |
+| GET     | `/api/invoices/pdf/:id`  | Téléchargement du PDF généré avec pdfkit        |
+| POST    | `/api/ai/facture`        | Génération de facture depuis un prompt texte    |
 
 ---
 
-## 🧠 Auteur
+## 🖥️ Expérience utilisateur
 
-**Eric Kay (@EricayStudio)** – Concepteur du projet **KADI**  
-Projet de démonstration SaaS basé sur React, Node.js, Supabase et OpenAI Codex.
+- Palette neutre (gris clair), bleu nuit et accent orange.
+- Layout responsive : navbar fixe, sections en cartes, formulaires arrondis.
+- Feedback immédiat : loaders basiques, toasts succès/erreur via `react-hot-toast`.
+- Facturation rapide : formulaire manuel + bouton de génération IA.
+- Gestion clients simple : formulaire compact + liste filtrable.
+
+---
+
+## 📦 Déploiement conseillé
+
+1. **Frontend (Vercel)**  
+   - Ajouter les variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_BACKEND_URL`.  
+   - Construire via `npm run build`.
+2. **Backend (Render)**  
+   - Service Web Node sur `server.js`, commande `npm install && npm run start`.  
+   - Variables d’environnement Supabase + OpenAI + `ALLOWED_ORIGINS`.
+3. **Supabase**  
+   - Préparer les tables (SQL ci-dessus) et ajuster les politiques RLS.
+
+---
+
+## ✅ Roadmap MVP -> Produit
+
+- [ ] CRUD produits côté frontend (sélection rapide dans le formulaire facture)
+- [ ] Tableau de bord analytique (courbes, top clients, ventes)
+- [ ] Intégration emails (envoi automatique de facture)
+- [ ] Passerelles de paiement locales (pawaPay, Paystack)
+- [ ] Internationalisation FR / EN / SW
+- [ ] PWA + mode hors ligne
+
+---
+
+## 👨🏾‍💻 Auteur & Licence
+
+Projet imaginé par **Eric Kay (@EricayStudio)**.  
+Code libre d’utilisation pour prototypage, merci de créditer la source.
