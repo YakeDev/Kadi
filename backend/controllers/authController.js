@@ -10,15 +10,81 @@ export const signup = async (req, res, next) => {
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: false,
+      email_confirm: true,
       user_metadata: { company }
     })
 
-    if (error) throw error
+    if (error) {
+      if (error.message?.toLowerCase().includes('already been registered')) {
+        error.status = 409
+      }
+      throw error
+    }
+
+    await createProfileInternal({
+      email,
+      company,
+      userId: data.user.id
+    })
+
     res.status(201).json({ user: data.user })
   } catch (error) {
     next(error)
   }
+}
+
+const createProfileInternal = async ({ email, company, userId }) => {
+  if (!userId) {
+    throw Object.assign(new Error('userId requis pour créer le profil'), {
+      status: 400
+    })
+  }
+
+  const {
+    data: { user },
+    error: userError
+  } = await supabase.auth.admin.getUserById(userId)
+
+  if (userError) throw userError
+  if (!user) {
+    throw Object.assign(new Error('Utilisateur Supabase introuvable.'), {
+      status: 404
+    })
+  }
+
+  const companyName = company || user.user_metadata?.company || email.split('@')[0]
+
+  const { data: existingProfile } = await supabase
+    .from('profiles')
+    .select('tenant_id')
+    .eq('id', userId)
+    .maybeSingle()
+
+  let tenantId = existingProfile?.tenant_id
+
+  if (!tenantId) {
+    const { data: tenant, error: tenantError } = await supabase
+      .from('tenants')
+      .insert({ name: companyName })
+      .select()
+      .single()
+    if (tenantError) throw tenantError
+    tenantId = tenant.id
+  }
+
+  const { error: profileError } = await supabase
+    .from('profiles')
+    .upsert(
+      {
+        id: userId,
+        tenant_id: tenantId,
+        email,
+        company: companyName
+      },
+      { onConflict: 'id' }
+    )
+
+  if (profileError) throw profileError
 }
 
 export const login = async (req, res, next) => {
@@ -51,15 +117,19 @@ export const logout = async (req, res, next) => {
 
 export const createProfile = async (req, res, next) => {
   try {
-    const { email, company } = req.body
-    if (!email) {
-      return res.status(400).json({ message: 'Email requis.' })
+    const { email, company, userId } = req.body
+    if (!email || !userId) {
+      return res.status(400).json({ message: 'Email et userId requis.' })
     }
+
+    const companyName = company || email.split('@')[0]
+
+    await createProfileInternal({ email, company: companyName, userId })
 
     const { data, error } = await supabase
       .from('profiles')
-      .upsert({ email, company })
-      .select()
+      .select('*')
+      .eq('id', userId)
       .single()
 
     if (error) throw error

@@ -14,9 +14,11 @@ const computeTotals = (items = []) =>
 
 export const listInvoices = async (req, res, next) => {
   try {
+    const tenantId = req.tenantId
     const { data, error } = await supabase
       .from('invoices')
       .select('*, client:clients(*)')
+      .eq('tenant_id', tenantId)
       .order('issue_date', { ascending: false })
 
     if (error) throw error
@@ -29,12 +31,17 @@ export const listInvoices = async (req, res, next) => {
 export const getInvoice = async (req, res, next) => {
   try {
     const { id } = req.params
+    const tenantId = req.tenantId
     const { data, error } = await supabase
       .from('invoices')
       .select('*, client:clients(*)')
       .eq('id', id)
-      .single()
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
     if (error) throw error
+    if (!data) {
+      return res.status(404).json({ message: 'Facture introuvable.' })
+    }
     res.json(data)
   } catch (error) {
     next(error)
@@ -43,10 +50,25 @@ export const getInvoice = async (req, res, next) => {
 
 export const createInvoice = async (req, res, next) => {
   try {
+    const tenantId = req.tenantId
     const payload = req.body
     const items = payload.items || []
     const totals = computeTotals(items)
     const invoiceNumber = `FAC-${Date.now().toString().slice(-6)}`
+
+    if (payload.client_id) {
+      const { error: clientError } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('id', payload.client_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (clientError) {
+        clientError.status = 400
+        clientError.message = "Client introuvable pour ce compte."
+        throw clientError
+      }
+    }
 
     const { data, error } = await supabase
       .from('invoices')
@@ -60,7 +82,8 @@ export const createInvoice = async (req, res, next) => {
         items,
         subtotal_amount: totals.subtotal,
         total_amount: totals.subtotal,
-        currency: payload.currency || 'USD'
+        currency: payload.currency || 'USD',
+        tenant_id: tenantId
       })
       .select('*, client:clients(*)')
       .single()
@@ -75,7 +98,22 @@ export const createInvoice = async (req, res, next) => {
 export const updateInvoice = async (req, res, next) => {
   try {
     const { id } = req.params
+    const tenantId = req.tenantId
     let updates = { ...req.body }
+
+    if (updates.client_id) {
+      const { error: clientError } = await supabase
+        .from('clients')
+        .select('id')
+        .eq('id', updates.client_id)
+        .eq('tenant_id', tenantId)
+        .single()
+      if (clientError) {
+        clientError.status = 400
+        clientError.message = "Client introuvable pour ce compte."
+        throw clientError
+      }
+    }
 
     if (updates.items) {
       const totals = computeTotals(updates.items)
@@ -90,6 +128,7 @@ export const updateInvoice = async (req, res, next) => {
       .from('invoices')
       .update(updates)
       .eq('id', id)
+      .eq('tenant_id', tenantId)
       .select('*, client:clients(*)')
       .single()
 
@@ -103,7 +142,8 @@ export const updateInvoice = async (req, res, next) => {
 export const deleteInvoice = async (req, res, next) => {
   try {
     const { id } = req.params
-    const { error } = await supabase.from('invoices').delete().eq('id', id)
+    const tenantId = req.tenantId
+    const { error } = await supabase.from('invoices').delete().eq('id', id).eq('tenant_id', tenantId)
     if (error) throw error
     res.status(204).send()
   } catch (error) {
@@ -113,18 +153,21 @@ export const deleteInvoice = async (req, res, next) => {
 
 export const getSummary = async (req, res, next) => {
   try {
+    const tenantId = req.tenantId
     const startOfMonth = dayjs().startOf('month').format('YYYY-MM-DD')
     const { data: monthly, error: monthlyError } = await supabase
       .from('invoices')
       .select('total_amount')
       .gte('issue_date', startOfMonth)
       .eq('status', 'paid')
+      .eq('tenant_id', tenantId)
 
     if (monthlyError) throw monthlyError
 
     const { data: outstanding, error: outstandingError } = await supabase
       .from('invoices')
       .select('total_amount, status')
+      .eq('tenant_id', tenantId)
 
     if (outstandingError) throw outstandingError
 
@@ -145,13 +188,22 @@ export const getSummary = async (req, res, next) => {
 export const streamInvoicePdf = async (req, res, next) => {
   try {
     const { id } = req.params
+    const tenantId = req.tenantId
     const { data: invoice, error } = await supabase
       .from('invoices')
-      .select('*, client:clients(*)')
+      .select(
+        `*,
+        client:clients(*)
+      `
+      )
       .eq('id', id)
-      .single()
+      .eq('tenant_id', tenantId)
+      .maybeSingle()
 
     if (error) throw error
+    if (!invoice) {
+      return res.status(404).json({ message: 'Facture introuvable.' })
+    }
 
     const doc = new PDFDocument({ margin: 50 })
 

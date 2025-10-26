@@ -15,3 +15,24 @@ api.interceptors.response.use(
     return Promise.reject(new Error(message))
   }
 )
+
+api.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const storedSession = window.localStorage.getItem('kadi.session')
+      if (storedSession) {
+        try {
+          const session = JSON.parse(storedSession)
+          const token = session?.access_token
+          if (token) {
+            config.headers.Authorization = `Bearer ${token}`
+          }
+        } catch (error) {
+          console.warn('Session invalide dans le localStorage.', error)
+        }
+      }
+    }
+    return config
+  },
+  (error) => Promise.reject(error)
+)

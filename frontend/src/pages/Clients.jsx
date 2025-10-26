@@ -148,6 +148,7 @@ const Clients = () => {
                 <th className='px-4 py-2 font-medium'>Contact</th>
                 <th className='px-4 py-2 font-medium'>Email</th>
                 <th className='px-4 py-2 font-medium'>Téléphone</th>
+                <th className='px-4 py-2 font-medium'>Adresse</th>
                 <th className='px-4 py-2 font-medium'>Actions</th>
               </tr>
             </thead>
@@ -158,6 +159,7 @@ const Clients = () => {
                   <td className='px-4 py-3'>{client.contact_name}</td>
                   <td className='px-4 py-3'>{client.email}</td>
                   <td className='px-4 py-3'>{client.phone}</td>
+                  <td className='px-4 py-3 text-slate-500'>{client.address || '—'}</td>
                   <td className='px-4 py-3'>
                     <button
                       onClick={() => handleDelete(client.id)}

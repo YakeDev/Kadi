@@ -40,7 +40,7 @@ const InvoiceList = ({ refreshKey }) => {
     }
   }
 
-  const handleDownloadPdf = async (id) => {
+  const handleDownloadPdf = async (id, invoiceNumber) => {
     try {
       const { data } = await api.get(`/invoices/pdf/${id}`, {
         responseType: 'blob'
@@ -48,7 +48,7 @@ const InvoiceList = ({ refreshKey }) => {
       const url = window.URL.createObjectURL(new Blob([data]))
       const link = document.createElement('a')
       link.href = url
-      link.setAttribute('download', `facture-${id}.pdf`)
+      link.setAttribute('download', `facture-${invoiceNumber || id}.pdf`)
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -126,7 +126,7 @@ const InvoiceList = ({ refreshKey }) => {
                       <option value='overdue'>Retard</option>
                     </select>
                     <button
-                      onClick={() => handleDownloadPdf(invoice.id)}
+                      onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}
                       className='rounded-xl border border-slate-200 px-3 py-1 text-xs font-medium text-nuit hover:border-nuit'
                     >
                       PDF

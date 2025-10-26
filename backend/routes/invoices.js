@@ -8,8 +8,11 @@ import {
   getSummary,
   streamInvoicePdf
 } from '../controllers/invoiceController.js'
+import { requireAuth } from '../middleware/requireAuth.js'
 
 const router = Router()
+
+router.use(requireAuth)
 
 router.get('/', listInvoices)
 router.get('/summary', getSummary)

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import { api } from '../services/api.js'
 
@@ -16,6 +16,10 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId }) => {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
+
+  useEffect(() => {
+    setForm((prev) => ({ ...prev, client_id: defaultClientId || '' }))
+  }, [defaultClientId])
 
   const updateField = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }))

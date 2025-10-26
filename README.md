@@ -16,7 +16,7 @@ KADI est une solution de facturation moderne pour petites entreprises.
 | Couche        | Technologie                    | Rôle                                                                                |
 | ------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
 | Frontend      | React 18 + Vite + TailwindCSS  | UI responsive, routing client‐side, toasts et formulaires intuitifs                |
-| Backend       | Node.js 20 + Express           | API REST, génération PDF, appels OpenAI, proxy vers Supabase                       |
+| Backend       | Node.js 20 + Express           | API REST multi-tenant, génération PDF, appels OpenAI, proxy vers Supabase          |
 | Auth & Données| Supabase                       | Authentification email/mot de passe, stockage des entités (clients, produits…)     |
 | IA            | OpenAI GPT‑5 (Codex)           | Parsing d’un texte libre en structure JSON de facture                              |
 | PDF           | pdfkit                          | Génération d’un PDF stylisé directement depuis le backend                          |
@@ -91,15 +91,26 @@ kadi/
 3. Créer les tables suivantes (SQL simplifié) :
 
 ```sql
-create table profiles (
+-- 1️⃣ Table des entreprises (tenants)
+create table tenants (
   id uuid primary key default uuid_generate_v4(),
+  name text not null,
+  created_at timestamp default now()
+);
+
+-- 2️⃣ Table des utilisateurs (liés à auth.users)
+create table profiles (
+  id uuid primary key references auth.users(id) on delete cascade,
+  tenant_id uuid references tenants(id) on delete cascade,
   email text unique not null,
   company text,
   created_at timestamp default now()
 );
 
+-- 3️⃣ Table des clients (chaque client appartient à un tenant)
 create table clients (
   id uuid primary key default uuid_generate_v4(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
   company_name text not null,
   contact_name text,
   email text,
@@ -108,8 +119,10 @@ create table clients (
   created_at timestamp default now()
 );
 
+-- 4️⃣ Table des produits
 create table products (
   id uuid primary key default uuid_generate_v4(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
   name text not null,
   description text,
   unit_price numeric default 0,
@@ -117,8 +130,10 @@ create table products (
   created_at timestamp default now()
 );
 
+-- 5️⃣ Table des factures
 create table invoices (
   id uuid primary key default uuid_generate_v4(),
+  tenant_id uuid not null references tenants(id) on delete cascade,
   client_id uuid references clients(id) on delete set null,
   invoice_number text unique not null,
   issue_date date,
@@ -131,9 +146,63 @@ create table invoices (
   currency text default 'USD',
   created_at timestamp default now()
 );
+
+-- 6️⃣ Index pour les perfs
+create index on clients (tenant_id);
+create index on products (tenant_id);
+create index on invoices (tenant_id);
 ```
 
-> Adapter les règles RLS à vos besoins. Pour un MVP interne, vous pouvez les désactiver le temps du développement.
+> Pour un vrai mode multi‑client, activez la Row Level Security et faites dépendre les policies du tenant associé à l’utilisateur connecté.
+
+### Exemple de policies RLS
+
+```sql
+alter table clients enable row level security;
+create policy "Clients par tenant" on clients
+  for all using (
+    tenant_id = (
+      select tenant_id from profiles where profiles.id = auth.uid()
+    )
+  )
+  with check (
+    tenant_id = (
+      select tenant_id from profiles where profiles.id = auth.uid()
+    )
+  );
+
+alter table products enable row level security;
+create policy "Produits par tenant" on products
+  for all using (
+    tenant_id = (
+      select tenant_id from profiles where profiles.id = auth.uid()
+    )
+  )
+  with check (
+    tenant_id = (
+      select tenant_id from profiles where profiles.id = auth.uid()
+    )
+  );
+
+alter table invoices enable row level security;
+create policy "Factures par tenant" on invoices
+  for all using (
+    tenant_id = (
+      select tenant_id from profiles where profiles.id = auth.uid()
+    )
+  )
+  with check (
+    tenant_id = (
+      select tenant_id from profiles where profiles.id = auth.uid()
+    )
+  );
+
+alter table profiles enable row level security;
+create policy "Profil par tenant" on profiles
+  for select using (id = auth.uid());
+```
+
+> Les policies sont un exemple : adaptez-les selon que vous souhaitiez autoriser des rôles backoffice.
 
 ### 2. Backend
 
@@ -166,6 +235,8 @@ npm install   # installe les versions stables les plus récentes
 # En cas d'erreur de peer deps : npm install --legacy-peer-deps
 # Mise à jour ciblée : npm install <package>@latest
 npm run dev
+
+# Le frontend transmet automatiquement le jeton Supabase dans l'en-tête Authorization (Bearer) pour garantir l'isolation multi-tenant.
 ```
 
 Le proxy Vite redirige automatiquement `/api` vers `http://localhost:4000`.
@@ -181,31 +252,32 @@ Le proxy Vite redirige automatiquement `/api` vers `http://localhost:4000`.
 | POST    | `/api/auth/login`        | Connexion (retourne session Supabase)           |
 | POST    | `/api/auth/logout`       | Invalidation de session côté backend            |
 | POST    | `/api/auth/profile`      | Création/MAJ du profil entreprise               |
-| GET     | `/api/clients`           | Liste des clients                                |
-| POST    | `/api/clients`           | Création client                                  |
-| PATCH   | `/api/clients/:id`       | Mise à jour client                               |
-| DELETE  | `/api/clients/:id`       | Suppression client                               |
-| GET     | `/api/products`          | Liste produits/services                          |
-| POST    | `/api/products`          | Création produit                                 |
-| PATCH   | `/api/products/:id`      | Mise à jour produit                              |
-| DELETE  | `/api/products/:id`      | Suppression produit                              |
-| GET     | `/api/invoices`          | Liste des factures                               |
-| GET     | `/api/invoices/summary`  | KPI tableau de bord (revenus, statut…)          |
-| POST    | `/api/invoices`          | Création facture (calcul automatique des totaux) |
-| PATCH   | `/api/invoices/:id`      | Mise à jour facture (statut, contenu, …)        |
-| DELETE  | `/api/invoices/:id`      | Suppression facture                              |
-| GET     | `/api/invoices/pdf/:id`  | Téléchargement du PDF généré avec pdfkit        |
-| POST    | `/api/ai/facture`        | Génération de facture depuis un prompt texte    |
+| GET     | `/api/clients`           | Liste des clients *(requires Bearer token)*     |
+| POST    | `/api/clients`           | Création client *(requires Bearer token)*       |
+| PATCH   | `/api/clients/:id`       | Mise à jour client *(requires Bearer token)*    |
+| DELETE  | `/api/clients/:id`       | Suppression client *(requires Bearer token)*    |
+| GET     | `/api/products`          | Liste produits/services *(requires Bearer token)* |
+| POST    | `/api/products`          | Création produit *(requires Bearer token)*       |
+| PATCH   | `/api/products/:id`      | Mise à jour produit *(requires Bearer token)*    |
+| DELETE  | `/api/products/:id`      | Suppression produit *(requires Bearer token)*    |
+| GET     | `/api/invoices`          | Liste des factures *(requires Bearer token)*     |
+| GET     | `/api/invoices/summary`  | KPI tableau de bord *(requires Bearer token)*    |
+| POST    | `/api/invoices`          | Création facture *(requires Bearer token)*       |
+| PATCH   | `/api/invoices/:id`      | Mise à jour facture *(requires Bearer token)*    |
+| DELETE  | `/api/invoices/:id`      | Suppression facture *(requires Bearer token)*    |
+| GET     | `/api/invoices/pdf/:id`  | Téléchargement du PDF *(requires Bearer token)*  |
+| POST    | `/api/ai/facture`        | Génération de facture depuis un prompt texte *(requires Bearer token)* |
 
 ---
 
-## 🖥️ Expérience utilisateur
+## 🖥️ Expérience utilisateur & multi-tenant
 
 - Palette neutre (gris clair), bleu nuit et accent orange.
 - Layout responsive : navbar fixe, sections en cartes, formulaires arrondis.
 - Feedback immédiat : loaders basiques, toasts succès/erreur via `react-hot-toast`.
 - Facturation rapide : formulaire manuel + bouton de génération IA.
 - Gestion clients simple : formulaire compact + liste filtrable.
+- Mode multi-client : chaque utilisateur dispose de son propre espace de données (isolation par `tenant_id`).
 
 ---
 

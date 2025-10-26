@@ -58,22 +58,9 @@ export const AuthProvider = ({ children }) => {
   }
 
   const signup = async ({ email, password, company }) => {
-    const {
-      data: { user },
-      error
-    } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: { company }
-      }
-    })
-
-    if (error) throw error
-
-    await api.post('/auth/profile', { email, company })
-
-    return user
+    await api.post('/auth/signup', { email, password, company })
+    const session = await login({ email, password })
+    return session?.user
   }
 
   const logout = async () => {
