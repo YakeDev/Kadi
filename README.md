@@ -1,4 +1,4 @@
-# 🧾 KADI – MVP SaaS de facturation pour PME locales
+# KADI – MVP SaaS de facturation pour PME locales
 
 KADI est une solution de facturation moderne pour petites entreprises.  
 ⚡️ Fonctionnalités principales :
@@ -11,20 +11,20 @@ KADI est une solution de facturation moderne pour petites entreprises.
 
 ---
 
-## 🧩 Stack technique
+## Stack technique
 
-| Couche        | Technologie                    | Rôle                                                                                |
-| ------------- | ------------------------------ | ----------------------------------------------------------------------------------- |
-| Frontend      | React 18 + Vite + TailwindCSS  | UI responsive, routing client‐side, toasts et formulaires intuitifs                |
-| Backend       | Node.js 20 + Express           | API REST multi-tenant, génération PDF, appels OpenAI, proxy vers Supabase          |
-| Auth & Données| Supabase                       | Authentification email/mot de passe, stockage des entités (clients, produits…)     |
-| IA            | OpenAI GPT‑5 (Codex)           | Parsing d’un texte libre en structure JSON de facture                              |
-| PDF           | pdfkit                          | Génération d’un PDF stylisé directement depuis le backend                          |
-| Déploiement   | Vercel (front) / Render (API)  | Plateformes gratuites/rapides adaptées à un MVP                                    |
+| Couche         | Technologie                   | Rôle                                                                           |
+| -------------- | ----------------------------- | ------------------------------------------------------------------------------ |
+| Frontend       | React 18 + Vite + TailwindCSS | UI responsive, routing client‐side, toasts et formulaires intuitifs            |
+| Backend        | Node.js 20 + Express          | API REST multi-tenant, génération PDF, appels OpenAI, proxy vers Supabase      |
+| Auth & Données | Supabase                      | Authentification email/mot de passe, stockage des entités (clients, produits…) |
+| IA             | OpenAI GPT‑5 (Codex)          | Parsing d’un texte libre en structure JSON de facture                          |
+| PDF            | pdfkit                        | Génération d’un PDF stylisé directement depuis le backend                      |
+| Déploiement    | Vercel (front) / Render (API) | Plateformes gratuites/rapides adaptées à un MVP                                |
 
 ---
 
-## 📁 Architecture
+## Architecture
 
 ```
 kadi/
@@ -73,7 +73,7 @@ kadi/
 
 ---
 
-## ⚙️ Pré‑requis
+## Pré‑requis
 
 - Node.js 20+
 - Compte Supabase (clé service role + clé publique)
@@ -82,7 +82,7 @@ kadi/
 
 ---
 
-## 🚀 Lancer le projet en local
+## Lancer le projet en local
 
 ### 1. Configuration Supabase
 
@@ -91,14 +91,14 @@ kadi/
 3. Créer les tables suivantes (SQL simplifié) :
 
 ```sql
--- 1️⃣ Table des entreprises (tenants)
+-- 1️ Table des entreprises (tenants)
 create table tenants (
   id uuid primary key default uuid_generate_v4(),
   name text not null,
   created_at timestamp default now()
 );
 
--- 2️⃣ Table des utilisateurs (liés à auth.users)
+-- 2️ Table des utilisateurs (liés à auth.users)
 create table profiles (
   id uuid primary key references auth.users(id) on delete cascade,
   tenant_id uuid references tenants(id) on delete cascade,
@@ -107,7 +107,7 @@ create table profiles (
   created_at timestamp default now()
 );
 
--- 3️⃣ Table des clients (chaque client appartient à un tenant)
+-- 3️ Table des clients (chaque client appartient à un tenant)
 create table clients (
   id uuid primary key default uuid_generate_v4(),
   tenant_id uuid not null references tenants(id) on delete cascade,
@@ -119,7 +119,7 @@ create table clients (
   created_at timestamp default now()
 );
 
--- 4️⃣ Table des produits
+-- 4️ Table des produits
 create table products (
   id uuid primary key default uuid_generate_v4(),
   tenant_id uuid not null references tenants(id) on delete cascade,
@@ -130,7 +130,7 @@ create table products (
   created_at timestamp default now()
 );
 
--- 5️⃣ Table des factures
+-- 5️ Table des factures
 create table invoices (
   id uuid primary key default uuid_generate_v4(),
   tenant_id uuid not null references tenants(id) on delete cascade,
@@ -147,7 +147,7 @@ create table invoices (
   created_at timestamp default now()
 );
 
--- 6️⃣ Index pour les perfs
+-- 6️ Index pour les perfs
 create index on clients (tenant_id);
 create index on products (tenant_id);
 create index on invoices (tenant_id);
@@ -243,34 +243,34 @@ Le proxy Vite redirige automatiquement `/api` vers `http://localhost:4000`.
 
 ---
 
-## 🔌 API REST disponible
+## API REST disponible
 
-| Méthode | Endpoint                 | Description                                      |
-| ------- | ------------------------ | ------------------------------------------------ |
-| GET     | `/api/health`            | Ping santé du backend                            |
-| POST    | `/api/auth/signup`       | Création utilisateur Supabase (admin)           |
-| POST    | `/api/auth/login`        | Connexion (retourne session Supabase)           |
-| POST    | `/api/auth/logout`       | Invalidation de session côté backend            |
-| POST    | `/api/auth/profile`      | Création/MAJ du profil entreprise               |
-| GET     | `/api/clients`           | Liste des clients *(requires Bearer token)*     |
-| POST    | `/api/clients`           | Création client *(requires Bearer token)*       |
-| PATCH   | `/api/clients/:id`       | Mise à jour client *(requires Bearer token)*    |
-| DELETE  | `/api/clients/:id`       | Suppression client *(requires Bearer token)*    |
-| GET     | `/api/products`          | Liste produits/services *(requires Bearer token)* |
-| POST    | `/api/products`          | Création produit *(requires Bearer token)*       |
-| PATCH   | `/api/products/:id`      | Mise à jour produit *(requires Bearer token)*    |
-| DELETE  | `/api/products/:id`      | Suppression produit *(requires Bearer token)*    |
-| GET     | `/api/invoices`          | Liste des factures *(requires Bearer token)*     |
-| GET     | `/api/invoices/summary`  | KPI tableau de bord *(requires Bearer token)*    |
-| POST    | `/api/invoices`          | Création facture *(requires Bearer token)*       |
-| PATCH   | `/api/invoices/:id`      | Mise à jour facture *(requires Bearer token)*    |
-| DELETE  | `/api/invoices/:id`      | Suppression facture *(requires Bearer token)*    |
-| GET     | `/api/invoices/pdf/:id`  | Téléchargement du PDF *(requires Bearer token)*  |
-| POST    | `/api/ai/facture`        | Génération de facture depuis un prompt texte *(requires Bearer token)* |
+| Méthode | Endpoint                | Description                                                            |
+| ------- | ----------------------- | ---------------------------------------------------------------------- |
+| GET     | `/api/health`           | Ping santé du backend                                                  |
+| POST    | `/api/auth/signup`      | Création utilisateur Supabase (admin)                                  |
+| POST    | `/api/auth/login`       | Connexion (retourne session Supabase)                                  |
+| POST    | `/api/auth/logout`      | Invalidation de session côté backend                                   |
+| POST    | `/api/auth/profile`     | Création/MAJ du profil entreprise                                      |
+| GET     | `/api/clients`          | Liste des clients _(requires Bearer token)_                            |
+| POST    | `/api/clients`          | Création client _(requires Bearer token)_                              |
+| PATCH   | `/api/clients/:id`      | Mise à jour client _(requires Bearer token)_                           |
+| DELETE  | `/api/clients/:id`      | Suppression client _(requires Bearer token)_                           |
+| GET     | `/api/products`         | Liste produits/services _(requires Bearer token)_                      |
+| POST    | `/api/products`         | Création produit _(requires Bearer token)_                             |
+| PATCH   | `/api/products/:id`     | Mise à jour produit _(requires Bearer token)_                          |
+| DELETE  | `/api/products/:id`     | Suppression produit _(requires Bearer token)_                          |
+| GET     | `/api/invoices`         | Liste des factures _(requires Bearer token)_                           |
+| GET     | `/api/invoices/summary` | KPI tableau de bord _(requires Bearer token)_                          |
+| POST    | `/api/invoices`         | Création facture _(requires Bearer token)_                             |
+| PATCH   | `/api/invoices/:id`     | Mise à jour facture _(requires Bearer token)_                          |
+| DELETE  | `/api/invoices/:id`     | Suppression facture _(requires Bearer token)_                          |
+| GET     | `/api/invoices/pdf/:id` | Téléchargement du PDF _(requires Bearer token)_                        |
+| POST    | `/api/ai/facture`       | Génération de facture depuis un prompt texte _(requires Bearer token)_ |
 
 ---
 
-## 🖥️ Expérience utilisateur & multi-tenant
+## Expérience utilisateur & multi-tenant
 
 - Palette neutre (gris clair), bleu nuit et accent orange.
 - Layout responsive : navbar fixe, sections en cartes, formulaires arrondis.
@@ -281,20 +281,20 @@ Le proxy Vite redirige automatiquement `/api` vers `http://localhost:4000`.
 
 ---
 
-## 📦 Déploiement conseillé
+## Déploiement conseillé
 
-1. **Frontend (Vercel)**  
-   - Ajouter les variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_BACKEND_URL`.  
+1. **Frontend (Vercel)**
+   - Ajouter les variables `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`, `VITE_BACKEND_URL`.
    - Construire via `npm run build`.
-2. **Backend (Render)**  
-   - Service Web Node sur `server.js`, commande `npm install && npm run start`.  
+2. **Backend (Render)**
+   - Service Web Node sur `server.js`, commande `npm install && npm run start`.
    - Variables d’environnement Supabase + OpenAI + `ALLOWED_ORIGINS`.
-3. **Supabase**  
+3. **Supabase**
    - Préparer les tables (SQL ci-dessus) et ajuster les politiques RLS.
 
 ---
 
-## ✅ Roadmap MVP -> Produit
+## Roadmap MVP -> Produit
 
 - [ ] CRUD produits côté frontend (sélection rapide dans le formulaire facture)
 - [ ] Tableau de bord analytique (courbes, top clients, ventes)
@@ -305,7 +305,7 @@ Le proxy Vite redirige automatiquement `/api` vers `http://localhost:4000`.
 
 ---
 
-## 👨🏾‍💻 Auteur & Licence
+## 👨🏾 Auteur & Licence
 
 Projet imaginé par **Eric Kay (@EricayStudio)**.  
 Code libre d’utilisation pour prototypage, merci de créditer la source.

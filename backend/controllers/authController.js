@@ -72,7 +72,7 @@ const createProfileInternal = async ({ email, company, userId }) => {
     tenantId = tenant.id
   }
 
-  const { error: profileError } = await supabase
+  const { data: profileData, error: profileError } = await supabase
     .from('profiles')
     .upsert(
       {
@@ -83,8 +83,12 @@ const createProfileInternal = async ({ email, company, userId }) => {
       },
       { onConflict: 'id' }
     )
+    .select('company')
+    .single()
 
   if (profileError) throw profileError
+
+  return profileData
 }
 
 export const login = async (req, res, next) => {
@@ -134,6 +138,50 @@ export const createProfile = async (req, res, next) => {
 
     if (error) throw error
     res.status(201).json(data)
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const getProfile = async (req, res, next) => {
+  try {
+    const userId = req.user?.id
+    if (!userId) {
+      return res.status(401).json({ message: 'Authentification requise.' })
+    }
+
+    let hasExtendedColumns = true
+    let response = await supabase
+      .from('profiles')
+      .select('company, tagline')
+      .eq('id', userId)
+      .single()
+    let { data, error } = response
+
+    if (
+      error &&
+      (error.code === 'PGRST105' ||
+        error.code === '42703' ||
+        /column.+does not exist/i.test(error.message))
+    ) {
+      hasExtendedColumns = false
+      const fallback = await supabase
+        .from('profiles')
+        .select('company')
+        .eq('id', userId)
+        .single()
+      data = fallback.data
+      error = fallback.error
+    }
+
+    if (error && error.code !== 'PGRST116') throw error
+
+    const fallbackCompany = req.user?.user_metadata?.company || req.user?.email?.split('@')[0] || ''
+
+    res.json({
+      company: data?.company ?? fallbackCompany,
+      tagline: hasExtendedColumns ? data?.tagline ?? '' : ''
+    })
   } catch (error) {
     next(error)
   }

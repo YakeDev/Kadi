@@ -3,17 +3,18 @@ import { Toaster } from 'react-hot-toast'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Facture from './pages/Facture.jsx'
+import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
-import Navbar from './components/Navbar.jsx'
 import { useAuth } from './hooks/useAuth.jsx'
+import ShellLayout from './components/ShellLayout.jsx'
 
 const ProtectedLayout = ({ children }) => {
   const { session, isLoading } = useAuth()
 
   if (isLoading) {
     return (
-      <div className='min-h-screen flex items-center justify-center bg-neutre'>
-        <p className='text-nuit'>Chargement en cours…</p>
+      <div className='flex min-h-screen items-center justify-center bg-[var(--bg-base)] text-[var(--text-muted)]'>
+        <p>Chargement en cours…</p>
       </div>
     )
   }
@@ -22,12 +23,7 @@ const ProtectedLayout = ({ children }) => {
     return <Navigate to='/login' replace />
   }
 
-  return (
-    <div className='min-h-screen bg-neutre'>
-      <Navbar />
-      <main className='max-w-6xl mx-auto px-4 py-8'>{children}</main>
-    </div>
-  )
+  return <ShellLayout>{children}</ShellLayout>
 }
 
 const App = () => {
@@ -48,6 +44,14 @@ const App = () => {
           element={
             <ProtectedLayout>
               <Facture />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path='/catalogue'
+          element={
+            <ProtectedLayout>
+              <Catalogue />
             </ProtectedLayout>
           }
         />

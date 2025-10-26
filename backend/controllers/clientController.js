@@ -66,7 +66,7 @@ export const updateClient = async (req, res, next) => {
 export const deleteClient = async (req, res, next) => {
   try {
     const { id } = req.params
-    const tenantId = req.user.id
+    const tenantId = req.tenantId
     const { error } = await supabase.from('clients').delete().eq('id', id).eq('tenant_id', tenantId)
     if (error) throw error
     res.status(204).send()
