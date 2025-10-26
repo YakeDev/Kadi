@@ -5,6 +5,7 @@ import Dashboard from './pages/Dashboard.jsx'
 import Facture from './pages/Facture.jsx'
 import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
+import Company from './pages/Company.jsx'
 import { useAuth } from './hooks/useAuth.jsx'
 import ShellLayout from './components/ShellLayout.jsx'
 
@@ -52,6 +53,14 @@ const App = () => {
           element={
             <ProtectedLayout>
               <Catalogue />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path='/entreprise'
+          element={
+            <ProtectedLayout>
+              <Company />
             </ProtectedLayout>
           }
         />

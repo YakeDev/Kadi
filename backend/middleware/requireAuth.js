@@ -18,7 +18,8 @@ export const requireAuth = async (req, res, next) => {
       return res.status(401).json({ message: 'Session invalide.' })
     }
 
-    const extendedColumns = 'tenant_id, company, tagline, logo_url, email'
+    const extendedColumns =
+      'tenant_id, company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, email'
     let hasExtendedProfileColumns = true
     let profileResponse = await supabase
       .from('profiles')
@@ -48,11 +49,11 @@ export const requireAuth = async (req, res, next) => {
     if (profileError || !profile?.tenant_id) {
       const companyName = user.user_metadata?.company || user.email?.split('@')[0] || 'Organisation'
 
-     const { data: tenant, error: tenantError } = await supabase
-       .from('tenants')
-       .insert({ name: companyName })
-       .select()
-       .single()
+      const { data: tenant, error: tenantError } = await supabase
+        .from('tenants')
+        .insert({ name: companyName })
+        .select()
+        .single()
 
       if (tenantError) {
         return res.status(403).json({ message: 'Profil ou tenant introuvable.' })
@@ -68,7 +69,14 @@ export const requireAuth = async (req, res, next) => {
                 email: user.email,
                 company: companyName,
                 tagline: profile?.tagline ?? null,
-                logo_url: profile?.logo_url ?? null
+                logo_url: profile?.logo_url ?? null,
+                manager_name: profile?.manager_name ?? null,
+                address: profile?.address ?? null,
+                city: profile?.city ?? null,
+                state: profile?.state ?? null,
+                national_id: profile?.national_id ?? null,
+                rccm: profile?.rccm ?? null,
+                nif: profile?.nif ?? null
               }
             : {
                 id: user.id,
@@ -80,7 +88,7 @@ export const requireAuth = async (req, res, next) => {
         )
         .select(
           hasExtendedProfileColumns
-            ? 'tenant_id, company, tagline, logo_url'
+            ? 'tenant_id, company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
             : 'tenant_id, company'
         )
         .single()
@@ -94,10 +102,19 @@ export const requireAuth = async (req, res, next) => {
 
     req.user = user
     req.tenantId = profile.tenant_id
+    const fallbackCompany = profile?.company || user.user_metadata?.company || user.email?.split('@')[0] || 'Organisation'
+
     req.profile = {
-      ...profile,
-      tagline: profile?.tagline ?? null,
-      logo_url: profile?.logo_url ?? null
+      company: profile?.company ?? fallbackCompany,
+      tagline: profile?.tagline ?? '',
+      logo_url: profile?.logo_url ?? null,
+      manager_name: profile?.manager_name ?? '',
+      address: profile?.address ?? '',
+      city: profile?.city ?? '',
+      state: profile?.state ?? '',
+      national_id: profile?.national_id ?? '',
+      rccm: profile?.rccm ?? '',
+      nif: profile?.nif ?? ''
     }
     next()
   } catch (error) {

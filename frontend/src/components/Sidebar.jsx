@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { LayoutDashboard, FileText, Users, LogOut, Package } from 'lucide-react'
+import { LayoutDashboard, FileText, Users, LogOut, Package, Building2 } from 'lucide-react'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
 
@@ -7,6 +7,7 @@ const iconMap = {
   LayoutDashboard,
   FileText,
   Package,
+  Building2,
   Users
 }
 
@@ -28,24 +29,41 @@ const SidebarLink = ({ to, label, icon: Icon }) => (
 )
 
 const Sidebar = () => {
-  const { logout } = useAuth()
+  const { logout, profile } = useAuth()
+
+  const companyName = profile?.company || 'Kadi'
+  const companyTagline = profile?.tagline || 'Facturation simple pour PME'
+  const companyInitial = (companyName?.trim().charAt(0) || 'K').toUpperCase()
+  const companyLogo = (profile?.logo_url && profile.logo_url.trim()) || null
 
   return (
     <aside className='fixed inset-y-0 hidden w-64 flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-soft backdrop-blur-xl lg:flex'>
       <div className='px-6 pt-8'>
         <div className='flex items-center gap-3 rounded-[var(--radius-lg)] border border-white/60 bg-[rgba(255,255,255,0.85)] px-4 py-3 shadow-[0_14px_38px_-32px_rgba(28,28,30,0.28)]'>
-          <div className='grid h-11 w-11 place-items-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--primary)] to-[#0a7aea] text-base font-semibold text-white shadow-soft'>
-            K
-          </div>
+          {companyLogo ? (
+            <img
+              src={companyLogo}
+              alt={`${companyName} logo`}
+              className='h-11 w-11 rounded-[var(--radius-md)] object-contain shadow-soft'
+              width={44}
+              height={44}
+            />
+          ) : (
+            <div className='grid h-11 w-11 place-items-center rounded-[var(--radius-md)] bg-gradient-to-br from-[var(--primary)] to-[#0a7aea] text-base font-semibold text-white shadow-soft'>
+              {companyInitial}
+            </div>
+          )}
           <div className='leading-tight'>
-            <p className='text-lg font-semibold text-[var(--text-dark)]'>Kadi</p>
-            <p className='text-[11px] font-medium uppercase tracking-[0.32em] text-[var(--text-muted)]'>
-              Factures
-            </p>
+            <p className='text-lg font-semibold text-[var(--text-dark)]'>{companyName}</p>
+            {companyTagline ? (
+              <p className='text-[11px] font-medium text-[var(--text-muted)]'>{companyTagline}</p>
+            ) : null}
           </div>
         </div>
         <p className='mt-4 text-xs text-[var(--text-muted)]'>
-          Plateforme de facturation moderne pour PME ambitieuses.
+          {profile?.city || profile?.state
+            ? [profile.city, profile.state].filter(Boolean).join(', ')
+            : 'Plateforme de facturation moderne pour PME ambitieuses.'}
         </p>
       </div>
 

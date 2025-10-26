@@ -257,20 +257,47 @@ export const streamInvoicePdf = async (req, res, next) => {
 
 		// === HEADER ===
 		const companyName = req.profile?.company || 'Kadi'
-		const companyTagline = req.profile?.tagline || 'Facturation simple pour PME'
+		const companyTagline = (req.profile?.tagline || '').trim()
+		const companyMetaLines = [
+			req.profile?.manager_name
+				? `Responsable : ${req.profile.manager_name}`
+				: null,
+			req.profile?.address || null,
+			[req.profile?.city, req.profile?.state]
+				.filter(Boolean)
+				.join(', ') || null,
+			req.profile?.national_id
+				? `ID. Nat. : ${req.profile.national_id}`
+				: null,
+			req.profile?.rccm ? `RCCM : ${req.profile.rccm}` : null,
+			req.profile?.nif ? `NIF : ${req.profile.nif}` : null
+		].filter(Boolean)
 
+		let headerY = 50
 		doc
 			.font(semiBoldFont)
 			.fontSize(26)
 			.fillColor(baseColor)
-			.text(companyName, startX, 50, { width: pageWidth / 2 })
+			.text(companyName, startX, headerY, { width: pageWidth / 2 })
+		headerY = doc.y + 6
+
 		if (companyTagline) {
 			doc
 				.font(regularFont)
 				.fontSize(11)
 				.fillColor(greyMedium)
-				.text(companyTagline, startX, 78, { width: pageWidth / 2 })
+				.text(companyTagline, startX, headerY, { width: pageWidth / 2 })
+			headerY = doc.y + 6
 		}
+
+		companyMetaLines.forEach((line) => {
+			doc
+				.font(regularFont)
+				.fontSize(10)
+				.fillColor(greyMedium)
+				.text(line, startX, headerY, { width: pageWidth / 2 })
+			headerY = doc.y + 4
+		})
 
 		const headerRightX = startX + pageWidth / 2
 		doc
@@ -290,13 +317,14 @@ export const streamInvoicePdf = async (req, res, next) => {
 				width: pageWidth / 2,
 			})
 
+		const headerSeparatorY = Math.max(headerY + 12, 100)
 		doc
-			.moveTo(startX, 100)
-			.lineTo(startX + pageWidth, 100)
+			.moveTo(startX, headerSeparatorY)
+			.lineTo(startX + pageWidth, headerSeparatorY)
 			.stroke(greyLight)
 
 		// === CLIENT BLOCK ===
-		const clientBlockY = 120
+		const clientBlockY = headerSeparatorY + 20
 		const paddingY = 20
 		const lineSpacing = 16
 

@@ -10,6 +10,11 @@ export const navigationLinks = [
     icon: 'FileText'
   },
   {
+    to: '/entreprise',
+    label: 'Mon entreprise',
+    icon: 'Building2'
+  },
+  {
     to: '/catalogue',
     label: 'Catalogue',
     icon: 'Package'

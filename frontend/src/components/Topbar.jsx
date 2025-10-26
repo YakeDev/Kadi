@@ -1,4 +1,4 @@
-import { Menu, Plus, Bell, CircleUser, LayoutDashboard, FileText, Users, Package } from 'lucide-react'
+import { Menu, Plus, Bell, CircleUser, LayoutDashboard, FileText, Users, Package, Building2 } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
@@ -7,6 +7,7 @@ import { useState } from 'react'
 const mobileIcons = {
   LayoutDashboard,
   FileText,
+  Building2,
   Package,
   Users
 }
@@ -19,7 +20,7 @@ const Topbar = () => {
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
 
   const companyName = profile?.company || import.meta.env.VITE_APP_NAME || 'Kadi'
-  const companyLogo = profile?.logo_url || import.meta.env.VITE_APP_LOGO || ''
+  const companyLogo = (profile?.logo_url && profile.logo_url.trim()) || import.meta.env.VITE_APP_LOGO || ''
   const taglineSource = profile?.tagline || import.meta.env.VITE_APP_TAGLINE || 'Invoices'
   const companyTagline =
     taglineSource.length > TRUNCATED_TAGLINE_LENGTH
@@ -59,9 +60,9 @@ const Topbar = () => {
           )}
           <div className='leading-tight'>
             <p className='text-sm font-semibold text-[var(--text-dark)]'>{companyName}</p>
-            <p className='text-[11px] font-medium text-[var(--text-muted)]'>
-              {companyTagline}
-            </p>
+            {companyTagline ? (
+              <p className='text-[11px] font-medium text-[var(--text-muted)]'>{companyTagline}</p>
+            ) : null}
           </div>
         </div>
 

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { DollarSign, Clock, CheckCircle2, Plug, ArrowUpRight, Inbox } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../services/api.js'
+import { useAuth } from '../hooks/useAuth.jsx'
 
 const cards = [
   { key: 'monthlyRevenue', title: 'Revenus du mois', suffix: 'USD', icon: DollarSign },
@@ -14,6 +15,7 @@ const formatMoney = (value, currency = 'USD') =>
   `${Number(value || 0).toLocaleString('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${currency}`
 
 const Dashboard = () => {
+  const { user, profile } = useAuth()
   const [summary, setSummary] = useState({
     monthlyRevenue: 0,
     outstanding: 0,
@@ -55,7 +57,15 @@ const Dashboard = () => {
         <div>
           <p className='text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]'>Tableau de bord</p>
           <h1 className='mt-2 text-3xl font-semibold text-[var(--text-dark)]'>
-            Bonjour, voici votre activité
+            {`Bonjour${(() => {
+              const nameCandidate =
+                user?.user_metadata?.full_name ||
+                profile?.manager_name ||
+                profile?.company ||
+                user?.email?.split('@')[0] ||
+                ''
+              return nameCandidate ? ` ${nameCandidate}` : ''
+            })()}, voici votre activité`}
           </h1>
           <p className='mt-1 text-sm text-[var(--text-muted)]'>
             Visualisez vos revenus, fluidifiez la facturation et relancez vos clients en un coup d’œil.
