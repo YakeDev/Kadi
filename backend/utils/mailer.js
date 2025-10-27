@@ -37,9 +37,8 @@ export const sendMail = async ({ to, subject, html, text }) => {
   const mailer = getTransporter()
 
   if (!mailer) {
-    console.warn(`${logPrefix} Aucun transport configuré. Email destiné à ${to} non envoyé.`)
-    console.warn(`${logPrefix} Sujet: ${subject}`)
-    return { sent: false }
+    console.warn(`${logPrefix} Aucun transport SMTP configuré. Email destiné à ${to} non envoyé.`)
+    return { sent: false, reason: 'transporter_not_configured' }
   }
 
   const fromEmail = getEnv('MAIL_FROM') || getEnv('SMTP_USER')
@@ -57,6 +56,6 @@ export const sendMail = async ({ to, subject, html, text }) => {
     return { sent: true, messageId: info.messageId }
   } catch (error) {
     console.error(`${logPrefix} Échec d'envoi`, error)
-    return { sent: false, error }
+    return { sent: false, reason: 'smtp_error', error }
   }
 }
