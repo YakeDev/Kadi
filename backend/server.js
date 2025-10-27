@@ -10,14 +10,42 @@ import authRouter from './routes/auth.js'
 
 dotenv.config()
 
+const normalizeOrigin = value => value?.trim().replace(/\/$/, '')
+const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
+  .split(',')
+  .map(normalizeOrigin)
+  .filter(Boolean)
+
+if (allowedOrigins.length > 0) {
+  console.log(`[CORS] Origines autorisées : ${allowedOrigins.join(', ')}`)
+} else {
+  console.warn('[CORS] ALLOWED_ORIGINS est vide – toutes les origines sont autorisées (usage développement).')
+}
+
 const app = express()
 
-app.use(
-  cors({
-    origin: process.env.ALLOWED_ORIGINS?.split(',') || '*',
-    credentials: true
-  })
-)
+const corsOptions = {
+  origin(origin, callback) {
+    const normalizedOrigin = normalizeOrigin(origin)
+
+    if (!normalizedOrigin) {
+      return callback(null, true)
+    }
+
+    if (allowedOrigins.length === 0 || allowedOrigins.includes(normalizedOrigin)) {
+      return callback(null, true)
+    }
+
+    console.warn(`[CORS] Origine refusée : ${normalizedOrigin}`)
+    return callback(new Error('Not allowed by CORS'))
+  },
+  credentials: true,
+  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+}
+
+app.use(cors(corsOptions))
+app.options('*', cors(corsOptions))
 app.use(express.json({ limit: '10mb' }))
 app.use(morgan('tiny'))
 
