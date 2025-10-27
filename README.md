@@ -122,6 +122,24 @@ Les prochaines étapes d’évolution sont décrites dans **ROADMAP.md** :
 
 ---
 
+## Tests
+
+### Backend
+
+```bash
+cd backend
+npm install            # première fois pour installer jest/supertest
+npm test               # exécuter la suite Jest
+```
+
+Les tests utilisent `supertest` pour vérifier les routes Express. Les variables de test sont dans `.env.test`.
+
+### Frontend
+
+> Tests unitaires non configurés pour l’instant. Voir `frontend/` si vous souhaitez ajouter Vitest/Testing Library.
+
+---
+
 ## Auteur & Licence
 
 Projet imaginé et développé par **Eric Kay (@EricayStudio)**.  
