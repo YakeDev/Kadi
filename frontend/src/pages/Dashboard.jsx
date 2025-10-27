@@ -4,6 +4,7 @@ import { DollarSign, Clock, CheckCircle2, Plug, ArrowUpRight, Inbox } from 'luci
 import toast from 'react-hot-toast'
 import { api } from '../services/api.js'
 import { useAuth } from '../hooks/useAuth.jsx'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const cards = [
   { key: 'monthlyRevenue', title: 'Revenus du mois', suffix: 'USD', icon: DollarSign },
@@ -34,9 +35,7 @@ const Dashboard = () => {
       setSummary(summaryData)
       setRecentInvoices((invoices || []).slice(0, 5))
     } catch (error) {
-      toast.error(error.message, {
-        icon: '⚠️'
-      })
+      showErrorToast(toast.error, error)
     } finally {
       setIsLoading(false)
     }

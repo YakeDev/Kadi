@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { api } from '../services/api.js'
 import { fetchCatalogItems } from '../services/catalog.js'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const createEmptyItem = () => ({
   catalogItemId: null,
@@ -56,7 +57,7 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
         const data = await fetchCatalogItems({ active: 'true' })
         setCatalog(data ?? [])
       } catch (error) {
-        toast.error(error.message)
+        showErrorToast(toast.error, error)
       } finally {
         setIsCatalogLoading(false)
       }
@@ -71,7 +72,7 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
       setCatalog(data ?? [])
       toast.success('Catalogue mis à jour.')
     } catch (error) {
-      toast.error(error.message)
+      showErrorToast(toast.error, error)
     } finally {
       setIsCatalogLoading(false)
     }
@@ -146,10 +147,13 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
       icon: '✅'
     })
 
-  const notifyError = (message) =>
-    toast.error(message, {
-      icon: '⚠️'
-    })
+  const notifyError = (payload) => {
+    if (typeof payload === 'string') {
+      toast.error(payload, { icon: '⚠️' })
+      return
+    }
+    showErrorToast(toast.error, payload)
+  }
 
   const handleSubmit = async (event) => {
     event.preventDefault()
@@ -160,7 +164,7 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
       resetForm()
       onCreated?.()
     } catch (error) {
-      notifyError(error.message)
+      notifyError(error)
     } finally {
       setIsSubmitting(false)
     }
@@ -193,7 +197,7 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
       }))
       notifySuccess('Facture générée par IA')
     } catch (error) {
-      notifyError(error.message)
+      notifyError(error)
     } finally {
       setIsGenerating(false)
     }

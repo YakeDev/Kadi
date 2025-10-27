@@ -4,6 +4,7 @@ import { Inbox, FileText, X } from 'lucide-react'
 import InvoiceForm from '../components/InvoiceForm.jsx'
 import InvoiceList from '../components/InvoiceList.jsx'
 import { api } from '../services/api.js'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const Facture = () => {
   const [clients, setClients] = useState([])
@@ -17,7 +18,7 @@ const Facture = () => {
       const { data } = await api.get('/clients')
       setClients(data)
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     }
   }
 

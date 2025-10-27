@@ -22,6 +22,59 @@ if (allowedOrigins.length > 0) {
   console.warn('[CORS] ALLOWED_ORIGINS est vide – toutes les origines sont autorisées (usage développement).')
 }
 
+const mapDatabaseError = (error) => {
+  if (!error) return null
+
+  if (error.code === '23505') {
+    const constraint = error.constraint || error.message || ''
+    if (constraint.includes('catalog_items_tenant_sku_key')) {
+      return {
+        status: 409,
+        message: 'Ce SKU est déjà utilisé pour un autre élément de votre catalogue.'
+      }
+    }
+    return {
+      status: 409,
+      message: 'Cette valeur doit être unique.'
+    }
+  }
+
+  if (error.code === '23503') {
+    return {
+      status: 409,
+      message: 'Cette opération est impossible car la ressource est liée à d’autres données.'
+    }
+  }
+
+  if (error.code === '22P02') {
+    return {
+      status: 400,
+      message: 'Format de donnée invalide, merci de vérifier les informations envoyées.'
+    }
+  }
+
+  return null
+}
+
+const buildErrorResponse = (error) => {
+  const mapped = mapDatabaseError(error)
+  if (mapped) {
+    return mapped
+  }
+
+  const status = Number.isInteger(error?.status) ? error.status : 500
+  if (status < 500 && error?.message) {
+    return { status, message: error.message }
+  }
+
+  return {
+    status,
+    message: status >= 500
+      ? 'Une erreur interne est survenue. Veuillez réessayer plus tard.'
+      : 'Requête invalide.'
+  }
+}
+
 const app = express()
 
 const corsOptions = {
@@ -61,10 +114,24 @@ app.use('/api/auth', authRouter)
 
 // eslint-disable-next-line no-unused-vars
 app.use((error, req, res, next) => {
-  console.error(error)
-  res.status(error.status || 500).json({
-    message: error.message || 'Erreur interne du serveur'
-  })
+  const { status, message } = buildErrorResponse(error)
+  const logPayload = {
+    method: req.method,
+    path: req.originalUrl,
+    status,
+    code: error?.code,
+    constraint: error?.constraint,
+    details: error?.details,
+    originalMessage: error?.message
+  }
+
+  if (status >= 500) {
+    console.error('[API ERROR]', logPayload, error?.stack)
+  } else {
+    console.warn('[API WARNING]', logPayload)
+  }
+
+  res.status(status).json({ message })
 })
 
 const PORT = process.env.PORT || 4000

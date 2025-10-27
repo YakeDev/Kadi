@@ -3,6 +3,7 @@ import { Navigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { uploadCompanyLogo, supabase } from '../services/supabase.js'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const INITIAL_FORM = {
   email: '',
@@ -27,10 +28,6 @@ const Login = () => {
   const [logoPreview, setLogoPreview] = useState('')
   const [logoError, setLogoError] = useState('')
 
-  if (session) {
-    return <Navigate to='/' replace />
-  }
-
   const handleChange = (event) => {
     const { name, value } = event.target
     setForm((prev) => ({ ...prev, [name]: value }))
@@ -54,6 +51,8 @@ const Login = () => {
       setLogoError('')
     }
   }, [isRegister])
+
+  const shouldRedirect = Boolean(session)
 
   const handleLogoChange = (event) => {
     const file = event.target.files?.[0]
@@ -127,10 +126,14 @@ const Login = () => {
       }
       setForm({ ...INITIAL_FORM })
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     } finally {
       setIsSubmitting(false)
     }
+  }
+
+  if (shouldRedirect) {
+    return <Navigate to='/' replace />
   }
 
   return (

@@ -37,8 +37,11 @@ const sanitizePayload = (body = {}, { ensureType = false } = {}) => {
     payload.currency = String(payload.currency).trim().toUpperCase()
   }
 
-  if (payload.sku) {
+  if (payload.sku != null) {
     payload.sku = String(payload.sku).trim()
+    if (payload.sku === '') {
+      payload.sku = null
+    }
   }
 
   if (payload.is_active != null) {
