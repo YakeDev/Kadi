@@ -1,4 +1,7 @@
+import { randomBytes } from 'crypto'
 import { supabase } from '../models/supabaseClient.js'
+import { sendMail } from '../utils/mailer.js'
+import { emailVerificationTemplate } from '../utils/templates.js'
 
 const PROFILE_OPTIONAL_FIELDS = [
   'logo_url',
@@ -12,9 +15,119 @@ const PROFILE_OPTIONAL_FIELDS = [
   'nif'
 ]
 
+const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
+
+const sanitizePathSegment = (value = '') =>
+  value
+    .toString()
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9-_]/g, '-')
+
+const inferMimeFromExtension = (extension = '') => {
+  switch (extension.toLowerCase()) {
+    case 'jpg':
+    case 'jpeg':
+      return 'image/jpeg'
+    case 'png':
+      return 'image/png'
+    case 'webp':
+      return 'image/webp'
+    case 'svg':
+      return 'image/svg+xml'
+    default:
+      return 'application/octet-stream'
+  }
+}
+
+const inferExtensionFromMime = (mime = '') => {
+  switch (mime.toLowerCase()) {
+    case 'image/jpeg':
+      return 'jpg'
+    case 'image/png':
+      return 'png'
+    case 'image/webp':
+      return 'webp'
+    case 'image/svg+xml':
+      return 'svg'
+    default:
+      return 'png'
+  }
+}
+
+const decodeBase64Logo = (value, fallbackExtension = '') => {
+  if (!value || typeof value !== 'string') {
+    throw Object.assign(new Error('Logo invalide.'), { status: 400 })
+  }
+
+  const dataUrlMatch = value.match(/^data:(.*?);base64,(.*)$/)
+  const base64Payload = dataUrlMatch ? dataUrlMatch[2] : value
+  const mimeType = dataUrlMatch ? dataUrlMatch[1] : inferMimeFromExtension(fallbackExtension)
+
+  const buffer = Buffer.from(base64Payload, 'base64')
+  if (!buffer || buffer.length === 0) {
+    throw Object.assign(new Error('Logo vide ou corrompu.'), { status: 400 })
+  }
+
+  const maxSizeBytes = 1 * 1024 * 1024
+  if (buffer.length > maxSizeBytes) {
+    throw Object.assign(new Error('Logo trop volumineux (1 Mo max).'), { status: 400 })
+  }
+
+  let extension = fallbackExtension?.toLowerCase().replace(/[^a-z0-9]/g, '') || ''
+  if (!extension) {
+    extension = inferExtensionFromMime(mimeType)
+  }
+
+  return {
+    buffer,
+    mimeType: mimeType || inferMimeFromExtension(extension),
+    extension: extension || 'png'
+  }
+}
+
+const uploadLogoForUser = async (userId, base64Content, originalFilename = '') => {
+  const hasExtension = originalFilename.includes('.')
+  const filenameWithoutExt = hasExtension ? originalFilename.replace(/\.[^/.]+$/, '') : originalFilename
+  const providedExtension = hasExtension ? originalFilename.split('.').pop() : ''
+  const safeName = sanitizePathSegment(filenameWithoutExt) || 'logo'
+  const { buffer, mimeType, extension } = decodeBase64Logo(base64Content, providedExtension)
+
+  const uniqueSuffix = `${Date.now()}-${randomBytes(4).toString('hex')}`
+  const filePath = `${sanitizePathSegment(userId)}/${safeName}-${uniqueSuffix}.${extension}`
+
+  const { error: uploadError } = await supabase.storage
+    .from(LOGO_BUCKET)
+    .upload(filePath, buffer, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: mimeType || 'image/png'
+    })
+
+  if (uploadError) {
+    throw Object.assign(new Error("Le logo n'a pas pu être enregistré. Veuillez vérifier le format et réessayer."), {
+      status: 400,
+      cause: uploadError
+    })
+  }
+
+  const { data: publicUrlData, error: publicUrlError } = supabase.storage
+    .from(LOGO_BUCKET)
+    .getPublicUrl(filePath)
+
+  if (publicUrlError) {
+    throw Object.assign(new Error("Impossible de générer l'URL publique du logo."), {
+      status: 500,
+      cause: publicUrlError
+    })
+  }
+
+  return publicUrlData?.publicUrl || null
+}
+
 export const signup = async (req, res, next) => {
   try {
-    const { email, password, company, ...rest } = req.body
+    const { email, password, company, logo_file: logoFile, logo_filename: logoFilename, ...rest } = req.body
     if (!email || !password) {
       return res.status(400).json({ message: 'Email et mot de passe requis.' })
     }
@@ -22,7 +135,7 @@ export const signup = async (req, res, next) => {
     const { data, error } = await supabase.auth.admin.createUser({
       email,
       password,
-      email_confirm: true,
+      email_confirm: false,
       user_metadata: { company }
     })
 
@@ -33,16 +146,73 @@ export const signup = async (req, res, next) => {
       throw error
     }
 
+    const sanitizedRest = {}
+    for (const [key, value] of Object.entries(rest)) {
+      if (value === undefined) continue
+      sanitizedRest[key] = typeof value === 'string' ? value.trim() : value
+    }
+
+    let uploadedLogoUrl = null
+    if (logoFile) {
+      uploadedLogoUrl = await uploadLogoForUser(data.user.id, logoFile, logoFilename || 'logo.png')
+      sanitizedRest.logo_url = uploadedLogoUrl
+    }
+
     const profilePayload = { email, company, userId: data.user.id }
     for (const field of PROFILE_OPTIONAL_FIELDS) {
-      if (rest[field] !== undefined) {
-        profilePayload[field] = rest[field]
+      if (sanitizedRest[field] !== undefined) {
+        profilePayload[field] = sanitizedRest[field]
       }
     }
 
-    await createProfileInternal(profilePayload)
+    const profileData = await createProfileInternal(profilePayload)
 
-    res.status(201).json({ user: data.user })
+    let verificationUrl = null
+    const redirectTo =
+      process.env.EMAIL_REDIRECT_URL ||
+      process.env.APP_URL ||
+      'http://localhost:5173/auth/callback'
+
+    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
+      type: 'signup',
+      email,
+      password,
+      options: { redirectTo }
+    })
+
+    if (linkError) {
+      console.error('Impossible de générer le lien de confirmation Supabase', linkError)
+    } else {
+      verificationUrl = linkData?.action_link ?? null
+      if (verificationUrl) {
+        const emailPayload = emailVerificationTemplate({
+          verificationUrl,
+          companyName: company || profileData?.company || ''
+        })
+        await sendMail({
+          to: email,
+          subject: emailPayload.subject,
+          html: emailPayload.html,
+          text: emailPayload.text
+        })
+      }
+    }
+
+    const confirmationMessage = verificationUrl
+      ? 'Compte créé. Un email de confirmation vient de vous être envoyé.'
+      : "Compte créé. Configurez l’envoi SMTP pour transmettre l’email de confirmation."
+
+    res.status(201).json({
+      user: {
+        id: data.user.id,
+        email: data.user.email
+      },
+      profile: profileData,
+      emailConfirmationRequired: true,
+      emailVerificationSent: Boolean(verificationUrl),
+      logoUploaded: Boolean(uploadedLogoUrl),
+      message: confirmationMessage
+    })
   } catch (error) {
     next(error)
   }

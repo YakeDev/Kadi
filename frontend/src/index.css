@@ -15,6 +15,9 @@
   --border: rgba(15, 23, 42, 0.08);
   --radius-md: 14px;
   --radius-lg: 20px;
+  --radius-xl: 28px;
+  --radius-2xl: 36px;
+  --radius-3xl: 48px;
   --shadow-soft: 0 28px 60px -45px rgba(28, 28, 30, 0.32);
   --shadow-card: 0 40px 90px -60px rgba(28, 28, 30, 0.36);
   --shadow-glass: 0 20px 48px -32px rgba(28, 28, 30, 0.26);
@@ -67,7 +70,7 @@
   }
 
   .input {
-    @apply w-full rounded-[var(--radius-md)] border border-[var(--border)] bg-[rgba(255,255,255,0.92)] px-4 py-2 text-sm text-[var(--text-dark)] shadow-[0_18px_45px_-40px_rgba(28,28,30,0.22)] transition focus:border-[var(--primary)] focus:bg-[var(--bg-panel)] focus:outline-none focus:ring-2 focus:ring-[rgba(10,132,255,0.25)];
+    @apply w-full rounded-[var(--radius-lg)] border border-[var(--border)] bg-[rgba(255,255,255,0.92)] px-4 py-2 text-sm text-[var(--text-dark)] shadow-[0_18px_45px_-40px_rgba(28,28,30,0.22)] transition focus:border-[var(--primary)] focus:bg-[var(--bg-panel)] focus:outline-none focus:ring-2 focus:ring-[rgba(10,132,255,0.25)];
   }
 
   .input-compact {

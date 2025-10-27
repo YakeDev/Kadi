@@ -92,9 +92,22 @@ L’application doit être accessible à l’adresse :
 |  | `SUPABASE_KEY` | Clé service role (serveur uniquement) |
 |  | `OPENAI_API_KEY` | Clé API GPT‑5 |
 |  | `ALLOWED_ORIGINS` | Domaine du frontend (CORS) |
+|  | `APP_NAME` | Nom affiché dans les emails (ex: Kadi) |
+|  | `APP_URL` | URL publique de l’app (ex: https://kadi.app) |
+|  | `EMAIL_REDIRECT_URL` | URL de redirection après confirmation (ex: https://app.kadi.app/login) |
+|  | `SMTP_HOST` | Serveur SMTP pour l’envoi d’emails |
+|  | `SMTP_PORT` | Port SMTP (465 pour SSL, 587 pour TLS) |
+|  | `SMTP_USER` | Identifiant SMTP |
+|  | `SMTP_PASS` | Mot de passe/API key SMTP |
+|  | `MAIL_FROM` | Email expéditeur affiché (ex: hello@kadi.app) |
+|  | `MAIL_FROM_NAME` | Nom expéditeur (ex: Équipe Kadi) |
 | `.env.local` (frontend) | `VITE_SUPABASE_URL` | URL publique Supabase |
 |  | `VITE_SUPABASE_ANON_KEY` | Clé anonyme Supabase |
 |  | `VITE_BACKEND_URL` | URL Render du backend |
+|  | `VITE_APP_NAME` | Nom marketing affiché (ex: Kadi) |
+|  | `VITE_APP_TAGLINE` | Baseline courte |
+|  | `VITE_APP_LOGO` | URL logo application (hébergé) |
+|  | `VITE_SUPABASE_LOGO_BUCKET` | Bucket Storage pour les logos |
 
 ---
 
@@ -133,4 +146,3 @@ L’application doit être accessible à l’adresse :
 
 **Auteur :** Eric Kay (@EricayStudio)  
 **Dernière mise à jour :** Octobre 2025
-
