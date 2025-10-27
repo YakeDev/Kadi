@@ -1,8 +1,20 @@
 import { supabase } from '../models/supabaseClient.js'
 
+const PROFILE_OPTIONAL_FIELDS = [
+  'logo_url',
+  'manager_name',
+  'address',
+  'city',
+  'state',
+  'tagline',
+  'national_id',
+  'rccm',
+  'nif'
+]
+
 export const signup = async (req, res, next) => {
   try {
-    const { email, password, company } = req.body
+    const { email, password, company, ...rest } = req.body
     if (!email || !password) {
       return res.status(400).json({ message: 'Email et mot de passe requis.' })
     }
@@ -21,11 +33,14 @@ export const signup = async (req, res, next) => {
       throw error
     }
 
-    await createProfileInternal({
-      email,
-      company,
-      userId: data.user.id
-    })
+    const profilePayload = { email, company, userId: data.user.id }
+    for (const field of PROFILE_OPTIONAL_FIELDS) {
+      if (rest[field] !== undefined) {
+        profilePayload[field] = rest[field]
+      }
+    }
+
+    await createProfileInternal(profilePayload)
 
     res.status(201).json({ user: data.user })
   } catch (error) {
@@ -33,7 +48,7 @@ export const signup = async (req, res, next) => {
   }
 }
 
-const createProfileInternal = async ({ email, company, userId }) => {
+const createProfileInternal = async ({ email, company, userId, ...rest }) => {
   if (!userId) {
     throw Object.assign(new Error('userId requis pour créer le profil'), {
       status: 400
@@ -72,18 +87,25 @@ const createProfileInternal = async ({ email, company, userId }) => {
     tenantId = tenant.id
   }
 
+  const profileRecord = {
+    id: userId,
+    tenant_id: tenantId,
+    email,
+    company: companyName
+  }
+
+  for (const field of PROFILE_OPTIONAL_FIELDS) {
+    if (field in rest) {
+      profileRecord[field] = rest[field]
+    }
+  }
+
   const { data: profileData, error: profileError } = await supabase
     .from('profiles')
-    .upsert(
-      {
-        id: userId,
-        tenant_id: tenantId,
-        email,
-        company: companyName
-      },
-      { onConflict: 'id' }
+    .upsert(profileRecord, { onConflict: 'id' })
+    .select(
+      'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
     )
-    .select('company')
     .single()
 
   if (profileError) throw profileError
@@ -121,23 +143,32 @@ export const logout = async (req, res, next) => {
 
 export const createProfile = async (req, res, next) => {
   try {
-    const { email, company, userId } = req.body
-    if (!email || !userId) {
-      return res.status(400).json({ message: 'Email et userId requis.' })
+    const userId = req.user?.id
+    const email = req.user?.email
+    if (!userId || !email) {
+      return res.status(401).json({ message: 'Authentification requise.' })
     }
 
-    const companyName = company || email.split('@')[0]
+    const { company, ...rest } = req.body || {}
+    const payload = { email, company: company?.trim?.() || undefined, userId }
+    for (const field of PROFILE_OPTIONAL_FIELDS) {
+      if (rest[field] !== undefined) {
+        payload[field] = rest[field]
+      }
+    }
 
-    await createProfileInternal({ email, company: companyName, userId })
+    await createProfileInternal(payload)
 
     const { data, error } = await supabase
       .from('profiles')
-      .select('*')
+      .select(
+        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
+      )
       .eq('id', userId)
       .single()
 
     if (error) throw error
-    res.status(201).json(data)
+    res.status(200).json(data)
   } catch (error) {
     next(error)
   }
@@ -153,7 +184,9 @@ export const getProfile = async (req, res, next) => {
     let hasExtendedColumns = true
     let response = await supabase
       .from('profiles')
-      .select('company, tagline')
+      .select(
+        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
+      )
       .eq('id', userId)
       .single()
     let { data, error } = response
@@ -180,7 +213,15 @@ export const getProfile = async (req, res, next) => {
 
     res.json({
       company: data?.company ?? fallbackCompany,
-      tagline: hasExtendedColumns ? data?.tagline ?? '' : ''
+      tagline: hasExtendedColumns ? data?.tagline ?? '' : '',
+      logo_url: hasExtendedColumns ? data?.logo_url ?? null : null,
+      manager_name: hasExtendedColumns ? data?.manager_name ?? '' : '',
+      address: hasExtendedColumns ? data?.address ?? '' : '',
+      city: hasExtendedColumns ? data?.city ?? '' : '',
+      state: hasExtendedColumns ? data?.state ?? '' : '',
+      national_id: hasExtendedColumns ? data?.national_id ?? '' : '',
+      rccm: hasExtendedColumns ? data?.rccm ?? '' : '',
+      nif: hasExtendedColumns ? data?.nif ?? '' : ''
     })
   } catch (error) {
     next(error)

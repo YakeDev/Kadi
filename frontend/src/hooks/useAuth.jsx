@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase } from '../services/supabase.js'
 import { api } from '../services/api.js'
 
@@ -6,18 +6,68 @@ const AuthContext = createContext()
 
 const LOCAL_SESSION_KEY = 'kadi.session'
 
+const emptyProfile = {
+  company: '',
+  tagline: '',
+  logo_url: null,
+  manager_name: '',
+  address: '',
+  city: '',
+  state: '',
+  national_id: '',
+  rccm: '',
+  nif: ''
+}
+
+const OPTIONAL_PROFILE_FIELDS = [
+  'logo_url',
+  'manager_name',
+  'address',
+  'city',
+  'state',
+  'tagline',
+  'national_id',
+  'rccm',
+  'nif'
+]
+
 const deriveFallbackProfile = (user) => {
   if (!user) {
-    return { company: '', tagline: '' }
+    return { ...emptyProfile }
   }
   const company = user.user_metadata?.company || user.email?.split('@')[0] || ''
-  return { company, tagline: '' }
+  return { ...emptyProfile, company }
 }
 
 export const AuthProvider = ({ children }) => {
   const [session, setSession] = useState(null)
   const [profile, setProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
+
+  const hydrateProfile = useCallback(async (user) => {
+    if (!user) {
+      setProfile(null)
+      return
+    }
+    try {
+      const { data } = await api.get('/auth/profile')
+      setProfile({
+        company: data?.company ?? deriveFallbackProfile(user).company,
+        tagline: data?.tagline ?? '',
+        logo_url: data?.logo_url ?? null,
+        manager_name: data?.manager_name ?? '',
+        address: data?.address ?? '',
+        city: data?.city ?? '',
+        state: data?.state ?? '',
+        national_id: data?.national_id ?? '',
+        rccm: data?.rccm ?? '',
+        nif: data?.nif ?? ''
+      })
+    } catch (error) {
+      console.warn('Impossible de récupérer le profil:', error.message)
+      setProfile(deriveFallbackProfile(user))
+    }
+  }, [])
 
   useEffect(() => {
     const initialiseSession = async () => {
@@ -55,26 +105,9 @@ export const AuthProvider = ({ children }) => {
     })
 
     return () => subscription.unsubscribe()
-  }, [])
+  }, [hydrateProfile])
 
-  const hydrateProfile = async (user) => {
-    if (!user) {
-      setProfile(null)
-      return
-    }
-    try {
-      const { data } = await api.get('/auth/profile')
-      setProfile({
-        company: data?.company ?? deriveFallbackProfile(user).company,
-        tagline: data?.tagline ?? ''
-      })
-    } catch (error) {
-      console.warn('Impossible de récupérer le profil:', error.message)
-      setProfile(deriveFallbackProfile(user))
-    }
-  }
-
-  const login = async ({ email, password }) => {
+  const login = useCallback(async ({ email, password }) => {
     const {
       data: { session: supabaseSession },
       error
@@ -84,20 +117,91 @@ export const AuthProvider = ({ children }) => {
     setSession(supabaseSession)
     await hydrateProfile(supabaseSession.user)
     return supabaseSession
-  }
+  }, [hydrateProfile])
 
-  const signup = async ({ email, password, company }) => {
-    await api.post('/auth/signup', { email, password, company })
-    const newSession = await login({ email, password })
-    return newSession?.user
-  }
+  const signup = useCallback(
+    async ({ email, password, company, ...rest }) => {
+      const trimmedEmail = email?.trim()
+      if (!trimmedEmail || !password) {
+        throw new Error('Email et mot de passe requis.')
+      }
+      const trimmedCompany = company?.trim?.()
+      const payload = {
+        email: trimmedEmail,
+        password
+      }
 
-  const logout = async () => {
+      if (trimmedCompany) {
+        payload.company = trimmedCompany
+      }
+
+      for (const field of OPTIONAL_PROFILE_FIELDS) {
+        if (rest[field] !== undefined) {
+          const value = rest[field]
+          if (typeof value === 'string') {
+            const trimmed = value.trim()
+            payload[field] = trimmed.length ? trimmed : null
+          } else {
+            payload[field] = value
+          }
+        }
+      }
+
+      await api.post('/auth/signup', payload)
+      const newSession = await login({ email: trimmedEmail, password })
+      return newSession?.user
+    },
+    [login]
+  )
+
+  const logout = useCallback(async () => {
     await supabase.auth.signOut()
     window.localStorage.removeItem(LOCAL_SESSION_KEY)
     setSession(null)
     setProfile(null)
-  }
+  }, [])
+
+  const updateProfile = useCallback(
+    async (payload = {}) => {
+      const sanitizedPayload = {}
+      for (const [key, value] of Object.entries(payload)) {
+        if (value === undefined) continue
+        if (typeof value === 'string') {
+          const trimmed = value.trim()
+          sanitizedPayload[key] = trimmed.length ? trimmed : null
+        } else {
+          sanitizedPayload[key] = value
+        }
+      }
+
+      const { data } = await api.post('/auth/profile', sanitizedPayload)
+      if (!data) {
+        if (session?.user) {
+          await hydrateProfile(session.user)
+        }
+        return
+      }
+
+      setProfile((prev) => {
+        const fallback = prev ?? deriveFallbackProfile(session?.user)
+        return {
+          company: data.company ?? sanitizedPayload.company ?? fallback.company ?? '',
+          tagline: data.tagline ?? sanitizedPayload.tagline ?? fallback.tagline ?? '',
+          logo_url: data.logo_url ?? sanitizedPayload.logo_url ?? fallback.logo_url ?? null,
+          manager_name:
+            data.manager_name ?? sanitizedPayload.manager_name ?? fallback.manager_name ?? '',
+          address: data.address ?? sanitizedPayload.address ?? fallback.address ?? '',
+          city: data.city ?? sanitizedPayload.city ?? fallback.city ?? '',
+          state: data.state ?? sanitizedPayload.state ?? fallback.state ?? '',
+          national_id:
+            data.national_id ?? sanitizedPayload.national_id ?? fallback.national_id ?? '',
+          rccm: data.rccm ?? sanitizedPayload.rccm ?? fallback.rccm ?? '',
+          nif: data.nif ?? sanitizedPayload.nif ?? fallback.nif ?? ''
+        }
+      })
+    },
+    [hydrateProfile, session]
+  )
 
   const value = useMemo(
     () => ({
@@ -107,9 +211,10 @@ export const AuthProvider = ({ children }) => {
       isLoading,
       login,
       signup,
-      logout
+      logout,
+      updateProfile
     }),
-    [session, profile, isLoading]
+    [session, profile, isLoading, login, signup, logout, updateProfile]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

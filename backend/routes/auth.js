@@ -7,7 +7,7 @@ const router = Router()
 router.post('/signup', signup)
 router.post('/login', login)
 router.post('/logout', logout)
-router.post('/profile', createProfile)
+router.post('/profile', requireAuth, createProfile)
 router.get('/profile', requireAuth, getProfile)
 
 export default router
