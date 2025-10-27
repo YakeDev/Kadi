@@ -167,7 +167,22 @@ export const signup = async (req, res, next) => {
 
     const profileData = await createProfileInternal(profilePayload)
 
+    const triggerSupabaseResend = async () => {
+      const { error: resendError } = await supabase.auth.admin.resend({
+        type: 'signup',
+        email,
+        options: { redirectTo }
+      })
+      if (resendError) {
+        console.warn('Impossible de déclencher l’email de confirmation via Supabase', resendError)
+        return { sent: false, reason: resendError.message || 'supabase_resend_failed' }
+      }
+      return { sent: true }
+    }
+
     let verificationUrl = null
+    let emailSent = false
+    let emailSendIssue = null
     const redirectTo =
       process.env.EMAIL_REDIRECT_URL ||
       process.env.APP_URL ||
@@ -182,6 +197,9 @@ export const signup = async (req, res, next) => {
 
     if (linkError) {
       console.error('Impossible de générer le lien de confirmation Supabase', linkError)
+      const resendResult = await triggerSupabaseResend()
+      emailSent = resendResult.sent
+      emailSendIssue = resendResult.reason || linkError.message || 'generate_link_failed'
     } else {
       verificationUrl = linkData?.action_link ?? null
       if (verificationUrl) {
@@ -189,18 +207,28 @@ export const signup = async (req, res, next) => {
           verificationUrl,
           companyName: company || profileData?.company || ''
         })
-        await sendMail({
+        const sendResult = await sendMail({
           to: email,
           subject: emailPayload.subject,
           html: emailPayload.html,
           text: emailPayload.text
         })
+        emailSent = sendResult.sent
+        if (!emailSent) {
+          const resendResult = await triggerSupabaseResend()
+          emailSent = resendResult.sent
+          emailSendIssue = resendResult.reason || sendResult.reason || 'smtp_failed'
+        }
+      } else {
+        const resendResult = await triggerSupabaseResend()
+        emailSent = resendResult.sent
+        emailSendIssue = resendResult.reason || 'missing_action_link'
       }
     }
 
-    const confirmationMessage = verificationUrl
+    const confirmationMessage = emailSent
       ? 'Compte créé. Un email de confirmation vient de vous être envoyé.'
-      : "Compte créé. Configurez l’envoi SMTP pour transmettre l’email de confirmation."
+      : "Compte créé. Impossible d’envoyer automatiquement l’email de confirmation. Vérifiez la configuration Supabase (Email confirmations activées, Redirect URL autorisée) puis renvoyez l’email depuis l’écran de connexion."
 
     res.status(201).json({
       user: {
@@ -209,8 +237,9 @@ export const signup = async (req, res, next) => {
       },
       profile: profileData,
       emailConfirmationRequired: true,
-      emailVerificationSent: Boolean(verificationUrl),
+      emailVerificationSent: emailSent,
       logoUploaded: Boolean(uploadedLogoUrl),
+      emailSendIssue,
       message: confirmationMessage
     })
   } catch (error) {
