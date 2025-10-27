@@ -15,6 +15,7 @@ import {
   PlusCircle
 } from 'lucide-react'
 import { api } from '../services/api.js'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const statusStyles = {
   draft: 'bg-[var(--primary-soft)] text-[var(--primary)]',
@@ -61,7 +62,7 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
       const { data } = await api.get('/invoices')
       setInvoices(data)
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     } finally {
       setIsLoading(false)
     }
@@ -93,7 +94,7 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
       toast.success('Statut mis à jour', { icon: '✅' })
       fetchInvoices()
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     }
   }
 
@@ -111,7 +112,7 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
       link.remove()
       toast.success('PDF téléchargé', { icon: '⬇️' })
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     }
   }
 

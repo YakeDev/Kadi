@@ -12,6 +12,7 @@ import {
   X
 } from 'lucide-react'
 import { createCatalogItem, fetchCatalogItems, updateCatalogItem } from '../services/catalog.js'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const emptyForm = {
   name: '',
@@ -74,7 +75,7 @@ const Catalogue = () => {
       const data = await fetchCatalogItems(params)
       setItems(data ?? [])
     } catch (error) {
-      toast.error(error.message)
+      showErrorToast(toast.error, error)
     } finally {
       setIsLoading(false)
     }
@@ -118,7 +119,7 @@ const Catalogue = () => {
       await loadItems()
       closeDrawer()
     } catch (error) {
-      toast.error(error.message)
+      showErrorToast(toast.error, error)
     } finally {
       setIsCreating(false)
     }
@@ -131,7 +132,7 @@ const Catalogue = () => {
       toast.success(item.is_active ? 'Article archivé.' : 'Article réactivé.')
       await loadItems()
     } catch (error) {
-      toast.error(error.message)
+      showErrorToast(toast.error, error)
     } finally {
       setBlockingId(null)
     }

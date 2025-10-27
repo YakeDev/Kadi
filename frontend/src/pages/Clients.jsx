@@ -17,6 +17,7 @@ import {
   PlusCircle
 } from 'lucide-react'
 import { api } from '../services/api.js'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const initialState = {
   company_name: '',
@@ -50,7 +51,7 @@ const Clients = () => {
       const { data } = await api.get('/clients')
       setClients(data)
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     } finally {
       setIsFetching(false)
     }
@@ -87,7 +88,7 @@ const Clients = () => {
       fetchClients()
       setIsDrawerOpen(false)
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     } finally {
       setIsLoading(false)
     }
@@ -100,7 +101,7 @@ const Clients = () => {
       toast.success('Client supprimé', { icon: '🗑️' })
       fetchClients()
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     }
   }
 
@@ -141,7 +142,7 @@ const Clients = () => {
       closeEditClient()
       fetchClients()
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
       setIsUpdatingClient(false)
     }
   }

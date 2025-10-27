@@ -3,6 +3,7 @@ import toast from 'react-hot-toast'
 import { Building2, Image as ImageIcon } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { uploadCompanyLogo } from '../services/supabase.js'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const initialState = {
   company: '',
@@ -140,7 +141,7 @@ const Company = () => {
       await updateProfile(payload)
       toast.success('Informations enregistrées ✅')
     } catch (error) {
-      toast.error(error.message, { icon: '⚠️' })
+      showErrorToast(toast.error, error)
     } finally {
       setIsSaving(false)
     }

@@ -42,12 +42,20 @@ export const uploadCompanyLogo = async (file, userId) => {
     throw uploadError
   }
 
-  const { data } = supabase.storage.from(logoBucket).getPublicUrl(filePath)
-  if (!data?.publicUrl) {
-    throw new Error('Impossible de récupérer l\'URL publique du logo uploadé.')
+  const { data: publicData } = supabase.storage.from(logoBucket).getPublicUrl(filePath)
+  if (publicData?.publicUrl) {
+    return publicData.publicUrl
   }
 
-  return data.publicUrl
+  const { data: signedData, error: signedError } = await supabase
+    .storage.from(logoBucket)
+    .createSignedUrl(filePath, 60 * 60) // URL temporaire valide 1 h
+
+  if (signedError || !signedData?.signedUrl) {
+    throw new Error("Impossible de récupérer l'URL du logo uploadé.")
+  }
+
+  return signedData.signedUrl
 }
 
 export const deleteCompanyLogo = async (logoUrl, userId) => {
