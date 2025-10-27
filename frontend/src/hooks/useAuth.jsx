@@ -119,40 +119,36 @@ export const AuthProvider = ({ children }) => {
     return supabaseSession
   }, [hydrateProfile])
 
-  const signup = useCallback(
-    async ({ email, password, company, ...rest }) => {
-      const trimmedEmail = email?.trim()
-      if (!trimmedEmail || !password) {
-        throw new Error('Email et mot de passe requis.')
-      }
-      const trimmedCompany = company?.trim?.()
-      const payload = {
-        email: trimmedEmail,
-        password
-      }
+  const signup = useCallback(async ({ email, password, company, ...rest }) => {
+    const trimmedEmail = email?.trim()
+    if (!trimmedEmail || !password) {
+      throw new Error('Email et mot de passe requis.')
+    }
+    const trimmedCompany = company?.trim?.()
+    const payload = {
+      email: trimmedEmail,
+      password
+    }
 
-      if (trimmedCompany) {
-        payload.company = trimmedCompany
-      }
+    if (trimmedCompany) {
+      payload.company = trimmedCompany
+    }
 
-      for (const field of OPTIONAL_PROFILE_FIELDS) {
-        if (rest[field] !== undefined) {
-          const value = rest[field]
-          if (typeof value === 'string') {
-            const trimmed = value.trim()
-            payload[field] = trimmed.length ? trimmed : null
-          } else {
-            payload[field] = value
-          }
+    for (const field of OPTIONAL_PROFILE_FIELDS) {
+      if (rest[field] !== undefined) {
+        const value = rest[field]
+        if (typeof value === 'string') {
+          const trimmed = value.trim()
+          payload[field] = trimmed.length ? trimmed : null
+        } else {
+          payload[field] = value
         }
       }
+    }
 
-      await api.post('/auth/signup', payload)
-      const newSession = await login({ email: trimmedEmail, password })
-      return newSession?.user
-    },
-    [login]
-  )
+    const { data } = await api.post('/auth/signup', payload)
+    return data
+  }, [])
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut()
