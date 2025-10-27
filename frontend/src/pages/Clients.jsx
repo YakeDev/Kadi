@@ -17,6 +17,7 @@ import {
   PlusCircle
 } from 'lucide-react'
 import { api } from '../services/api.js'
+import FormSection from '../components/FormSection.jsx'
 import { showErrorToast } from '../utils/errorToast.js'
 
 const initialState = {
@@ -157,6 +158,78 @@ const Clients = () => {
       setIsDrawerOpen(false)
     }
   }
+
+  const buildFormSections = (values, onChangeHandler) => (
+    <div className='space-y-4'>
+      <FormSection
+        title='Identité client'
+        description="Nom de l'entreprise et personne de contact."
+        icon={Building2}
+      >
+        <div className='flex flex-col gap-2'>
+          <label className='label'>Entreprise</label>
+          <input
+            name='company_name'
+            value={values.company_name}
+            onChange={onChangeHandler}
+            placeholder='Ex. Alpha SARL'
+            className='input'
+            required
+          />
+        </div>
+        <div className='flex flex-col gap-2'>
+          <label className='label'>Contact principal</label>
+          <input
+            name='contact_name'
+            value={values.contact_name}
+            onChange={onChangeHandler}
+            placeholder='Nom & prénom'
+            className='input'
+          />
+        </div>
+      </FormSection>
+
+      <FormSection
+        title='Coordonnées'
+        description='Moyens de communication privilégiés.'
+        icon={Mail}
+      >
+        <div className='grid gap-4 sm:grid-cols-2'>
+          <div className='flex flex-col gap-2'>
+            <label className='label'>Email</label>
+            <input
+              type='email'
+              name='email'
+              value={values.email}
+              onChange={onChangeHandler}
+              placeholder='client@entreprise.com'
+              className='input'
+            />
+          </div>
+          <div className='flex flex-col gap-2'>
+            <label className='label'>Téléphone</label>
+            <input
+              name='phone'
+              value={values.phone}
+              onChange={onChangeHandler}
+              placeholder='+243 000 000 000'
+              className='input'
+            />
+          </div>
+        </div>
+      </FormSection>
+
+      <FormSection title='Adresse (optionnel)' icon={MapPin}>
+        <textarea
+          name='address'
+          value={values.address}
+          onChange={onChangeHandler}
+          placeholder="Adresse postale du client"
+          className='textarea textarea-compact min-h-[90px]'
+        />
+      </FormSection>
+    </div>
+  )
 
   return (
     <div className='space-y-8'>
@@ -316,75 +389,7 @@ const Clients = () => {
 
             <form onSubmit={handleSubmit} className='flex h-full flex-col'>
               <div className='flex-1 space-y-4 overflow-y-auto px-6 py-6'>
-                <div className='space-y-2'>
-                  <label className='label flex items-center gap-2'>
-                    <Building2 className='h-4 w-4 text-[var(--text-muted)]' />
-                    Raison sociale
-                  </label>
-                  <input
-                    name='company_name'
-                    value={form.company_name}
-                    onChange={handleChange}
-                    className='input-compact'
-                    placeholder='Nom de l’entreprise'
-                    required
-                  />
-                </div>
-                <div className='space-y-2'>
-                  <label className='label flex items-center gap-2'>
-                    <IdCard className='h-4 w-4 text-[var(--text-muted)]' />
-                    Contact principal
-                  </label>
-                  <input
-                    name='contact_name'
-                    value={form.contact_name}
-                    onChange={handleChange}
-                    className='input-compact'
-                    placeholder='Nom et prénom'
-                  />
-                </div>
-                <div className='grid gap-3 sm:grid-cols-2'>
-                  <div className='space-y-2'>
-                    <label className='label flex items-center gap-2'>
-                      <Mail className='h-4 w-4 text-[var(--text-muted)]' />
-                      Email
-                    </label>
-                    <input
-                      type='email'
-                      name='email'
-                      value={form.email}
-                      onChange={handleChange}
-                      className='input-compact'
-                      placeholder='exemple@entreprise.com'
-                    />
-                  </div>
-                  <div className='space-y-2'>
-                    <label className='label flex items-center gap-2'>
-                      <Phone className='h-4 w-4 text-[var(--text-muted)]' />
-                      Téléphone
-                    </label>
-                    <input
-                      name='phone'
-                      value={form.phone}
-                      onChange={handleChange}
-                      className='input-compact'
-                      placeholder='+243 000 000'
-                    />
-                  </div>
-                </div>
-                <div className='space-y-2'>
-                  <label className='label flex items-center gap-2'>
-                    <MapPin className='h-4 w-4 text-[var(--text-muted)]' />
-                    Adresse complète
-                  </label>
-                  <textarea
-                    name='address'
-                    value={form.address}
-                    onChange={handleChange}
-                    className='textarea textarea-compact min-h-[110px]'
-                    placeholder='Adresse postale, ville, pays…'
-                  />
-                </div>
+                {buildFormSections(form, handleChange)}
               </div>
               <div className='flex items-center justify-between gap-2 border-t border-[var(--border)] px-6 py-4'>
                 <button
@@ -433,70 +438,7 @@ const Clients = () => {
             </div>
 
             <form onSubmit={handleUpdateClient} className='space-y-4'>
-              <div className='space-y-2'>
-                <label className='label flex items-center gap-2'>
-                  <Building2 className='h-4 w-4 text-[var(--text-muted)]' />
-                  Raison sociale
-                </label>
-                <input
-                  name='company_name'
-                  value={editingClient.company_name}
-                  onChange={handleEditChange}
-                  className='input'
-                  required
-                />
-              </div>
-              <div className='space-y-2'>
-                <label className='label flex items-center gap-2'>
-                  <IdCard className='h-4 w-4 text-[var(--text-muted)]' />
-                  Contact principal
-                </label>
-                <input
-                  name='contact_name'
-                  value={editingClient.contact_name}
-                  onChange={handleEditChange}
-                  className='input'
-                />
-              </div>
-              <div className='grid gap-4 md:grid-cols-2'>
-                <div className='space-y-2'>
-                  <label className='label flex items-center gap-2'>
-                    <Mail className='h-4 w-4 text-[var(--text-muted)]' />
-                    Email
-                  </label>
-                  <input
-                    type='email'
-                    name='email'
-                    value={editingClient.email}
-                    onChange={handleEditChange}
-                    className='input'
-                  />
-                </div>
-                <div className='space-y-2'>
-                  <label className='label flex items-center gap-2'>
-                    <Phone className='h-4 w-4 text-[var(--text-muted)]' />
-                    Téléphone
-                  </label>
-                  <input
-                    name='phone'
-                    value={editingClient.phone}
-                    onChange={handleEditChange}
-                    className='input'
-                  />
-                </div>
-              </div>
-              <div className='space-y-2'>
-                <label className='label flex items-center gap-2'>
-                  <MapPin className='h-4 w-4 text-[var(--text-muted)]' />
-                  Adresse complète
-                </label>
-                <textarea
-                  name='address'
-                  value={editingClient.address}
-                  onChange={handleEditChange}
-                  className='textarea min-h-[120px]'
-                />
-              </div>
+              {buildFormSections(editingClient, handleEditChange)}
 
               <div className='flex justify-end gap-2 pt-2'>
                 <button type='button' onClick={closeEditClient} className='btn-ghost px-4 text-sm font-semibold'>

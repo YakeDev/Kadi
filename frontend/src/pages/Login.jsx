@@ -16,11 +16,20 @@ import {
 } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { showErrorToast } from '../utils/errorToast.js'
+import FormSection from '../components/FormSection.jsx'
 
 const ACCOUNT_INITIAL = {
   email: '',
   password: '',
   confirmPassword: ''
+}
+
+const Steps = {
+  LOGIN: 'login',
+  ACCOUNT: 'register-account',
+  COMPANY_PROFILE: 'register-company-profile',
+  COMPANY_DETAILS: 'register-company-details',
+  SUCCESS: 'register-success'
 }
 
 const COMPANY_INITIAL = {
@@ -32,15 +41,16 @@ const COMPANY_INITIAL = {
   tagline: '',
   national_id: '',
   rccm: '',
-  nif: ''
+  nif: '',
+  phone: '',
+  website: ''
 }
 
-const Steps = {
-  LOGIN: 'login',
-  ACCOUNT: 'register-account',
-  COMPANY: 'register-company',
-  SUCCESS: 'register-success'
-}
+const REGISTRATION_STEPS = [
+  { id: Steps.ACCOUNT, label: 'Compte' },
+  { id: Steps.COMPANY_PROFILE, label: 'Entreprise' },
+  { id: Steps.COMPANY_DETAILS, label: 'Mentions' }
+]
 
 const MAX_LOGO_SIZE_BYTES = 1024 * 1024 // 1 MB
 
@@ -126,48 +136,35 @@ const fileToDataUrl = (file) =>
     reader.readAsDataURL(file)
   })
 
-const RegistrationStepper = ({ currentStep }) => {
-  const steps = [
-    { id: Steps.ACCOUNT, label: 'Compte' },
-    { id: Steps.COMPANY, label: 'Entreprise' }
-  ]
-
-  return (
-    <div className='mb-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]'>
-      {steps.map((step, index) => {
-        const isActive = currentStep === step.id
-        const isCompleted =
-          steps.findIndex((entry) => entry.id === currentStep) > index
-        return (
-          <div key={step.id} className='flex items-center gap-2'>
-            <div
-              className={[
-                'flex h-8 w-8 items-center justify-center rounded-full border text-[11px]',
-                isCompleted
-                  ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
-                  : isActive
-                    ? 'border-[var(--primary)] text-[var(--primary)]'
-                    : 'border-[var(--border)] text-[var(--text-muted)]'
-              ].join(' ')}
-            >
-              {index + 1}
-            </div>
-            <span
-              className={
-                isActive || isCompleted ? 'text-[var(--text-dark)]' : undefined
-              }
-            >
-              {step.label}
-            </span>
-            {index < steps.length - 1 ? (
-              <div className='h-[1px] w-10 bg-[var(--border)]' />
-            ) : null}
+const RegistrationStepper = ({ currentStep, steps }) => (
+  <div className='mb-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]'>
+    {steps.map((step, index) => {
+      const isActive = currentStep === step.id
+      const activeIndex = steps.findIndex((entry) => entry.id === currentStep)
+      const isCompleted = activeIndex > index
+      return (
+        <div key={step.id} className='flex items-center gap-2'>
+          <div
+            className={[
+              'flex h-8 w-8 items-center justify-center rounded-full border text-[11px]',
+              isCompleted
+                ? 'border-[var(--primary)] bg-[var(--primary-soft)] text-[var(--primary)]'
+                : isActive
+                  ? 'border-[var(--primary)] text-[var(--primary)]'
+                  : 'border-[var(--border)] text-[var(--text-muted)]'
+            ].join(' ')}
+          >
+            {index + 1}
           </div>
-        )
-      })}
-    </div>
-  )
-}
+          <span className={isActive || isCompleted ? 'text-[var(--text-dark)]' : undefined}>
+            {step.label}
+          </span>
+          {index < steps.length - 1 ? <div className='h-[1px] w-10 bg-[var(--border)]' /> : null}
+        </div>
+      )
+    })}
+  </div>
+)
 
 const Login = () => {
   const { login, signup, session } = useAuth()
@@ -312,7 +309,24 @@ const Login = () => {
     }
 
     setAccountForm((prev) => ({ ...prev, email: trimmedEmail }))
-    setView(Steps.COMPANY)
+    setView(Steps.COMPANY_PROFILE)
+  }
+
+  const handleCompanyProfileSubmit = (event) => {
+    event.preventDefault()
+    const trimmedCompany = companyForm.company.trim()
+    if (!trimmedCompany) {
+      toast.error("Indiquez le nom de votre entreprise.", { icon: '⚠️' })
+      return
+    }
+
+    setCompanyForm((prev) => ({
+      ...prev,
+      company: trimmedCompany,
+      phone: prev.phone.trim(),
+      website: prev.website.trim()
+    }))
+    setView(Steps.COMPANY_DETAILS)
   }
 
   const handleLogoSelection = (file) => {
@@ -381,7 +395,9 @@ const Login = () => {
         tagline: trimOrNull(companyForm.tagline),
         national_id: trimOrNull(companyForm.national_id),
         rccm: trimOrNull(companyForm.rccm),
-        nif: trimOrNull(companyForm.nif)
+        nif: trimOrNull(companyForm.nif),
+        phone: trimOrNull(companyForm.phone),
+        website: trimOrNull(companyForm.website)
       }
 
       if (logoFile) {
@@ -538,9 +554,9 @@ const Login = () => {
 
   const renderAccountStep = () => (
     <>
-      <RegistrationStepper currentStep={Steps.ACCOUNT} />
+      <RegistrationStepper currentStep={Steps.ACCOUNT} steps={REGISTRATION_STEPS} />
       <div className='mb-6 space-y-2'>
-        <p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>Étape 1/2</p>
+        <p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>Étape 1/3</p>
         <h1 className='text-2xl font-semibold text-[var(--text-dark)]'>Créons votre accès</h1>
         <p className='text-sm text-[var(--text-muted)]'>
           Votre email servira d’identifiant. Choisissez un mot de passe robuste pour sécuriser vos factures.
@@ -668,47 +684,34 @@ const Login = () => {
     </div>
   )
 
-  const renderCompanyStep = () => (
+  const renderCompanyProfileStep = () => (
     <>
-      <RegistrationStepper currentStep={Steps.COMPANY} />
+      <RegistrationStepper currentStep={Steps.COMPANY_PROFILE} steps={REGISTRATION_STEPS} />
       <div className='mb-6 space-y-2'>
-        <p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>Étape 2/2</p>
-        <h1 className='text-2xl font-semibold text-[var(--text-dark)]'>Votre identité entreprise</h1>
+        <p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>Étape 2/3</p>
+        <h1 className='text-2xl font-semibold text-[var(--text-dark)]'>Profil de votre entreprise</h1>
         <p className='text-sm text-[var(--text-muted)]'>
-          Ces informations alimentent vos factures et votre future zone client. Vous pourrez les compléter plus tard.
+          Ajoutez les informations visibles par vos clients (nom, slogan, contacts, logo).
         </p>
       </div>
 
-      <form
-        onSubmit={handleRegistrationSubmit}
-        className='space-y-5 rounded-[var(--radius-xl)] border border-[var(--border)] bg-white/85 p-6 shadow-soft'
-      >
-        <div className='rounded-[var(--radius-xl)] bg-[rgba(15,23,42,0.02)] p-5'>
+      <form onSubmit={handleCompanyProfileSubmit} className='space-y-5'>
+        <FormSection
+          title='Identité visuelle'
+          description='Logo et nom figurant sur vos factures.'
+          icon={Building2}
+        >
           {renderLogoDropzone()}
-        </div>
-
-        <div className='space-y-4'>
-          <div className='flex flex-col gap-2'>
-            <label className='label'>Nom de l’entreprise</label>
-            <input
-              name='company'
-              value={companyForm.company}
-              onChange={handleCompanyChange}
-              placeholder='Ex. Gocongo'
-              className='input'
-              required
-            />
-          </div>
-
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Responsable</label>
+              <label className='label'>Nom de l’entreprise</label>
               <input
-                name='manager_name'
-                value={companyForm.manager_name}
+                name='company'
+                value={companyForm.company}
                 onChange={handleCompanyChange}
-                placeholder='Nom du gestionnaire'
+                placeholder='Ex. Gocongo'
                 className='input'
+                required
               />
             </div>
             <div className='flex flex-col gap-2'>
@@ -722,7 +725,69 @@ const Login = () => {
               />
             </div>
           </div>
+        </FormSection>
 
+        <FormSection title='Coordonnées principales'>
+          <div className='grid gap-4 sm:grid-cols-2'>
+            <div className='flex flex-col gap-2'>
+              <label className='label'>Responsable</label>
+              <input
+                name='manager_name'
+                value={companyForm.manager_name}
+                onChange={handleCompanyChange}
+                placeholder='Nom du gestionnaire'
+                className='input'
+              />
+            </div>
+            <div className='flex flex-col gap-2'>
+              <label className='label'>Téléphone</label>
+              <input
+                name='phone'
+                value={companyForm.phone}
+                onChange={handleCompanyChange}
+                placeholder='+243 000 000 000'
+                className='input'
+              />
+            </div>
+          </div>
+          <div className='flex flex-col gap-2'>
+            <label className='label'>Site web (optionnel)</label>
+            <input
+              name='website'
+              value={companyForm.website}
+              onChange={handleCompanyChange}
+              placeholder='https://kadi.app'
+              className='input'
+            />
+          </div>
+        </FormSection>
+
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <button type='button' onClick={() => setView(Steps.ACCOUNT)} className='btn-ghost justify-center'>
+            <ArrowLeft className='mr-2 h-4 w-4' />
+            Retour
+          </button>
+          <button type='submit' className='btn-primary justify-center'>
+            Étape suivante
+          </button>
+        </div>
+      </form>
+    </>
+  )
+
+  const renderCompanyDetailsStep = () => (
+    <>
+      <RegistrationStepper currentStep={Steps.COMPANY_DETAILS} steps={REGISTRATION_STEPS} />
+      <div className='mb-6 space-y-2'>
+        <p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>Étape 3/3</p>
+        <h1 className='text-2xl font-semibold text-[var(--text-dark)]'>Coordonnées & mentions légales</h1>
+        <p className='text-sm text-[var(--text-muted)]'>
+          Ces informations enrichissent vos factures. Vous pourrez les modifier à tout moment depuis l’onglet “Mon entreprise”.
+        </p>
+      </div>
+
+      <form onSubmit={handleRegistrationSubmit} className='space-y-5'>
+        <FormSection title='Adresse professionnelle'>
           <div className='flex flex-col gap-2'>
             <label className='label'>Adresse</label>
             <textarea
@@ -733,7 +798,6 @@ const Login = () => {
               className='textarea min-h-[100px]'
             />
           </div>
-
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='flex flex-col gap-2'>
               <label className='label'>Ville</label>
@@ -756,20 +820,22 @@ const Login = () => {
               />
             </div>
           </div>
+        </FormSection>
 
+        <FormSection title='Mentions légales (optionnel)'>
           <div className='grid gap-4 sm:grid-cols-2'>
             <div className='flex flex-col gap-2'>
-              <label className='label'>ID. Nat. (optionnel)</label>
+              <label className='label'>ID. Nat.</label>
               <input
                 name='national_id'
                 value={companyForm.national_id}
                 onChange={handleCompanyChange}
-                placeholder='ID nat. de l’entreprise'
+                placeholder='ID national de l’entreprise'
                 className='input'
               />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>RCCM (optionnel)</label>
+              <label className='label'>RCCM</label>
               <input
                 name='rccm'
                 value={companyForm.rccm}
@@ -778,34 +844,25 @@ const Login = () => {
                 className='input'
               />
             </div>
+            <div className='flex flex-col gap-2 sm:col-span-2 md:sm:col-span-1'>
+              <label className='label'>NIF</label>
+              <input
+                name='nif'
+                value={companyForm.nif}
+                onChange={handleCompanyChange}
+                placeholder='Numéro d’impôt'
+                className='input'
+              />
+            </div>
           </div>
+        </FormSection>
 
-          <div className='flex flex-col gap-2 sm:w-1/2'>
-            <label className='label'>NIF (optionnel)</label>
-            <input
-              name='nif'
-              value={companyForm.nif}
-              onChange={handleCompanyChange}
-              placeholder='Numéro d’impôt'
-              className='input'
-            />
-          </div>
-        </div>
-
-        <div className='mt-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
-          <button
-            type='button'
-            onClick={() => setView(Steps.ACCOUNT)}
-            className='btn-ghost justify-center'
-          >
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between'>
+          <button type='button' onClick={() => setView(Steps.COMPANY_PROFILE)} className='btn-ghost justify-center'>
             <ArrowLeft className='mr-2 h-4 w-4' />
             Retour
           </button>
-          <button
-            type='submit'
-            className='btn-primary justify-center'
-            disabled={isRegisterSubmitting}
-          >
+          <button type='submit' className='btn-primary justify-center' disabled={isRegisterSubmitting}>
             {isRegisterSubmitting ? (
               <>
                 <Loader2 className='mr-2 h-4 w-4 animate-spin' /> Création du compte…
@@ -881,7 +938,8 @@ const Login = () => {
       <div className='mx-auto w-full max-w-[620px] rounded-[var(--radius-2xl)] border border-white/55 bg-[rgba(255,255,255,0.9)] px-9 py-10 shadow-[0_35px_120px_-42px_rgba(28,28,30,0.42)] backdrop-blur-xl'>
         {view === Steps.LOGIN && renderLoginForm()}
         {view === Steps.ACCOUNT && renderAccountStep()}
-        {view === Steps.COMPANY && renderCompanyStep()}
+        {view === Steps.COMPANY_PROFILE && renderCompanyProfileStep()}
+        {view === Steps.COMPANY_DETAILS && renderCompanyDetailsStep()}
         {view === Steps.SUCCESS && renderSuccessStep()}
       </div>
     </div>
