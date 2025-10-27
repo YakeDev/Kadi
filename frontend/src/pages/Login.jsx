@@ -408,7 +408,11 @@ const Login = () => {
 
       const response = await signup(payload)
       setPendingEmail(response?.user?.email ?? accountForm.email.trim())
-      setSignupMessage(response?.message || 'Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse.')
+      if (response?.message) {
+        setSignupMessage(response.message)
+      } else {
+        setSignupMessage('Compte créé. Vérifiez votre boîte mail pour confirmer votre adresse.')
+      }
       setAccountForm(ACCOUNT_INITIAL)
       setCompanyForm(COMPANY_INITIAL)
       setLogoError('')

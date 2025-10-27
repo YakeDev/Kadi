@@ -36,6 +36,17 @@ create table profiles (
   tenant_id uuid references tenants(id) on delete cascade,
   email text unique not null,
   company text,
+  tagline text,
+  logo_url text,
+  manager_name text,
+  address text,
+  city text,
+  state text,
+  national_id text,
+  rccm text,
+  nif text,
+  phone text,
+  website text,
   created_at timestamp default now()
 );
 
@@ -85,9 +96,27 @@ create index on catalogue (tenant_id);
 create index on invoices (tenant_id);
 ```
 
+### Mise à jour d’un schéma existant
+
+Si votre table `profiles` a été créée avant l’ajout des champs optionnels (logo, téléphone, site web…), exécutez :
+
+```sql
+alter table profiles add column if not exists tagline text;
+alter table profiles add column if not exists logo_url text;
+alter table profiles add column if not exists manager_name text;
+alter table profiles add column if not exists address text;
+alter table profiles add column if not exists city text;
+alter table profiles add column if not exists state text;
+alter table profiles add column if not exists national_id text;
+alter table profiles add column if not exists rccm text;
+alter table profiles add column if not exists nif text;
+alter table profiles add column if not exists phone text;
+alter table profiles add column if not exists website text;
+```
+
 ---
 
-## 3. Sécurité RLS (Row Level Security)
+## 5. Sécurité RLS (Row Level Security)
 
 Activez la sécurité par ligne sur chaque table :
 

@@ -1,7 +1,5 @@
 import { randomBytes } from 'crypto'
 import { supabase } from '../models/supabaseClient.js'
-import { sendMail } from '../utils/mailer.js'
-import { emailVerificationTemplate } from '../utils/templates.js'
 
 const PROFILE_OPTIONAL_FIELDS = [
   'logo_url',
@@ -169,69 +167,6 @@ export const signup = async (req, res, next) => {
 
     const profileData = await createProfileInternal(profilePayload)
 
-    const triggerSupabaseResend = async () => {
-      const { error: resendError } = await supabase.auth.admin.resend({
-        type: 'signup',
-        email,
-        options: { redirectTo }
-      })
-      if (resendError) {
-        console.warn('Impossible de déclencher l’email de confirmation via Supabase', resendError)
-        return { sent: false, reason: resendError.message || 'supabase_resend_failed' }
-      }
-      return { sent: true }
-    }
-
-    let verificationUrl = null
-    let emailSent = false
-    let emailSendIssue = null
-    const redirectTo =
-      process.env.EMAIL_REDIRECT_URL ||
-      process.env.APP_URL ||
-      'http://localhost:5173/auth/callback'
-
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'signup',
-      email,
-      password,
-      options: { redirectTo }
-    })
-
-    if (linkError) {
-      console.error('Impossible de générer le lien de confirmation Supabase', linkError)
-      const resendResult = await triggerSupabaseResend()
-      emailSent = resendResult.sent
-      emailSendIssue = resendResult.reason || linkError.message || 'generate_link_failed'
-    } else {
-      verificationUrl = linkData?.action_link ?? null
-      if (verificationUrl) {
-        const emailPayload = emailVerificationTemplate({
-          verificationUrl,
-          companyName: company || profileData?.company || ''
-        })
-        const sendResult = await sendMail({
-          to: email,
-          subject: emailPayload.subject,
-          html: emailPayload.html,
-          text: emailPayload.text
-        })
-        emailSent = sendResult.sent
-        if (!emailSent) {
-          const resendResult = await triggerSupabaseResend()
-          emailSent = resendResult.sent
-          emailSendIssue = resendResult.reason || sendResult.reason || 'smtp_failed'
-        }
-      } else {
-        const resendResult = await triggerSupabaseResend()
-        emailSent = resendResult.sent
-        emailSendIssue = resendResult.reason || 'missing_action_link'
-      }
-    }
-
-    const confirmationMessage = emailSent
-      ? 'Compte créé. Un email de confirmation vient de vous être envoyé.'
-      : "Compte créé. Impossible d’envoyer automatiquement l’email de confirmation. Vérifiez la configuration Supabase (Email confirmations activées, Redirect URL autorisée) puis renvoyez l’email depuis l’écran de connexion."
-
     res.status(201).json({
       user: {
         id: data.user.id,
@@ -239,10 +174,9 @@ export const signup = async (req, res, next) => {
       },
       profile: profileData,
       emailConfirmationRequired: true,
-      emailVerificationSent: emailSent,
+      emailVerificationSent: false,
       logoUploaded: Boolean(uploadedLogoUrl),
-      emailSendIssue,
-      message: confirmationMessage
+      message: 'Compte créé. Veuillez confirmer votre email ultérieurement.'
     })
   } catch (error) {
     next(error)
@@ -301,15 +235,35 @@ const createProfileInternal = async ({ email, company, userId, ...rest }) => {
     }
   }
 
+  const profileColumns =
+    'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
+
   const { data: profileData, error: profileError } = await supabase
     .from('profiles')
     .upsert(profileRecord, { onConflict: 'id' })
-    .select(
-      'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
-    )
+    .select(profileColumns)
     .single()
 
-  if (profileError) throw profileError
+  if (profileError) {
+    const isMissingColumn =
+      profileError.code === '42703' ||
+      /column.+does not exist/i.test(profileError.message || '')
+
+    if (isMissingColumn) {
+      const fallbackColumns =
+        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
+      const { data: fallbackProfile, error: fallbackError } = await supabase
+        .from('profiles')
+        .select(fallbackColumns)
+        .eq('id', userId)
+        .single()
+
+      if (fallbackError) throw fallbackError
+      return fallbackProfile
+    }
+
+    throw profileError
+  }
 
   return profileData
 }
@@ -382,12 +336,12 @@ export const getProfile = async (req, res, next) => {
       return res.status(401).json({ message: 'Authentification requise.' })
     }
 
+    const profileColumns =
+      'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
     let hasExtendedColumns = true
     let response = await supabase
       .from('profiles')
-      .select(
-        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
-      )
+      .select(profileColumns)
       .eq('id', userId)
       .single()
     let { data, error } = response
@@ -401,7 +355,7 @@ export const getProfile = async (req, res, next) => {
       hasExtendedColumns = false
       const fallback = await supabase
         .from('profiles')
-        .select('company')
+        .select('company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif')
         .eq('id', userId)
         .single()
       data = fallback.data
@@ -422,7 +376,9 @@ export const getProfile = async (req, res, next) => {
       state: hasExtendedColumns ? data?.state ?? '' : '',
       national_id: hasExtendedColumns ? data?.national_id ?? '' : '',
       rccm: hasExtendedColumns ? data?.rccm ?? '' : '',
-      nif: hasExtendedColumns ? data?.nif ?? '' : ''
+      nif: hasExtendedColumns ? data?.nif ?? '' : '',
+      phone: hasExtendedColumns ? data?.phone ?? '' : '',
+      website: hasExtendedColumns ? data?.website ?? '' : ''
     })
   } catch (error) {
     next(error)
