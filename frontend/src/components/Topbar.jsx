@@ -44,20 +44,23 @@ const Topbar = () => {
         </button>
 
         <div className='flex items-center gap-3'>
-          {companyLogo ? (
-            <img
-              src={companyLogo}
-              alt={`${companyName} logo`}
-              width={LOGO_SIZE}
-              height={LOGO_SIZE}
-              className='h-9 w-9 rounded-[var(--radius-md)] object-contain shadow-soft'
-              loading='lazy'
-            />
-          ) : (
-            <div className='grid h-9 w-9 place-items-center rounded-[var(--radius-md)] bg-[var(--primary-soft)] text-sm font-semibold uppercase text-[var(--primary)] shadow-soft'>
-              {companyInitial}
-            </div>
-          )}
+          <div className='relative h-9 w-9'>
+            <div className='absolute inset-0 rounded-full border border-white/60 bg-white/70 blur-[2px]' />
+            {companyLogo ? (
+              <img
+                src={companyLogo}
+                alt={`${companyName} logo`}
+                width={LOGO_SIZE}
+                height={LOGO_SIZE}
+                className='relative z-10 h-9 w-9 rounded-full object-cover shadow-soft'
+                loading='lazy'
+              />
+            ) : (
+              <div className='relative z-10 grid h-9 w-9 place-items-center rounded-full bg-[var(--primary-soft)] text-sm font-semibold uppercase text-[var(--primary)] shadow-soft'>
+                {companyInitial}
+              </div>
+            )}
+          </div>
           <div className='leading-tight'>
             <p className='text-sm font-semibold text-[var(--text-dark)]'>{companyName}</p>
             {companyTagline ? (
