@@ -13,6 +13,7 @@ import {
 } from 'lucide-react'
 import { createCatalogItem, fetchCatalogItems, updateCatalogItem } from '../services/catalog.js'
 import { showErrorToast } from '../utils/errorToast.js'
+import FormSection from '../components/FormSection.jsx'
 
 const emptyForm = {
   name: '',
@@ -141,6 +142,111 @@ const Catalogue = () => {
   const handleFilterChange = (type) => {
     setFilters((prev) => ({ ...prev, type }))
   }
+
+  const renderCatalogueFormSections = () => (
+    <div className='space-y-4'>
+      <FormSection
+        title='Informations générales'
+        description='Nom, description et nature de votre prestation.'
+        icon={Package}
+      >
+        <div className='flex flex-col gap-2'>
+          <label className='label' htmlFor='name'>Nom de l’article</label>
+          <input
+            id='name'
+            value={form.name}
+            onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
+            className='input-compact'
+            placeholder='Nom du produit ou service'
+            required
+          />
+        </div>
+        <div className='flex flex-col gap-2'>
+          <label className='label' htmlFor='description'>Description</label>
+          <textarea
+            id='description'
+            value={form.description}
+            onChange={(event) => setForm((prev) => ({ ...prev, description: event.target.value }))}
+            className='textarea textarea-compact min-h-[110px]'
+            placeholder='Détaillez en quoi consiste cet article…'
+          />
+        </div>
+        <div className='grid gap-3 sm:grid-cols-2'>
+          <div className='space-y-2'>
+            <label className='label'>Type</label>
+            <div className='grid grid-cols-2 gap-2'>
+              <button
+                type='button'
+                onClick={() => setForm((prev) => ({ ...prev, item_type: 'product' }))}
+                className={`btn-ghost h-9 justify-center text-xs font-semibold ${
+                  form.item_type === 'product' ? 'border-[var(--primary)] text-[var(--primary)]' : ''
+                }`}
+              >
+                <Package className='mr-2 h-4 w-4' /> Produit
+              </button>
+              <button
+                type='button'
+                onClick={() => setForm((prev) => ({ ...prev, item_type: 'service' }))}
+                className={`btn-ghost h-9 justify-center text-xs font-semibold ${
+                  form.item_type === 'service' ? 'border-[var(--primary)] text-[var(--primary)]' : ''
+                }`}
+              >
+                <Wand2 className='mr-2 h-4 w-4' /> Service
+              </button>
+            </div>
+          </div>
+          <div className='flex flex-col gap-2'>
+            <label className='label' htmlFor='sku'>Référence interne (SKU)</label>
+            <input
+              id='sku'
+              value={form.sku}
+              onChange={(event) => setForm((prev) => ({ ...prev, sku: event.target.value }))}
+              className='input-compact'
+              placeholder='Ex. PROD-001'
+            />
+          </div>
+        </div>
+      </FormSection>
+
+      <FormSection
+        title='Tarification'
+        description='Déterminez le prix par défaut et la devise.'
+        icon={BadgeCheck}
+      >
+        <div className='grid gap-3 sm:grid-cols-2'>
+          <div className='flex flex-col gap-2'>
+            <label className='label' htmlFor='unit_price'>Prix unitaire</label>
+            <input
+              id='unit_price'
+              type='number'
+              min='0'
+              step='0.01'
+              value={form.unit_price}
+              onChange={(event) => setForm((prev) => ({ ...prev, unit_price: event.target.value }))}
+              className='input-compact'
+              placeholder='0.00'
+            />
+          </div>
+          <div className='flex flex-col gap-2'>
+            <label className='label' htmlFor='currency'>Devise</label>
+            <input
+              id='currency'
+              value={form.currency}
+              onChange={(event) =>
+                setForm((prev) => ({
+                  ...prev,
+                  currency: event.target.value.toUpperCase().slice(0, 3)
+                }))
+              }
+              className='input-compact uppercase'
+              placeholder='USD'
+              maxLength={3}
+            />
+          </div>
+        </div>
+      </FormSection>
+    </div>
+  )
 
   return (
     <div className='space-y-8'>
@@ -371,119 +477,8 @@ const Catalogue = () => {
             </div>
             <form onSubmit={handleCreate} className='flex h-full flex-col'>
               <div className='flex-1 space-y-4 overflow-y-auto px-6 py-6'>
-                <div className='space-y-2'>
-                  <label className='label' htmlFor='name'>
-                    Intitulé
-                  </label>
-                  <input
-                    id='name'
-                    value={form.name}
-                    onChange={(event) => setForm((prev) => ({ ...prev, name: event.target.value }))}
-                    className='input-compact'
-                    placeholder='Nom du produit ou service'
-                    required
-                  />
-                </div>
-
-                <div className='space-y-2'>
-                  <label className='label' htmlFor='description'>
-                    Description
-                  </label>
-                  <textarea
-                    id='description'
-                    value={form.description}
-                    onChange={(event) =>
-                      setForm((prev) => ({ ...prev, description: event.target.value }))
-                    }
-                    className='textarea textarea-compact min-h-[110px]'
-                    placeholder='Détaillez en quoi consiste cet article…'
-                  />
-                </div>
-
-                <div className='grid gap-3 sm:grid-cols-2'>
-                  <div className='space-y-2'>
-                    <label className='label'>Type</label>
-                    <div className='grid grid-cols-2 gap-2'>
-                      <button
-                        type='button'
-                        onClick={() => setForm((prev) => ({ ...prev, item_type: 'product' }))}
-                        className={`btn-ghost h-9 justify-center text-xs font-semibold ${
-                          form.item_type === 'product'
-                            ? 'border-[var(--primary)] text-[var(--primary)]'
-                            : ''
-                        }`}
-                      >
-                        <Package className='mr-2 h-4 w-4' />
-                        Produit
-                      </button>
-                      <button
-                        type='button'
-                        onClick={() => setForm((prev) => ({ ...prev, item_type: 'service' }))}
-                        className={`btn-ghost h-9 justify-center text-xs font-semibold ${
-                          form.item_type === 'service'
-                            ? 'border-[var(--primary)] text-[var(--primary)]'
-                            : ''
-                        }`}
-                      >
-                        <Wand2 className='mr-2 h-4 w-4' />
-                        Service
-                      </button>
-                    </div>
-                  </div>
-
-                  <div className='space-y-2'>
-                    <label className='label' htmlFor='sku'>
-                      Référence interne (SKU)
-                    </label>
-                    <input
-                      id='sku'
-                      value={form.sku}
-                      onChange={(event) => setForm((prev) => ({ ...prev, sku: event.target.value }))}
-                      className='input-compact'
-                      placeholder='Ex. PROD-001'
-                    />
-                  </div>
-                </div>
-
-                <div className='grid gap-3 sm:grid-cols-2'>
-                  <div className='space-y-2'>
-                    <label className='label' htmlFor='unit_price'>
-                      Prix unitaire
-                    </label>
-                    <input
-                      id='unit_price'
-                      type='number'
-                      min='0'
-                      step='0.01'
-                      value={form.unit_price}
-                      onChange={(event) =>
-                        setForm((prev) => ({ ...prev, unit_price: event.target.value }))
-                      }
-                      className='input-compact'
-                      placeholder='0.00'
-                    />
-                  </div>
-                  <div className='space-y-2'>
-                    <label className='label' htmlFor='currency'>
-                      Devise
-                    </label>
-                    <input
-                      id='currency'
-                      value={form.currency}
-                      onChange={(event) =>
-                        setForm((prev) => ({
-                          ...prev,
-                          currency: event.target.value.toUpperCase().slice(0, 3)
-                        }))
-                      }
-                      className='input-compact uppercase'
-                      placeholder='USD'
-                      maxLength={3}
-                    />
-                  </div>
-                </div>
+                {renderCatalogueFormSections()}
               </div>
-
               <div className='flex items-center justify-between gap-2 border-t border-[var(--border)] px-6 py-4'>
                 <button
                   type='button'

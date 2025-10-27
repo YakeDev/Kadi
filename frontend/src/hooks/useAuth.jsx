@@ -16,7 +16,9 @@ const emptyProfile = {
   state: '',
   national_id: '',
   rccm: '',
-  nif: ''
+  nif: '',
+  phone: '',
+  website: ''
 }
 
 const OPTIONAL_PROFILE_FIELDS = [
@@ -28,7 +30,9 @@ const OPTIONAL_PROFILE_FIELDS = [
   'tagline',
   'national_id',
   'rccm',
-  'nif'
+  'nif',
+  'phone',
+  'website'
 ]
 
 const deriveFallbackProfile = (user) => {
@@ -61,7 +65,9 @@ export const AuthProvider = ({ children }) => {
         state: data?.state ?? '',
         national_id: data?.national_id ?? '',
         rccm: data?.rccm ?? '',
-        nif: data?.nif ?? ''
+        nif: data?.nif ?? '',
+        phone: data?.phone ?? '',
+        website: data?.website ?? ''
       })
     } catch (error) {
       console.warn('Impossible de récupérer le profil:', error.message)
@@ -192,7 +198,9 @@ export const AuthProvider = ({ children }) => {
           national_id:
             data.national_id ?? sanitizedPayload.national_id ?? fallback.national_id ?? '',
           rccm: data.rccm ?? sanitizedPayload.rccm ?? fallback.rccm ?? '',
-          nif: data.nif ?? sanitizedPayload.nif ?? fallback.nif ?? ''
+          nif: data.nif ?? sanitizedPayload.nif ?? fallback.nif ?? '',
+          phone: data.phone ?? sanitizedPayload.phone ?? fallback.phone ?? '',
+          website: data.website ?? sanitizedPayload.website ?? fallback.website ?? ''
         }
       })
     },

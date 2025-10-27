@@ -12,7 +12,9 @@ const PROFILE_OPTIONAL_FIELDS = [
   'tagline',
   'national_id',
   'rccm',
-  'nif'
+  'nif',
+  'phone',
+  'website'
 ]
 
 const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
@@ -303,7 +305,7 @@ const createProfileInternal = async ({ email, company, userId, ...rest }) => {
     .from('profiles')
     .upsert(profileRecord, { onConflict: 'id' })
     .select(
-      'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
+      'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
     )
     .single()
 
@@ -361,7 +363,7 @@ export const createProfile = async (req, res, next) => {
     const { data, error } = await supabase
       .from('profiles')
       .select(
-        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
+        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
       )
       .eq('id', userId)
       .single()
