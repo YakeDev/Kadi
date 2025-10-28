@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth.jsx'
 import { uploadCompanyLogo } from '../services/supabase.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import FormSection from '../components/FormSection.jsx'
+import PageHeader from '../components/PageHeader.jsx'
 
 const initialState = {
   company: '',
@@ -157,20 +158,25 @@ const Company = () => {
   const disabled = isLoading || isSaving || isUploadingLogo
 
   const renderLogoUploader = () => (
-    <div className='flex flex-col items-center gap-3 rounded-[var(--radius-xl)] border border-dashed border-[var(--border)] bg-[rgba(15,23,42,0.02)] p-5 text-center'>
-      <div className='relative flex h-28 w-28 items-center justify-center rounded-[var(--radius-lg)] bg-white shadow-soft'>
-        {logoPreview ? (
-          <img
-            src={logoPreview}
-            alt='Logo de votre entreprise'
-            className='h-full w-full rounded-[var(--radius-lg)] object-contain'
-          />
-        ) : (
-          <div className='flex h-full w-full flex-col items-center justify-center gap-2 text-[var(--text-muted)]'>
-            <ImageIcon className='h-8 w-8' />
-            <span className='text-xs font-semibold'>Logo</span>
-          </div>
-        )}
+    <div
+      className={[
+        'relative flex w-full flex-col items-center gap-4 rounded-[var(--radius-xl)] border-2 border-dashed p-4 text-center transition',
+        isUploadingLogo
+          ? 'border-[var(--primary)] bg-[rgba(10,132,255,0.06)]'
+          : 'border-[var(--border)] bg-[rgba(15,23,42,0.02)]'
+      ].join(' ')}
+    >
+      <div className='relative'>
+        <div className='h-20 w-20 overflow-hidden rounded-full border border-[rgba(255,255,255,0.6)] bg-white shadow-soft'>
+          {logoPreview ? (
+            <img src={logoPreview} alt='Logo de votre entreprise' className='h-full w-full object-cover' />
+          ) : (
+            <div className='flex h-full w-full flex-col items-center justify-center gap-1 text-[var(--text-muted)]'>
+              <ImageIcon className='h-7 w-7' />
+              <span className='text-[11px] font-medium'>Logo</span>
+            </div>
+          )}
+        </div>
         <label className='btn-primary absolute -bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center justify-center px-4 text-xs font-semibold shadow-soft'>
           {logoPreview ? 'Modifier' : 'Importer un logo'}
           <input type='file' accept='image/*' className='hidden' onChange={handleLogoChange} disabled={disabled} />
@@ -193,40 +199,42 @@ const Company = () => {
 
   return (
     <div className='space-y-8'>
-      <header className='flex flex-col gap-2'>
-        <p className='text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]'>Mon entreprise</p>
-        <h1 className='text-3xl font-semibold text-[var(--text-dark)]'>Identité et mentions légales</h1>
-        <p className='text-sm text-[var(--text-muted)]'>Ces informations apparaîtront sur vos factures et dans la navigation.</p>
-      </header>
+      <PageHeader
+        icon={Building2}
+        title='Identité et mentions légales'
+        subtitle='Ces informations apparaîtront sur vos factures et dans la navigation.'
+      />
 
       <form onSubmit={handleSubmit} className='space-y-6'>
         <FormSection
-          title="Identité visuelle"
+          title='Identité visuelle'
           description='Votre logo et votre slogan apparaîtront sur vos factures.'
           icon={ImageIcon}
         >
-          {renderLogoUploader()}
-          <div className='grid gap-4 md:grid-cols-2'>
-            <div className='flex flex-col gap-2'>
-              <label className='label'>Nom de l’entreprise</label>
-              <input name='company' value={form.company} onChange={handleChange} className='input' required />
-            </div>
-            <div className='flex flex-col gap-2'>
-              <label className='label'>Tagline (optionnel)</label>
-              <input
-                name='tagline'
-                value={form.tagline}
-                onChange={handleChange}
-                className='input'
-                placeholder='Facturation simple pour PME'
-              />
+          <div className='grid gap-6 md:grid-cols-2 md:items-start'>
+            <div className='flex justify-center md:justify-start md:pt-1'>{renderLogoUploader()}</div>
+            <div className='grid gap-4 md:grid-cols-2'>
+              <div className='flex flex-col gap-2 md:col-span-2'>
+                <label className='label'>Nom de l’entreprise</label>
+                <input name='company' value={form.company} onChange={handleChange} className='input' required />
+              </div>
+              <div className='flex flex-col gap-2 md:col-span-2'>
+                <label className='label'>Tagline (optionnel)</label>
+                <input
+                  name='tagline'
+                  value={form.tagline}
+                  onChange={handleChange}
+                  className='input'
+                  placeholder='Facturation simple pour PME'
+                />
+              </div>
             </div>
           </div>
         </FormSection>
 
         <FormSection
           title='Coordonnées principales'
-          description="Ces informations sont utilisées pour contacter votre entreprise."
+          description='Ces informations sont utilisées pour contacter votre entreprise.'
           icon={Phone}
         >
           <div className='grid gap-4 md:grid-cols-2'>
@@ -257,7 +265,7 @@ const Company = () => {
               <input value={companyEmail} disabled className='input bg-[rgba(148,163,184,0.12)]' />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Site web (optionnel)</label>
+              <label className='label'>Site web</label>
               <input
                 name='website'
                 value={form.website}
@@ -271,76 +279,57 @@ const Company = () => {
 
         <FormSection
           title='Adresse professionnelle'
-          description='Ces informations apparaissent sur vos factures et documents légaux.'
+          description='Localisation physique de votre entreprise.'
           icon={Building2}
         >
-          <div className='flex flex-col gap-2'>
-            <label className='label'>Adresse complète</label>
-            <textarea
-              name='address'
-              value={form.address}
-              onChange={handleChange}
-              className='textarea textarea-compact min-h-[100px]'
-              placeholder='Adresse postale, quartier, numéro de bâtiment…'
-            />
-          </div>
           <div className='grid gap-4 md:grid-cols-2'>
+            <div className='flex flex-col gap-2 md:col-span-2'>
+              <label className='label'>Adresse</label>
+              <textarea
+                name='address'
+                value={form.address}
+                onChange={handleChange}
+                className='textarea'
+                placeholder='Rue, numéro, ville'
+              />
+            </div>
             <div className='flex flex-col gap-2'>
               <label className='label'>Ville</label>
               <input name='city' value={form.city} onChange={handleChange} className='input' />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>État / Province</label>
+              <label className='label'>Province / État</label>
               <input name='state' value={form.state} onChange={handleChange} className='input' />
             </div>
           </div>
         </FormSection>
 
-        <FormSection title='Mentions légales (optionnel)' icon={LinkIcon}>
-          <div className='grid gap-4 md:grid-cols-3'>
+        <FormSection
+          title='Mentions légales (optionnel)'
+          description='Ajoutez vos informations légales pour les faire apparaître sur vos documents.'
+          icon={LinkIcon}
+        >
+          <div className='grid gap-4 md:grid-cols-2'>
             <div className='flex flex-col gap-2'>
-              <label className='label'>ID. Nat.</label>
-              <input
-                name='national_id'
-                value={form.national_id}
-                onChange={handleChange}
-                className='input'
-                placeholder='Numéro national'
-              />
+              <label className='label'>Registre du commerce (RCCM)</label>
+              <input name='rccm' value={form.rccm} onChange={handleChange} className='input' />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>RCCM</label>
-              <input
-                name='rccm'
-                value={form.rccm}
-                onChange={handleChange}
-                className='input'
-                placeholder='RCCM'
-              />
+              <label className='label'>Numéro fiscal (NIF)</label>
+              <input name='nif' value={form.nif} onChange={handleChange} className='input' />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>NIF</label>
-              <input
-                name='nif'
-                value={form.nif}
-                onChange={handleChange}
-                className='input'
-                placeholder='Numéro fiscal'
-              />
+              <label className='label'>Identifiant national</label>
+              <input name='national_id' value={form.national_id} onChange={handleChange} className='input' />
             </div>
           </div>
         </FormSection>
 
-        <div className='flex justify-end gap-3 pt-2'>
-          <button
-            type='button'
-            onClick={() => syncFormWithProfile(profile)}
-            className='btn-ghost px-4 text-sm font-semibold'
-            disabled={disabled}
-          >
-            Réinitialiser
+        <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end'>
+          <button type='button' onClick={() => syncFormWithProfile(profile)} className='btn-ghost justify-center'>
+            Restaurer
           </button>
-          <button type='submit' className='btn-primary px-6 text-sm font-semibold' disabled={disabled}>
+          <button type='submit' className='btn-primary justify-center' disabled={disabled}>
             {isSaving ? 'Enregistrement…' : 'Enregistrer'}
           </button>
         </div>

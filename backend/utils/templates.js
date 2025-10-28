@@ -61,3 +61,40 @@ export const emailVerificationTemplate = ({ verificationUrl, companyName }) => (
     `Si vous n'êtes pas à l'origine de cette demande, ignorez simplement cet email.`
   ].join('\n')
 })
+
+export const passwordResetTemplate = ({ resetUrl, companyName }) => ({
+  subject: `Réinitialisez votre mot de passe ${appName}`,
+  html: `
+    <div style="${baseStyles}">
+      <div style="${cardStyles}">
+        <h1 style="font-size: 24px; margin-bottom: 12px;">Bonjour${companyName ? ` ${companyName}` : ''} 👋</h1>
+        <p style="margin: 0 0 16px 0; font-size: 16px;">
+          Nous avons reçu une demande de réinitialisation de mot de passe pour votre compte <strong>${appName}</strong>.
+        </p>
+        <p style="margin: 0 0 28px 0;">
+          <a href="${resetUrl}" style="${buttonStyles}">Créer un nouveau mot de passe</a>
+        </p>
+        <p style="font-size: 14px; color: #6e6e73;">
+          Si vous n'êtes pas à l'origine de cette demande, aucune action n'est requise.
+        </p>
+        <hr style="margin: 32px 0; border: none; border-top: 1px solid rgba(15,23,42,0.08);" />
+        <p style="font-size: 13px; color: #6e6e73;">
+          Lien de secours (copiez-collez dans votre navigateur) :<br />
+          <span style="word-break: break-all;">${resetUrl}</span>
+        </p>
+        <p style="font-size: 13px; color: #6e6e73;">
+          — L'équipe ${appName}
+        </p>
+      </div>
+    </div>
+  `,
+  text: [
+    `Bonjour ${companyName || ''}`.trim(),
+    '',
+    `Nous avons reçu une demande de réinitialisation de mot de passe pour ${appName}.`,
+    'Suivez ce lien pour créer un nouveau mot de passe :',
+    resetUrl,
+    '',
+    "Si vous n'avez pas fait cette demande, ignorez simplement ce message."
+  ].join('\n')
+})

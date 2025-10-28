@@ -14,6 +14,8 @@ import {
 import { createCatalogItem, fetchCatalogItems, updateCatalogItem } from '../services/catalog.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import FormSection from '../components/FormSection.jsx'
+import PageHeader from '../components/PageHeader.jsx'
+import FloatingActionButton from '../components/FloatingActionButton.jsx'
 
 const emptyForm = {
   name: '',
@@ -250,30 +252,27 @@ const Catalogue = () => {
 
   return (
     <div className='space-y-8'>
-      <header className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
-        <div className='space-y-2'>
-          <p className='text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]'>Catalogue</p>
-          <h1 className='text-3xl font-semibold text-[var(--text-dark)]'>Produits & services</h1>
-          <p className='text-sm text-[var(--text-muted)]'>
-            Centralisez vos prestations pour les injecter en un clic dans vos factures.
-          </p>
-        </div>
-        <div className='flex flex-wrap items-center gap-2'>
+      <PageHeader
+        icon={PackagePlus}
+        title='Produits & services'
+        subtitle='Centralisez vos prestations pour les injecter en un clic dans vos factures.'
+        actions={[
           <button
+            key='refresh'
             type='button'
             onClick={loadItems}
-            className='btn-ghost h-10 px-4 text-sm font-semibold'
+            className='btn-ghost h-11 justify-center'
             disabled={isLoading}
           >
             <RefreshCcw className={`mr-2 h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             Actualiser
-          </button>
-          <button type='button' onClick={openDrawer} className='btn-primary h-10 px-4 text-sm font-semibold'>
+          </button>,
+          <button key='create' type='button' onClick={openDrawer} className='btn-primary h-11 justify-center'>
             <PackagePlus className='mr-2 h-4 w-4' />
             Nouvel article
           </button>
-        </div>
-      </header>
+        ]}
+      />
 
       <section className='card border border-white/40 p-0 shadow-[0_18px_52px_-44px_rgba(28,28,30,0.22)]'>
         <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
@@ -514,6 +513,15 @@ const Catalogue = () => {
             </form>
           </div>
         </div>
+      ) : null}
+
+      {!isDrawerOpen ? (
+        <FloatingActionButton
+          icon={PackagePlus}
+          label='Nouvel article'
+          onClick={openDrawer}
+          className='lg:hidden'
+        />
       ) : null}
     </div>
   )

@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { DollarSign, Clock, CheckCircle2, Plug, ArrowUpRight, Inbox } from 'lucide-react'
+import { DollarSign, Clock, CheckCircle2, Plug, ArrowUpRight, Inbox, LayoutDashboard } from 'lucide-react'
 import toast from 'react-hot-toast'
 import { api } from '../services/api.js'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { showErrorToast } from '../utils/errorToast.js'
+import PageHeader from '../components/PageHeader.jsx'
 
 const cards = [
   { key: 'monthlyRevenue', title: 'Revenus du mois', suffix: 'USD', icon: DollarSign },
@@ -50,36 +51,25 @@ const Dashboard = () => {
     [recentInvoices, isLoading]
   )
 
+  const nameCandidate =
+    user?.user_metadata?.full_name || profile?.manager_name || profile?.company || user?.email?.split('@')[0] || ''
+
   return (
     <div className='space-y-8'>
-      <div className='flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between'>
-        <div>
-          <p className='text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]'>Tableau de bord</p>
-          <h1 className='mt-2 text-3xl font-semibold text-[var(--text-dark)]'>
-            {`Bonjour${(() => {
-              const nameCandidate =
-                user?.user_metadata?.full_name ||
-                profile?.manager_name ||
-                profile?.company ||
-                user?.email?.split('@')[0] ||
-                ''
-              return nameCandidate ? ` ${nameCandidate}` : ''
-            })()}, voici votre activité`}
-          </h1>
-          <p className='mt-1 text-sm text-[var(--text-muted)]'>
-            Visualisez vos revenus, fluidifiez la facturation et relancez vos clients en un coup d’œil.
-          </p>
-        </div>
-        <div className='flex flex-wrap gap-3'>
-          <Link to='/factures' className='btn-primary'>
+      <PageHeader
+        icon={LayoutDashboard}
+        title={`Bonjour${nameCandidate ? ` ${nameCandidate}` : ''}, voici votre activité`}
+        subtitle='Visualisez vos revenus, fluidifiez la facturation et relancez vos clients en un coup d’œil.'
+        actions={[
+          <Link key='invoice' to='/factures' className='btn-primary h-11 justify-center'>
             <ArrowUpRight className='h-4 w-4' />
             Créer une facture
-          </Link>
-          <Link to='/clients' className='btn-secondary'>
+          </Link>,
+          <Link key='clients' to='/clients' className='btn-secondary h-11 justify-center'>
             Gérer mes clients
           </Link>
-        </div>
-      </div>
+        ]}
+      />
 
       <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
         {cards.map((card) => {

@@ -13,7 +13,7 @@ KADI utilise 5 tables principales :
 | `tenants`   | Gère les entreprises (espaces de travail indépendants) |
 | `profiles`  | Profils utilisateurs liés à Supabase Auth              |
 | `clients`   | Clients de chaque entreprise                           |
-| `catalogue` | Produits ou services vendus                            |
+| `catalog_items` | Produits ou services vendus                        |
 | `invoices`  | Factures et montants associés                          |
 
 ---
@@ -63,15 +63,20 @@ create table clients (
 );
 
 -- 4 Table du catalogue
-create table catalogue (
+create table catalog_items (
   id uuid primary key default uuid_generate_v4(),
   tenant_id uuid not null references tenants(id) on delete cascade,
   name text not null,
   description text,
+  item_type text not null check (item_type in ('product', 'service')),
   unit_price numeric default 0,
   currency text default 'USD',
-  created_at timestamp default now()
+  sku text,
+  is_active boolean default true,
+  created_at timestamp default now(),
+  updated_at timestamp default now()
 );
+create unique index catalog_items_tenant_sku_key on catalog_items (tenant_id, sku) where sku is not null;
 
 -- 5 Table des factures
 create table invoices (
@@ -92,7 +97,7 @@ create table invoices (
 
 -- 6 Index pour performance
 create index on clients (tenant_id);
-create index on catalogue (tenant_id);
+create index on catalog_items (tenant_id);
 create index on invoices (tenant_id);
 ```
 
@@ -123,7 +128,7 @@ Activez la sécurité par ligne sur chaque table :
 ```sql
 alter table profiles enable row level security;
 alter table clients enable row level security;
-alter table catalogue enable row level security;
+alter table catalog_items enable row level security;
 alter table invoices enable row level security;
 ```
 
@@ -156,10 +161,10 @@ create policy "Clients par tenant" on clients
   );
 ```
 
-### Table `catalogue`
+### Table `catalog_items`
 
 ```sql
-create policy "Catalogue par tenant" on catalogue
+create policy "Catalogue par tenant" on catalog_items
   for all using (
     tenant_id = (
       select tenant_id from profiles where profiles.id = auth.uid()
