@@ -163,6 +163,22 @@ export const AuthProvider = ({ children }) => {
     setProfile(null)
   }, [])
 
+  const resendVerificationEmail = useCallback(async (email) => {
+    if (!email?.trim()) {
+      throw new Error('Adresse email requise.')
+    }
+    const { data } = await api.post('/auth/resend-verification', { email: email.trim() })
+    return data
+  }, [])
+
+  const requestPasswordReset = useCallback(async (email) => {
+    if (!email?.trim()) {
+      throw new Error('Adresse email requise.')
+    }
+    const { data } = await api.post('/auth/password/forgot', { email: email.trim() })
+    return data
+  }, [])
+
   const updateProfile = useCallback(
     async (payload = {}) => {
       const sanitizedPayload = {}
@@ -216,9 +232,11 @@ export const AuthProvider = ({ children }) => {
       login,
       signup,
       logout,
-      updateProfile
+      updateProfile,
+      resendVerificationEmail,
+      requestPasswordReset
     }),
-    [session, profile, isLoading, login, signup, logout, updateProfile]
+    [session, profile, isLoading, login, signup, logout, updateProfile, resendVerificationEmail, requestPasswordReset]
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

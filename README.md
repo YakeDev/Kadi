@@ -51,8 +51,8 @@ cd Kadi
 
 ```bash
 cd backend
-cp .env .env.local
-# Ajouter vos clés Supabase et OpenAI
+cp .env.example .env.local
+# Renseignez vos variables (Supabase, OpenAI, SMTP, URL de redirection)
 npm install
 npm run dev
 ```

@@ -8,13 +8,17 @@ Chaque requête doit être accompagnée d’un **token Bearer** (issu de Supabas
 ## Authentification
 
 ### `POST /api/auth/signup`
-Crée un nouvel utilisateur Supabase (réservé à l’admin ou via console).
+Inscription d’un nouvel utilisateur (email + mot de passe) et création du profil entreprise.
 
 **Body JSON :**
 ```json
 {
   "email": "user@exemple.com",
-  "password": "123456"
+  "password": "123456",
+  "company": "Nom de l'entreprise",
+  "manager_name": "Responsable",
+  "logo_file": "data:image/png;base64,...",
+  "logo_filename": "logo.png"
 }
 ```
 
@@ -22,7 +26,12 @@ Crée un nouvel utilisateur Supabase (réservé à l’admin ou via console).
 ```json
 {
   "user": {"id": "uuid", "email": "user@exemple.com"},
-  "message": "Utilisateur créé avec succès"
+  "profile": {"company": "Nom de l'entreprise"},
+  "emailConfirmationRequired": true,
+  "emailVerificationSent": true,
+  "verificationUrl": "https://example.com/verify",
+  "logoUploaded": true,
+  "message": "Compte créé. Un email de confirmation vous a été envoyé."
 }
 ```
 
@@ -52,11 +61,47 @@ Connexion utilisateur via Supabase.
 ---
 
 ### `POST /api/auth/logout`
-Déconnexion et invalidation de la session.
+Déconnexion. Répond `204 No Content`.
+
+---
+
+### `POST /api/auth/resend-verification`
+Renvoie un email de confirmation si le compte n’est pas encore validé (idempotent).
+
+**Body JSON :**
+```json
+{
+  "email": "user@exemple.com"
+}
+```
 
 **Réponse :**
 ```json
-{"message": "Session terminée"}
+{
+  "emailVerificationSent": true,
+  "verificationUrl": "https://example.com/verify",
+  "message": "Un nouvel email de confirmation vous a été envoyé."
+}
+```
+
+---
+
+### `POST /api/auth/password/forgot`
+Déclenche l’envoi d’un email sécurisé pour réinitialiser le mot de passe.
+
+**Body JSON :**
+```json
+{
+  "email": "user@exemple.com"
+}
+```
+
+**Réponse :**
+```json
+{
+  "resetEmailSent": true,
+  "message": "Un email de réinitialisation vient de vous être envoyé."
+}
 ```
 
 ---
@@ -286,4 +331,3 @@ Permet de vérifier l’état du backend.
 
 **Auteur :** Eric Kay (@EricayStudio)  
 **Dernière mise à jour :** Octobre 2025
-

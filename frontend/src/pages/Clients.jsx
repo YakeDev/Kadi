@@ -19,6 +19,8 @@ import {
 import { api } from '../services/api.js'
 import FormSection from '../components/FormSection.jsx'
 import { showErrorToast } from '../utils/errorToast.js'
+import PageHeader from '../components/PageHeader.jsx'
+import FloatingActionButton from '../components/FloatingActionButton.jsx'
 
 const initialState = {
   company_name: '',
@@ -233,30 +235,26 @@ const Clients = () => {
 
   return (
     <div className='space-y-8'>
-      <header className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
-        <div className='space-y-2'>
-          <div className='flex items-center gap-3'>
-            <div className='rounded-full bg-[var(--primary-soft)] p-2 text-[var(--primary)] shadow-soft'>
-              <Users className='h-5 w-5' />
-            </div>
-            <p className='text-xs uppercase tracking-[0.2em] text-[var(--text-muted)]'>Clients</p>
-          </div>
-          <h1 className='text-3xl font-semibold text-[var(--text-dark)]'>Répertoire client</h1>
-          <p className='text-sm text-[var(--text-muted)]'>
-            Centralisez vos contacts pour accélérer la génération de devis et factures.
-          </p>
-        </div>
-        <div className='flex items-center gap-2'>
-          <button type='button' onClick={fetchClients} className='btn-ghost h-10 px-4 text-sm font-semibold'>
+      <PageHeader
+        icon={Users}
+        title='Répertoire client'
+        subtitle='Centralisez vos contacts pour accélérer la génération de devis et factures.'
+        actions={[
+          <button
+            key='refresh'
+            type='button'
+            onClick={fetchClients}
+            className='btn-ghost h-11 justify-center'
+          >
             <RefreshCcw className='mr-2 h-4 w-4' />
             Actualiser
-          </button>
-          <button type='button' onClick={openDrawer} className='btn-primary h-10 px-4 text-sm font-semibold'>
+          </button>,
+          <button key='create' type='button' onClick={openDrawer} className='btn-primary h-11 justify-center'>
             <PlusCircle className='mr-2 h-4 w-4' />
             Nouveau client
           </button>
-        </div>
-      </header>
+        ]}
+      />
 
       <section className='card border border-white/40 p-0 shadow-[0_18px_52px_-44px_rgba(28,28,30,0.22)]'>
         <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
@@ -452,6 +450,15 @@ const Clients = () => {
             </form>
           </div>
         </div>
+      ) : null}
+
+      {!isDrawerOpen ? (
+        <FloatingActionButton
+          icon={PlusCircle}
+          label='Nouveau client'
+          onClick={openDrawer}
+          className='lg:hidden'
+        />
       ) : null}
     </div>
   )

@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { supabase } from '../models/supabaseClient.js'
 import { sendMail } from '../utils/mailer.js'
-import { emailVerificationTemplate } from '../utils/templates.js'
+import { emailVerificationTemplate, passwordResetTemplate } from '../utils/templates.js'
 
 const PROFILE_OPTIONAL_FIELDS = [
   'logo_url',
@@ -18,6 +18,21 @@ const PROFILE_OPTIONAL_FIELDS = [
 ]
 
 const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
+const APP_NAME = process.env.APP_NAME || 'Kadi'
+
+const sanitizeUrl = (value, fallback) => {
+  if (!value) return fallback
+  const trimmed = value.trim()
+  if (!trimmed) return fallback
+  return trimmed
+}
+
+const DEFAULT_APP_URL = process.env.APP_URL || 'http://localhost:5173'
+const EMAIL_REDIRECT_URL = sanitizeUrl(process.env.EMAIL_REDIRECT_URL, `${DEFAULT_APP_URL}/login?confirmed=1`)
+const PASSWORD_RESET_REDIRECT_URL = sanitizeUrl(
+  process.env.PASSWORD_RESET_REDIRECT_URL,
+  `${DEFAULT_APP_URL}/login?reset=1`
+)
 
 const sanitizePathSegment = (value = '') =>
   value
@@ -127,6 +142,79 @@ const uploadLogoForUser = async (userId, base64Content, originalFilename = '') =
   return publicUrlData?.publicUrl || null
 }
 
+const dispatchVerificationEmail = async ({ email, companyName }) => {
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type: 'signup',
+    email,
+    options: {
+      redirectTo: EMAIL_REDIRECT_URL
+    }
+  })
+
+  if (error) {
+    throw Object.assign(new Error("Impossible de générer le lien de confirmation d'email."), {
+      status: 500,
+      cause: error
+    })
+  }
+
+  const verificationUrl = data?.properties?.action_link
+  if (!verificationUrl) {
+    return { sent: false, reason: 'missing_action_link' }
+  }
+
+  const smtpHost = process.env.SMTP_HOST?.trim()
+  const smtpUser = process.env.SMTP_USER?.trim()
+  const smtpPass = process.env.SMTP_PASS?.trim()
+  const hasSmtp = Boolean(smtpHost && smtpUser && smtpPass)
+
+  if (!hasSmtp) {
+    return { sent: false, reason: 'transporter_not_configured', verificationUrl }
+  }
+
+  const template = emailVerificationTemplate({ verificationUrl, companyName })
+  const result = await sendMail({
+    to: email,
+    subject: template.subject,
+    html: template.html,
+    text: template.text
+  })
+
+  return { sent: Boolean(result?.sent), verificationUrl, mailer: result }
+}
+
+const dispatchPasswordResetEmail = async ({ email, companyName }) => {
+  const { data, error } = await supabase.auth.admin.generateLink({
+    type: 'recovery',
+    email,
+    options: {
+      redirectTo: PASSWORD_RESET_REDIRECT_URL
+    }
+  })
+
+  if (error) {
+    throw Object.assign(new Error('Impossible de générer le lien de réinitialisation du mot de passe.'), {
+      status: 500,
+      cause: error
+    })
+  }
+
+  const resetUrl = data?.properties?.action_link
+  if (!resetUrl) {
+    return { sent: false, reason: 'missing_action_link' }
+  }
+
+  const template = passwordResetTemplate({ resetUrl, companyName })
+  const result = await sendMail({
+    to: email,
+    subject: template.subject,
+    html: template.html,
+    text: template.text
+  })
+
+  return { sent: Boolean(result?.sent), resetUrl, mailer: result }
+}
+
 export const signup = async (req, res, next) => {
   try {
     const { email, password, company, logo_file: logoFile, logo_filename: logoFilename, ...rest } = req.body
@@ -168,69 +256,24 @@ export const signup = async (req, res, next) => {
     }
 
     const profileData = await createProfileInternal(profilePayload)
-
-    const triggerSupabaseResend = async () => {
-      const { error: resendError } = await supabase.auth.admin.resend({
-        type: 'signup',
+    let verificationStatus = { sent: false }
+    try {
+      verificationStatus = await dispatchVerificationEmail({
         email,
-        options: { redirectTo }
+        companyName: profileData?.company || company || APP_NAME
       })
-      if (resendError) {
-        console.warn('Impossible de déclencher l’email de confirmation via Supabase', resendError)
-        return { sent: false, reason: resendError.message || 'supabase_resend_failed' }
-      }
-      return { sent: true }
-    }
-
-    let verificationUrl = null
-    let emailSent = false
-    let emailSendIssue = null
-    const redirectTo =
-      process.env.EMAIL_REDIRECT_URL ||
-      process.env.APP_URL ||
-      'http://localhost:5173/auth/callback'
-
-    const { data: linkData, error: linkError } = await supabase.auth.admin.generateLink({
-      type: 'signup',
-      email,
-      password,
-      options: { redirectTo }
-    })
-
-    if (linkError) {
-      console.error('Impossible de générer le lien de confirmation Supabase', linkError)
-      const resendResult = await triggerSupabaseResend()
-      emailSent = resendResult.sent
-      emailSendIssue = resendResult.reason || linkError.message || 'generate_link_failed'
-    } else {
-      verificationUrl = linkData?.action_link ?? null
-      if (verificationUrl) {
-        const emailPayload = emailVerificationTemplate({
-          verificationUrl,
-          companyName: company || profileData?.company || ''
-        })
-        const sendResult = await sendMail({
-          to: email,
-          subject: emailPayload.subject,
-          html: emailPayload.html,
-          text: emailPayload.text
-        })
-        emailSent = sendResult.sent
-        if (!emailSent) {
-          const resendResult = await triggerSupabaseResend()
-          emailSent = resendResult.sent
-          emailSendIssue = resendResult.reason || sendResult.reason || 'smtp_failed'
-        }
-      } else {
-        const resendResult = await triggerSupabaseResend()
-        emailSent = resendResult.sent
-        emailSendIssue = resendResult.reason || 'missing_action_link'
+    } catch (mailError) {
+      const reason = mailError?.reason || mailError?.cause?.reason
+      if (reason !== 'transporter_not_configured') {
+        console.warn('[Auth] Échec de l’envoi du mail de confirmation', mailError)
       }
     }
 
-    const confirmationMessage = emailSent
-      ? 'Compte créé. Un email de confirmation vient de vous être envoyé.'
-      : "Compte créé. Impossible d’envoyer automatiquement l’email de confirmation. Vérifiez la configuration Supabase (Email confirmations activées, Redirect URL autorisée) puis renvoyez l’email depuis l’écran de connexion."
+    const verificationMessage = verificationStatus?.sent
+      ? 'Compte créé. Un email de confirmation vous a été envoyé.'
+      : verificationStatus?.reason === 'transporter_not_configured'
+        ? "Compte créé. SMTP non configuré : utilisez le lien ci-dessous pour confirmer votre adresse."
+        : 'Compte créé. Vérifiez votre adresse email avant de vous connecter.'
 
     res.status(201).json({
       user: {
@@ -239,10 +282,10 @@ export const signup = async (req, res, next) => {
       },
       profile: profileData,
       emailConfirmationRequired: true,
-      emailVerificationSent: emailSent,
+      emailVerificationSent: Boolean(verificationStatus?.sent),
+      verificationUrl: verificationStatus?.verificationUrl ?? null,
       logoUploaded: Boolean(uploadedLogoUrl),
-      emailSendIssue,
-      message: confirmationMessage
+      message: verificationMessage
     })
   } catch (error) {
     next(error)
@@ -301,15 +344,35 @@ const createProfileInternal = async ({ email, company, userId, ...rest }) => {
     }
   }
 
+  const profileColumns =
+    'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
+
   const { data: profileData, error: profileError } = await supabase
     .from('profiles')
     .upsert(profileRecord, { onConflict: 'id' })
-    .select(
-      'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
-    )
+    .select(profileColumns)
     .single()
 
-  if (profileError) throw profileError
+  if (profileError) {
+    const isMissingColumn =
+      profileError.code === '42703' ||
+      /column.+does not exist/i.test(profileError.message || '')
+
+    if (isMissingColumn) {
+      const fallbackColumns =
+        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
+      const { data: fallbackProfile, error: fallbackError } = await supabase
+        .from('profiles')
+        .select(fallbackColumns)
+        .eq('id', userId)
+        .single()
+
+      if (fallbackError) throw fallbackError
+      return fallbackProfile
+    }
+
+    throw profileError
+  }
 
   return profileData
 }
@@ -336,7 +399,7 @@ export const login = async (req, res, next) => {
 export const logout = async (req, res, next) => {
   try {
     await supabase.auth.signOut()
-    res.status(200).json({ message: 'Déconnecté' })
+    res.status(204).send()
   } catch (error) {
     next(error)
   }
@@ -382,12 +445,12 @@ export const getProfile = async (req, res, next) => {
       return res.status(401).json({ message: 'Authentification requise.' })
     }
 
+    const profileColumns =
+      'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
     let hasExtendedColumns = true
     let response = await supabase
       .from('profiles')
-      .select(
-        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
-      )
+      .select(profileColumns)
       .eq('id', userId)
       .single()
     let { data, error } = response
@@ -401,7 +464,7 @@ export const getProfile = async (req, res, next) => {
       hasExtendedColumns = false
       const fallback = await supabase
         .from('profiles')
-        .select('company')
+        .select('company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif')
         .eq('id', userId)
         .single()
       data = fallback.data
@@ -422,7 +485,91 @@ export const getProfile = async (req, res, next) => {
       state: hasExtendedColumns ? data?.state ?? '' : '',
       national_id: hasExtendedColumns ? data?.national_id ?? '' : '',
       rccm: hasExtendedColumns ? data?.rccm ?? '' : '',
-      nif: hasExtendedColumns ? data?.nif ?? '' : ''
+      nif: hasExtendedColumns ? data?.nif ?? '' : '',
+      phone: hasExtendedColumns ? data?.phone ?? '' : '',
+      website: hasExtendedColumns ? data?.website ?? '' : ''
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const resendVerificationEmail = async (req, res, next) => {
+  try {
+    const email = req.body?.email?.trim()?.toLowerCase()
+    if (!email) {
+      return res.status(400).json({ message: 'Adresse email requise.' })
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('company, email')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (profileError) throw profileError
+
+    if (!profile) {
+      return res.status(200).json({
+        emailVerificationSent: false,
+        verificationUrl: null,
+        message: 'Si un compte existe pour cette adresse, un email vient de vous être envoyé.'
+      })
+    }
+
+    const result = await dispatchVerificationEmail({
+      email,
+      companyName: profile.company || APP_NAME
+    })
+
+    const verificationMessage = result.sent
+      ? 'Un nouvel email de confirmation vous a été envoyé.'
+      : result.reason === 'transporter_not_configured'
+        ? 'SMTP non configuré : utilisez le lien ci-dessous pour confirmer votre adresse.'
+        : "Impossible d'envoyer l'email de confirmation pour le moment."
+
+    res.json({
+      emailVerificationSent: Boolean(result.sent),
+      verificationUrl: result.verificationUrl ?? null,
+      message: verificationMessage
+    })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const requestPasswordReset = async (req, res, next) => {
+  try {
+    const email = req.body?.email?.trim()?.toLowerCase()
+    if (!email) {
+      return res.status(400).json({ message: 'Adresse email requise.' })
+    }
+
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('company, email')
+      .eq('email', email)
+      .maybeSingle()
+
+    if (profileError) throw profileError
+
+    if (!profile) {
+      return res.status(200).json({
+        resetEmailSent: false,
+        message: 'Si un compte existe pour cette adresse, un email de réinitialisation vient de vous être envoyé.'
+      })
+    }
+
+    const result = await dispatchPasswordResetEmail({
+      email,
+      companyName: profile.company || APP_NAME
+    })
+
+    res.json({
+      resetEmailSent: Boolean(result.sent),
+      message: result.sent
+        ? 'Un email de réinitialisation vient de vous être envoyé.'
+        : "Impossible d'envoyer le lien de réinitialisation pour le moment."
     })
   } catch (error) {
     next(error)
