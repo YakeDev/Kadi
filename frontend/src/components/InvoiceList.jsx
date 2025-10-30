@@ -12,7 +12,8 @@ import {
   RefreshCcw,
   Search,
   Filter,
-  PlusCircle
+  PlusCircle,
+  Pencil
 } from 'lucide-react'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
@@ -40,7 +41,7 @@ const statusFilters = [
   { value: 'overdue', label: 'En retard' }
 ]
 
-const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
+const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
   const [invoices, setInvoices] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [filters, setFilters] = useState({
@@ -385,16 +386,26 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
                           <option value='paid'>Payée</option>
                           <option value='overdue'>En retard</option>
                         </select>
-                        <button
-                          type='button'
-                          onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}
-                          className='btn-ghost text-xs font-semibold'
-                        >
-                          <Download className='h-4 w-4' />
-                          PDF
-                        </button>
-                      </div>
-                    </td>
+                    <button
+                      type='button'
+                      onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}
+                      className='btn-ghost text-xs font-semibold'
+                    >
+                      <Download className='h-4 w-4' />
+                      PDF
+                    </button>
+                    {invoice.status === 'draft' ? (
+                      <button
+                        type='button'
+                        onClick={() => onEdit?.(invoice)}
+                        className='btn-ghost text-xs font-semibold'
+                      >
+                        <Pencil className='h-4 w-4' />
+                        Modifier
+                      </button>
+                    ) : null}
+                  </div>
+                </td>
                   </tr>
                 ))
               : null}

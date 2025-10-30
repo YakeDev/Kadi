@@ -4,9 +4,15 @@ import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { supabase } from '../models/supabaseClient.js'
-import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.js'
+import {
+	getPaginationParams,
+	buildPaginationMeta,
+} from '../utils/pagination.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
+const ABSOLUTE_URL_REGEX = /^https?:\/\//i
+const DATA_URL_REGEX = /^data:/i
 
 const computeTotals = (items = []) =>
 	items.reduce(
@@ -17,6 +23,65 @@ const computeTotals = (items = []) =>
 		},
 		{ subtotal: 0 }
 	)
+
+const sanitizeStoragePath = (value = '') => value.toString().replace(/^\/+/, '')
+
+const resolveLogoUrlForPdf = async (value) => {
+	if (!value || typeof value !== 'string') return null
+	if (ABSOLUTE_URL_REGEX.test(value) || DATA_URL_REGEX.test(value)) {
+		return value.trim()
+	}
+
+	const storagePath = sanitizeStoragePath(value)
+	if (!storagePath) return null
+
+	try {
+		const { data, error } = await supabase.storage
+			.from(LOGO_BUCKET)
+			.createSignedUrl(storagePath, 60 * 60)
+		if (!error && data?.signedUrl) {
+			return data.signedUrl
+		}
+		if (error) {
+			console.warn('[Invoice PDF] createSignedUrl error:', error.message)
+		}
+	} catch (error) {
+		console.warn('[Invoice PDF] createSignedUrl exception:', error.message)
+	}
+
+	try {
+		const { data: publicData, error: publicError } = supabase.storage
+			.from(LOGO_BUCKET)
+			.getPublicUrl(storagePath)
+		if (publicError) {
+			console.warn('[Invoice PDF] getPublicUrl error:', publicError.message)
+		} else if (publicData?.publicUrl) {
+			return publicData.publicUrl
+		}
+	} catch (error) {
+		console.warn('[Invoice PDF] getPublicUrl exception:', error.message)
+	}
+
+	return null
+}
+
+const fetchLogoBuffer = async (url) => {
+	if (!url || typeof globalThis.fetch !== 'function') return null
+	try {
+		const response = await fetch(url)
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status}`)
+		}
+		const arrayBuffer = await response.arrayBuffer()
+		if (!arrayBuffer.byteLength) {
+			return null
+		}
+		return Buffer.from(arrayBuffer)
+	} catch (error) {
+		console.warn('[Invoice PDF] Impossible de charger le logo:', error.message)
+		return null
+	}
+}
 
 export const listInvoices = async (req, res, next) => {
 	try {
@@ -48,7 +113,7 @@ export const listInvoices = async (req, res, next) => {
 		if (error) throw error
 		res.json({
 			data: data ?? [],
-			pagination: buildPaginationMeta(count ?? 0, page, pageSize)
+			pagination: buildPaginationMeta(count ?? 0, page, pageSize),
 		})
 	} catch (error) {
 		next(error)
@@ -205,7 +270,7 @@ const parsePeriodRange = ({ period = 'month', start, end }) => {
 	return {
 		period: safePeriod,
 		startDate: startDate.startOf('day'),
-		endDate: endDate.endOf('day')
+		endDate: endDate.endOf('day'),
 	}
 }
 
@@ -229,7 +294,9 @@ const groupInvoicesByUnit = (invoices, unit) => {
 		buckets.set(label, prev)
 	})
 
-	return Array.from(buckets.values()).sort((a, b) => a.label.localeCompare(b.label))
+	return Array.from(buckets.values()).sort((a, b) =>
+		a.label.localeCompare(b.label)
+	)
 }
 
 const rankClients = (invoices) => {
@@ -242,7 +309,7 @@ const rankClients = (invoices) => {
 			totals.set(key, {
 				clientId: invoice.client_id,
 				company: invoice.client?.company_name || 'Client inconnu',
-				total: 0
+				total: 0,
 			})
 		}
 		totals.get(key).total += amount
@@ -268,7 +335,7 @@ const rankProducts = (invoices) => {
 				products.set(label, {
 					label,
 					total: 0,
-					quantity: 0
+					quantity: 0,
 				})
 			}
 
@@ -290,7 +357,9 @@ export const getSummary = async (req, res, next) => {
 
 		const { data: invoices, error } = await supabase
 			.from('invoices')
-			.select('id, total_amount, status, issue_date, items, client_id, client:clients(company_name)')
+			.select(
+				'id, total_amount, status, issue_date, items, client_id, client:clients(company_name)'
+			)
 			.eq('tenant_id', tenantId)
 			.gte('issue_date', startDate.format('YYYY-MM-DD'))
 			.lte('issue_date', endDate.format('YYYY-MM-DD'))
@@ -336,12 +405,13 @@ export const getSummary = async (req, res, next) => {
 				totalAmount: 0,
 				totalInvoices: 0,
 				drafts: 0,
-				paymentDelays: []
+				paymentDelays: [],
 			}
 		)
 
 		const averageDelay = totals.paymentDelays.length
-			? totals.paymentDelays.reduce((sum, value) => sum + value, 0) / totals.paymentDelays.length
+			? totals.paymentDelays.reduce((sum, value) => sum + value, 0) /
+				totals.paymentDelays.length
 			: 0
 
 		const summary = {
@@ -351,18 +421,18 @@ export const getSummary = async (req, res, next) => {
 				totalAmount: totals.totalAmount,
 				invoiceCount: totals.totalInvoices,
 				draftCount: totals.drafts,
-				averagePaymentDelay: Number(averageDelay.toFixed(1))
+				averagePaymentDelay: Number(averageDelay.toFixed(1)),
 			},
 			charts: {
 				revenue: groupInvoicesByUnit(records, period),
 				topClients: rankClients(records),
-				topProducts: rankProducts(records)
+				topProducts: rankProducts(records),
 			},
 			meta: {
 				period,
 				startDate: startDate.toISOString(),
-				endDate: endDate.toISOString()
-			}
+				endDate: endDate.toISOString(),
+			},
 		}
 
 		res.json(summary)
@@ -385,6 +455,9 @@ export const streamInvoicePdf = async (req, res, next) => {
 		if (error) throw error
 		if (!invoice)
 			return res.status(404).json({ message: 'Facture introuvable.' })
+
+		const resolvedLogoUrl = await resolveLogoUrlForPdf(req.profile?.logo_url)
+		const logoBuffer = await fetchLogoBuffer(resolvedLogoUrl)
 
 		const doc = new PDFDocument({ margin: 48 })
 
@@ -437,30 +510,53 @@ export const streamInvoicePdf = async (req, res, next) => {
 				? `Responsable : ${req.profile.manager_name}`
 				: null,
 			req.profile?.address || null,
-			[req.profile?.city, req.profile?.state]
-				.filter(Boolean)
-				.join(', ') || null,
-			req.profile?.national_id
-				? `ID. Nat. : ${req.profile.national_id}`
-				: null,
+			[req.profile?.city, req.profile?.state].filter(Boolean).join(', ') ||
+				null,
+			req.profile?.national_id ? `ID. Nat. : ${req.profile.national_id}` : null,
 			req.profile?.rccm ? `RCCM : ${req.profile.rccm}` : null,
-			req.profile?.nif ? `NIF : ${req.profile.nif}` : null
+			req.profile?.nif ? `NIF : ${req.profile.nif}` : null,
 		].filter(Boolean)
 
-		let headerY = 50
-		doc
-			.font(semiBoldFont)
-			.fontSize(26)
-			.fillColor(baseColor)
-			.text(companyName, startX, headerY, { width: pageWidth / 2 })
-		headerY = doc.y + 6
+		const headerTop = 50
+		const logoSize = 96
+		const logoGap = 18
+		let textStartX = startX
+		let logoBottom = headerTop
+
+		if (logoBuffer) {
+			try {
+				doc.image(logoBuffer, startX, headerTop, {
+					fit: [logoSize, logoSize],
+					width: logoSize,
+					height: logoSize,
+				})
+				textStartX = startX + logoSize + logoGap
+				logoBottom = headerTop + logoSize
+			} catch (error) {
+				console.warn(
+					'[Invoice PDF] Impossible d’intégrer le logo:',
+					error.message
+				)
+			}
+		}
+
+		let headerY = headerTop
+		const leftColumnWidth = Math.max(pageWidth / 2 - (textStartX - startX), 180)
+		if (!logoBuffer) {
+			doc
+				.font(semiBoldFont)
+				.fontSize(26)
+				.fillColor(baseColor)
+				.text(companyName, textStartX, headerY, { width: leftColumnWidth })
+			headerY = doc.y + 6
+		}
 
 		if (companyTagline) {
 			doc
 				.font(regularFont)
 				.fontSize(11)
 				.fillColor(greyMedium)
-				.text(companyTagline, startX, headerY, { width: pageWidth / 2 })
+				.text(companyTagline, textStartX, headerY, { width: leftColumnWidth })
 			headerY = doc.y + 6
 		}
 
@@ -469,7 +565,7 @@ export const streamInvoicePdf = async (req, res, next) => {
 				.font(regularFont)
 				.fontSize(10)
 				.fillColor(greyMedium)
-				.text(line, startX, headerY, { width: pageWidth / 2 })
+				.text(line, textStartX, headerY, { width: leftColumnWidth })
 			headerY = doc.y + 4
 		})
 
@@ -491,7 +587,7 @@ export const streamInvoicePdf = async (req, res, next) => {
 				width: pageWidth / 2,
 			})
 
-		const headerSeparatorY = Math.max(headerY + 12, 100)
+		const headerSeparatorY = Math.max(headerY + 12, logoBottom + 12, 100)
 		doc
 			.moveTo(startX, headerSeparatorY)
 			.lineTo(startX + pageWidth, headerSeparatorY)
@@ -568,64 +664,76 @@ export const streamInvoicePdf = async (req, res, next) => {
 
 		doc.font(semiBoldFont).fontSize(11).fillColor(greyMedium)
 		doc.text('Description', cols.desc, yTable)
-		doc.text('Quantité', cols.qty, yTable, { width: 50, align: 'center' })
-		doc.text('Prix unitaire', cols.unit, yTable, { width: 100, align: 'right' })
-		doc.text('Total', cols.total, yTable, { width: 100, align: 'right' })
+		doc.text('Quantité', cols.qty, yTable, { width: 60, align: 'center' })
+		doc.text('Prix unitaire', cols.unit, yTable, { width: 110, align: 'right' })
+		doc.text('Total', cols.total, yTable, { width: 110, align: 'right' })
 
 		doc
 			.moveTo(startX, yTable + 18)
 			.lineTo(startX + pageWidth, yTable + 18)
 			.stroke(greyLight)
 
-		let y = yTable + 30
+		let y = yTable + 32
 		doc.font(regularFont).fontSize(11).fillColor(baseColor)
-		;(invoice.items || []).forEach((item) => {
+		const topPadding = 4
+		const bottomPadding = 6
+		const lineGap = 4
+		;(invoice.items || []).forEach((item, index, array) => {
 			const qty = Number(item.quantity || 0)
 			const unitPrice = Number(item.unitPrice || 0)
 			const lineTotal = qty * unitPrice
 
 			// Calcule la hauteur nécessaire pour la description
-			const descWidth = cols.qty - cols.desc - 12
-			const descHeight = doc.heightOfString(item.description || '-', {
+			const descWidth = cols.qty - cols.desc - 16
+			const desc = item.description || '-'
+			const descHeight = doc.heightOfString(desc, {
 				width: descWidth,
+				lineGap,
 			})
-			const rowHeight = Math.max(descHeight, 22) // hauteur uniforme
+			const minRowHeight = 32
+			const contentHeight = descHeight + topPadding + bottomPadding
+			const rowHeight = Math.max(contentHeight, minRowHeight)
+			const baseY = y + topPadding
+			const centreY = y + rowHeight / 2 - doc.currentLineHeight() / 2
 
 			// --- Colonne Description ---
-			doc.text(item.description || '-', cols.desc, y, {
+			doc.text(desc, cols.desc, baseY, {
 				width: descWidth,
+				lineGap,
 				lineBreak: true,
 			})
 
 			// --- Colonne Quantité ---
-			doc.text(String(qty || '-'), cols.qty, y, {
-				width: 50,
+			doc.text(String(qty || '-'), cols.qty, centreY, {
+				width: 60,
 				align: 'center',
 				lineBreak: false,
 			})
 
 			// --- Colonne Prix unitaire ---
 			const unitText = `${unitPrice.toFixed(2)}\u00A0${invoice.currency}`
-			doc.text(unitText, cols.unit, y, {
-				width: 100,
+			doc.text(unitText, cols.unit, centreY, {
+				width: 110,
 				align: 'right',
 				lineBreak: false,
 			})
 
 			// --- Colonne Total ---
 			const totalText = `${lineTotal.toFixed(2)}\u00A0${invoice.currency}`
-			doc.text(totalText, cols.total, y, {
-				width: 100,
+			doc.text(totalText, cols.total, centreY, {
+				width: 110,
 				align: 'right',
 				lineBreak: false,
 			})
 
 			// --- Ligne de séparation ---
-			y += rowHeight + 6
-			doc
-				.moveTo(startX, y)
-				.lineTo(startX + pageWidth, y)
-				.stroke('#f1f5f9')
+			y += rowHeight + 2
+			if (index !== array.length - 1) {
+				doc
+					.moveTo(startX, y)
+					.lineTo(startX + pageWidth, y)
+					.stroke('#f1f5f9')
+			}
 		})
 
 		// === TOTALS ===
