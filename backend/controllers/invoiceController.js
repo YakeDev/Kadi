@@ -664,67 +664,76 @@ export const streamInvoicePdf = async (req, res, next) => {
 
 		doc.font(semiBoldFont).fontSize(11).fillColor(greyMedium)
 		doc.text('Description', cols.desc, yTable)
-		doc.text('Quantité', cols.qty, yTable, { width: 50, align: 'center' })
-		doc.text('Prix unitaire', cols.unit, yTable, { width: 100, align: 'right' })
-		doc.text('Total', cols.total, yTable, { width: 100, align: 'right' })
+		doc.text('Quantité', cols.qty, yTable, { width: 60, align: 'center' })
+		doc.text('Prix unitaire', cols.unit, yTable, { width: 110, align: 'right' })
+		doc.text('Total', cols.total, yTable, { width: 110, align: 'right' })
 
 		doc
 			.moveTo(startX, yTable + 18)
 			.lineTo(startX + pageWidth, yTable + 18)
 			.stroke(greyLight)
 
-		let y = yTable + 30
+		let y = yTable + 32
 		doc.font(regularFont).fontSize(11).fillColor(baseColor)
-		;(invoice.items || []).forEach((item) => {
+		const topPadding = 4
+		const bottomPadding = 6
+		const lineGap = 4
+		;(invoice.items || []).forEach((item, index, array) => {
 			const qty = Number(item.quantity || 0)
 			const unitPrice = Number(item.unitPrice || 0)
 			const lineTotal = qty * unitPrice
 
 			// Calcule la hauteur nécessaire pour la description
-			const descWidth = cols.qty - cols.desc - 12
+			const descWidth = cols.qty - cols.desc - 16
 			const desc = item.description || '-'
 			const descHeight = doc.heightOfString(desc, {
 				width: descWidth,
+				lineGap,
 			})
-			const minRowHeight = 22
-			const rowHeight = Math.max(descHeight, minRowHeight)
-			const verticalAdjust = (rowHeight - descHeight) / 2
+			const minRowHeight = 32
+			const contentHeight = descHeight + topPadding + bottomPadding
+			const rowHeight = Math.max(contentHeight, minRowHeight)
+			const baseY = y + topPadding
+			const centreY = y + rowHeight / 2 - doc.currentLineHeight() / 2
 
 			// --- Colonne Description ---
-			doc.text(desc, cols.desc, y, {
+			doc.text(desc, cols.desc, baseY, {
 				width: descWidth,
+				lineGap,
 				lineBreak: true,
 			})
 
 			// --- Colonne Quantité ---
-			doc.text(String(qty || '-'), cols.qty, y + verticalAdjust, {
-				width: 50,
+			doc.text(String(qty || '-'), cols.qty, centreY, {
+				width: 60,
 				align: 'center',
 				lineBreak: false,
 			})
 
 			// --- Colonne Prix unitaire ---
 			const unitText = `${unitPrice.toFixed(2)}\u00A0${invoice.currency}`
-			doc.text(unitText, cols.unit, y + verticalAdjust, {
-				width: 100,
+			doc.text(unitText, cols.unit, centreY, {
+				width: 110,
 				align: 'right',
 				lineBreak: false,
 			})
 
 			// --- Colonne Total ---
 			const totalText = `${lineTotal.toFixed(2)}\u00A0${invoice.currency}`
-			doc.text(totalText, cols.total, y + verticalAdjust, {
-				width: 100,
+			doc.text(totalText, cols.total, centreY, {
+				width: 110,
 				align: 'right',
 				lineBreak: false,
 			})
 
 			// --- Ligne de séparation ---
-			y += rowHeight + 4
-			doc
-				.moveTo(startX, y)
-				.lineTo(startX + pageWidth, y)
-				.stroke('#f1f5f9')
+			y += rowHeight + 2
+			if (index !== array.length - 1) {
+				doc
+					.moveTo(startX, y)
+					.lineTo(startX + pageWidth, y)
+					.stroke('#f1f5f9')
+			}
 		})
 
 		// === TOTALS ===
