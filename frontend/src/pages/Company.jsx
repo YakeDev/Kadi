@@ -213,7 +213,7 @@ const Company = () => {
       ].join(' ')}
     >
       <div className='relative'>
-        <div className='h-20 w-20 overflow-hidden rounded-full border border-[rgba(255,255,255,0.6)] bg-white shadow-soft'>
+        <div className='h-20 w-20 overflow-hidden rounded-full border border-[var(--border)] bg-white'>
           {logoPreview ? (
             <img src={logoPreview} alt='Logo de votre entreprise' className='h-full w-full object-cover' />
           ) : (
@@ -223,7 +223,7 @@ const Company = () => {
             </div>
           )}
         </div>
-        <label className='btn-primary absolute -bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center justify-center px-4 text-xs font-semibold shadow-soft'>
+        <label className='btn-primary absolute -bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center justify-center px-4 text-xs font-semibold'>
           {logoPreview ? 'Modifier' : 'Importer un logo'}
           <input type='file' accept='image/*' className='hidden' onChange={handleLogoChange} disabled={disabled} />
         </label>

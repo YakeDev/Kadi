@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import { Inbox, FileText, X, UserPlus, Loader2 } from 'lucide-react'
-import InvoiceForm from '../components/InvoiceForm.jsx'
 import InvoiceList from '../components/InvoiceList.jsx'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
@@ -10,9 +10,8 @@ import FloatingActionButton from '../components/FloatingActionButton.jsx'
 
 const Facture = () => {
   const [clients, setClients] = useState([])
+  const navigate = useNavigate()
   const [refreshKey, setRefreshKey] = useState(0)
-  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const [invoiceToEdit, setInvoiceToEdit] = useState(null)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false)
   const [isCreatingClient, setIsCreatingClient] = useState(false)
   const [newClient, setNewClient] = useState({ company_name: '', contact_name: '', email: '' })
@@ -36,18 +35,12 @@ const Facture = () => {
     fetchClients()
   }, [])
 
-  const openDrawer = () => {
+  const openCreatePage = () => {
     if (!hasClients) {
       toast.error('Ajoutez d’abord un client pour créer une facture.', { icon: 'ℹ️' })
       return
     }
-    setInvoiceToEdit(null)
-    setIsDrawerOpen(true)
-  }
-
-  const closeDrawer = () => {
-    setIsDrawerOpen(false)
-    setInvoiceToEdit(null)
+    navigate('/factures/nouvelle')
   }
 
   const handleEditInvoice = (invoice) => {
@@ -56,8 +49,7 @@ const Facture = () => {
       toast.error('Seules les factures en brouillon peuvent être modifiées.', { icon: 'ℹ️' })
       return
     }
-    setInvoiceToEdit(invoice)
-    setIsDrawerOpen(true)
+    navigate(`/factures/nouvelle?id=${invoice.id}`)
   }
 
   const openClientModal = () => setIsClientModalOpen(true)
@@ -102,16 +94,6 @@ const Facture = () => {
     }
   }
 
-  const handleInvoiceCreated = () => {
-    setRefreshKey((prev) => prev + 1)
-    closeDrawer()
-  }
-
-  const handleInvoiceUpdated = () => {
-    setRefreshKey((prev) => prev + 1)
-    closeDrawer()
-  }
-
   return (
     <div className='space-y-8'>
       <PageHeader
@@ -126,7 +108,7 @@ const Facture = () => {
           <button
             key='create'
             type='button'
-            onClick={openDrawer}
+            onClick={openCreatePage}
             className='btn-primary h-11 justify-center'
             disabled={!hasClients}
           >
@@ -137,8 +119,8 @@ const Facture = () => {
       />
 
       {!hasClients ? (
-        <div className='card flex flex-col items-center justify-center gap-4 border border-white/40 p-8 text-center text-sm text-[var(--text-muted)] shadow-[0_18px_52px_-44px_rgba(28,28,30,0.22)]'>
-          <div className='rounded-full bg-[var(--primary-soft)] p-4 text-[var(--primary)] shadow-soft'>
+        <div className='card flex flex-col items-center justify-center gap-4 p-8 text-center text-sm text-[var(--text-muted)]'>
+          <div className='rounded-full bg-[var(--primary-soft)] p-4 text-[var(--primary)]'>
             <Inbox className='h-8 w-8' />
           </div>
           <div className='space-y-1'>
@@ -148,51 +130,13 @@ const Facture = () => {
         </div>
       ) : null}
 
-      <InvoiceList refreshKey={refreshKey} onCreate={openDrawer} onEdit={handleEditInvoice} canCreate={hasClients} />
+      <InvoiceList refreshKey={refreshKey} onCreate={openCreatePage} onEdit={handleEditInvoice} canCreate={hasClients} />
 
-      {isDrawerOpen ? (
-        <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
-          <div className='flex min-h-full items-stretch justify-end'>
-            <div className='relative flex h-full min-h-full w-full max-w-3xl flex-col border border-white/45 bg-[var(--bg-panel)] shadow-[0_28px_80px_-48px_rgba(28,28,30,0.32)]'>
-              <div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
-                <div>
-                  <h2 className='text-lg font-semibold text-[var(--text-dark)]'>
-                    {invoiceToEdit ? 'Modifier une facture' : 'Nouvelle facture'}
-                  </h2>
-                  <p className='text-xs text-[var(--text-muted)]'>
-                    {invoiceToEdit
-                      ? 'Apportez vos corrections puis enregistrez la facture en brouillon.'
-                      : 'Sélectionnez vos clients et vos prestations pour générer une facture.'}
-                  </p>
-                </div>
-                <button
-                  type='button'
-                  onClick={closeDrawer}
-                  className='rounded-full border border-[var(--border)] bg-white/70 p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
-                >
-                  <X className='h-4 w-4' />
-                </button>
-              </div>
-              <div className='flex-1 overflow-y-auto px-6 py-6'>
-                <InvoiceForm
-                  variant='drawer'
-                  clients={clients}
-                  defaultClientId={invoiceToEdit?.client_id ?? clients[0]?.id}
-                  invoice={invoiceToEdit}
-                  onCreated={handleInvoiceCreated}
-                  onUpdated={handleInvoiceUpdated}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {hasClients && !isDrawerOpen ? (
+      {hasClients ? (
         <FloatingActionButton
           icon={FileText}
           label='Nouvelle facture'
-          onClick={openDrawer}
+          onClick={openCreatePage}
           className='lg:hidden'
         />
       ) : null}
@@ -200,7 +144,7 @@ const Facture = () => {
       {isClientModalOpen ? (
         <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
           <div className='flex min-h-full items-center justify-center px-4 py-6'>
-            <div className='w-full max-w-lg rounded-[var(--radius-2xl)] border border-white/50 bg-[var(--bg-panel)] shadow-[0_28px_80px_-48px_rgba(28,28,30,0.32)] max-h-[calc(100vh-3rem)] overflow-y-auto'>
+            <div className='w-full max-w-lg rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white max-h-[calc(100vh-3rem)] overflow-y-auto'>
               <div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
                 <div className='space-y-1'>
                   <h2 className='text-lg font-semibold text-[var(--text-dark)]'>Nouveau client</h2>
@@ -209,7 +153,7 @@ const Facture = () => {
                 <button
                   type='button'
                   onClick={closeClientModal}
-                  className='rounded-full border border-[var(--border)] bg-white/70 p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
+                  className='rounded-full border border-[var(--border)] bg-white p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
                 >
                   <X className='h-4 w-4' />
                 </button>

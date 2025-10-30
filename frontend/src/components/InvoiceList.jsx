@@ -192,7 +192,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
   }
 
   return (
-    <div className='card border border-white/40 p-0 shadow-[0_18px_52px_-44px_rgba(28,28,30,0.22)]'>
+    <div className='card p-0'>
       <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
         <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
           <div>
@@ -235,7 +235,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
         </div>
 
         <div className='flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between'>
-          <div className='flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-panel)] px-3 py-2 shadow-[0_12px_35px_-30px_rgba(28,28,30,0.22)] transition focus-within:border-[var(--primary)]'>
+          <div className='flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-white px-3 py-2 transition focus-within:border-[var(--primary)]'>
             <Search className='h-4 w-4 text-[var(--text-muted)]' />
             <input
               className='flex-1 bg-transparent text-sm text-[var(--text-dark)] focus:outline-none'
@@ -325,7 +325,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
               <tr>
                 <td colSpan={6} className='py-16 text-center text-sm text-[var(--text-muted)]'>
                   <div className='flex flex-col items-center gap-4'>
-                    <div className='rounded-full bg-[var(--primary-soft)] p-5 text-[var(--primary)] shadow-soft'>
+                    <div className='rounded-full bg-[var(--primary-soft)] p-5 text-[var(--primary)]'>
                       <Inbox className='h-9 w-9' />
                     </div>
                     <div className='space-y-1'>

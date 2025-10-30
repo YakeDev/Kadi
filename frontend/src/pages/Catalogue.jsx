@@ -352,7 +352,7 @@ const Catalogue = () => {
         ]}
       />
 
-      <section className='card border border-white/40 p-0 shadow-[0_18px_52px_-44px_rgba(28,28,30,0.22)]'>
+      <section className='card p-0'>
         <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
           <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
             <div>
@@ -364,7 +364,7 @@ const Catalogue = () => {
           </div>
 
           <div className='flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between'>
-            <div className='flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-panel)] px-3 py-2 shadow-[0_12px_35px_-30px_rgba(28,28,30,0.22)] transition focus-within:border-[var(--primary)]'>
+          <div className='flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-white px-3 py-2 transition focus-within:border-[var(--primary)]'>
               <Search className='h-4 w-4 text-[var(--text-muted)]' />
               <input
                 className='flex-1 bg-transparent text-sm text-[var(--text-dark)] focus:outline-none'
@@ -457,7 +457,7 @@ const Catalogue = () => {
                 <tr>
                   <td colSpan={6} className='py-16 text-center text-sm text-[var(--text-muted)]'>
                     <div className='flex flex-col items-center gap-4'>
-                      <div className='rounded-full bg-[var(--primary-soft)] p-5 text-[var(--primary)] shadow-soft'>
+                      <div className='rounded-full bg-[var(--primary-soft)] p-5 text-[var(--primary)]'>
                         <PackagePlus className='h-10 w-10' />
                       </div>
                       <div className='space-y-1'>
@@ -549,7 +549,7 @@ const Catalogue = () => {
       {isDrawerOpen ? (
         <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
           <div className='flex min-h-full items-stretch justify-end'>
-            <div className='relative flex h-full min-h-full w-full max-w-lg flex-col border border-white/45 bg-[var(--bg-panel)] shadow-[0_28px_80px_-48px_rgba(28,28,30,0.32)]'>
+            <div className='relative flex h-full min-h-full w-full max-w-lg flex-col border border-[var(--border)] bg-white'>
               <div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
                 <div>
                   <h2 className='text-lg font-semibold text-[var(--text-dark)]'>Ajouter un article</h2>
@@ -560,7 +560,7 @@ const Catalogue = () => {
                 <button
                   type='button'
                   onClick={closeDrawer}
-                  className='rounded-full border border-[var(--border)] bg-white/70 p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
+                  className='rounded-full border border-[var(--border)] bg-white p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
                 >
                   <X className='h-4 w-4' />
                 </button>

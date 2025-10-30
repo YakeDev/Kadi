@@ -3,6 +3,7 @@ import { Toaster } from 'react-hot-toast'
 import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Facture from './pages/Facture.jsx'
+import InvoiceCreate from './pages/InvoiceCreate.jsx'
 import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Company from './pages/Company.jsx'
@@ -45,6 +46,14 @@ const App = () => {
           element={
             <ProtectedLayout>
               <Facture />
+            </ProtectedLayout>
+          }
+        />
+        <Route
+          path='/factures/nouvelle'
+          element={
+            <ProtectedLayout>
+              <InvoiceCreate />
             </ProtectedLayout>
           }
         />

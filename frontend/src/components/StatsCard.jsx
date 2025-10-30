@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 
-const base = 'rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-panel)]/90 p-5 shadow-soft'
+const base = 'rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-5'
 
 const metric = 'text-3xl font-semibold text-[var(--text-dark)]'
 const helper = 'text-xs text-[var(--text-muted)]'
@@ -34,7 +34,7 @@ const StatsCard = ({ icon: Icon, title, value, helperText, trend, className, act
         <TrendBadge trend={trend} />
       </div>
       {Icon ? (
-        <span className='inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)] shadow-soft'>
+        <span className='inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)]'>
           <Icon className='h-5 w-5' />
         </span>
       ) : null}

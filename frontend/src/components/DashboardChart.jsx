@@ -99,7 +99,7 @@ const DashboardChart = ({
     return (
       <div
         className={clsx(
-          "flex min-h-[220px] items-center justify-center rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-panel)]/90 p-6 shadow-soft",
+          "flex min-h-[220px] items-center justify-center rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6",
           className,
         )}
       >
@@ -112,7 +112,7 @@ const DashboardChart = ({
             Ajoutez d’autres factures ou changez de période pour visualiser une
             courbe de tendance.
           </p>
-          <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white/80 p-4 text-[var(--text-dark)] shadow-soft">
+          <div className="rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-4 text-[var(--text-dark)]">
             <div className="flex flex-col gap-3 text-sm">
               <div className="flex items-center justify-between">
                 <span className="text-[var(--text-muted)]">Dernier total</span>
@@ -127,7 +127,7 @@ const DashboardChart = ({
               <div className="flex items-center justify-center pt-1">
                 <div className="flex h-16 w-full max-w-[160px] items-end justify-around">
                   <div className="flex h-full w-full items-end justify-center rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] bg-[rgba(10,132,255,0.08)]">
-                    <span className="mb-1 h-3 w-3 rounded-full bg-[var(--primary)] shadow-[0_0_8px_rgba(10,132,255,0.35)]" />
+                    <span className="mb-1 h-3 w-3 rounded-full bg-[var(--primary)]" />
                   </div>
                 </div>
               </div>
@@ -161,7 +161,7 @@ const DashboardChart = ({
   return (
     <div
       className={clsx(
-        "rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-panel)]/90 p-4 shadow-soft",
+        "rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-4",
         className,
       )}
     >

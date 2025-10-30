@@ -589,7 +589,7 @@ const Login = () => {
 	}
 
 	const renderPasswordResetCard = () => (
-		<div className='mt-5 space-y-4 rounded-[var(--radius-xl)] border border-[rgba(10,132,255,0.2)] bg-white/90 p-5 shadow-soft'>
+		<div className='mt-5 space-y-4 rounded-[var(--radius-xl)] border border-[rgba(10,132,255,0.2)] bg-white p-5'>
 			<div className='flex items-center gap-2 text-sm font-semibold text-[var(--text-dark)]'>
 				<KeyRound className='h-4 w-4 text-[var(--primary)]' />
 				Réinitialiser votre mot de passe
@@ -652,7 +652,7 @@ const Login = () => {
 			</div>
 			<form
 				onSubmit={handleLoginSubmit}
-				className='space-y-4 rounded-[var(--radius-xl)] border border-[var(--border)] bg-white/85 p-6 shadow-soft'>
+				className='space-y-4 rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6'>
 				{loginErrors.global ? (
 					<div className='rounded-[var(--radius-lg)] border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] px-4 py-2 text-sm text-red-500'>
 						{loginErrors.global}
@@ -763,7 +763,7 @@ const Login = () => {
 
 			<form
 				onSubmit={handleAccountSubmit}
-				className='space-y-4 rounded-[var(--radius-xl)] border border-[var(--border)] bg-white/85 p-6 shadow-soft'>
+				className='space-y-4 rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6'>
 				<div className='flex flex-col gap-2'>
 					<label className='label'>Email professionnel</label>
 					<input
@@ -830,7 +830,7 @@ const Login = () => {
 					: 'border-[var(--border)] bg-[rgba(15,23,42,0.02)]',
 			].join(' ')}>
 			<div className='relative'>
-				<div className='h-16 w-16 overflow-hidden md:h-20 md:w-20 rounded-full border border-[rgba(255,255,255,0.6)] bg-white shadow-soft'>
+				<div className='h-16 w-16 overflow-hidden rounded-full border border-[var(--border)] bg-white md:h-20 md:w-20'>
 					{logoPreview ? (
 						<img
 							src={logoPreview}
@@ -847,7 +847,7 @@ const Login = () => {
 				<button
 					type='button'
 					onClick={() => fileInputRef.current?.click()}
-					className='absolute -bottom-2 -right-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-white shadow-soft'>
+					className='absolute -bottom-2 -right-2 inline-flex h-8 w-8 items-center justify-center rounded-full bg-[var(--primary)] text-white'>
 					<UploadCloud className='h-4 w-4' />
 				</button>
 			</div>
@@ -1091,7 +1091,7 @@ const Login = () => {
 
 	const renderSuccessStep = () => (
 		<div className='space-y-6 text-center'>
-			<div className='inline-flex h-16 w-16 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)] shadow-soft'>
+			<div className='inline-flex h-16 w-16 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)]'>
 				<CheckCircle2 className='h-10 w-10' />
 			</div>
 			<div className='space-y-2'>
@@ -1108,7 +1108,7 @@ const Login = () => {
 				</p>
 			</div>
 			{verificationLink ? (
-				<div className='space-y-3 rounded-[var(--radius-xl)] border border-[rgba(10,132,255,0.35)] bg-[rgba(10,132,255,0.08)] p-5 text-left shadow-soft'>
+				<div className='space-y-3 rounded-[var(--radius-xl)] border border-[rgba(10,132,255,0.35)] bg-[rgba(10,132,255,0.08)] p-5 text-left'>
 					<p className='text-sm font-semibold text-[var(--text-dark)]'>
 						Lien direct de confirmation
 					</p>
@@ -1116,7 +1116,7 @@ const Login = () => {
 						Aucun email reçu ? Utilisez ce lien sécurisé pour confirmer votre
 						compte immédiatement.
 					</p>
-					<div className='flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[rgba(10,132,255,0.25)] bg-white/95 p-3 text-sm'>
+					<div className='flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[rgba(10,132,255,0.25)] bg-white p-3 text-sm'>
 						<a
 							href={verificationLink}
 							target='_blank'
@@ -1137,7 +1137,7 @@ const Login = () => {
 					</div>
 				</div>
 			) : null}
-			<div className='rounded-[var(--radius-xl)] border border-[var(--border)] bg-[rgba(15,23,42,0.02)] p-5 text-left shadow-soft'>
+			<div className='rounded-[var(--radius-xl)] border border-[var(--border)] bg-[rgba(15,23,42,0.02)] p-5 text-left'>
 				<p className='text-sm font-semibold text-[var(--text-dark)]'>
 					Étapes suivantes
 				</p>
@@ -1188,7 +1188,7 @@ const Login = () => {
 
 	return (
 		<div className='flex min-h-screen flex-col justify-center bg-[var(--bg-base)] px-4 py-6'>
-			<div className='mx-auto w-full max-w-[720px] rounded-[var(--radius-2xl)] border border-white/55 bg-[rgba(255,255,255,0.9)] px-9 py-10 shadow-[0_35px_120px_-42px_rgba(28,28,30,0.42)] backdrop-blur-xl'>
+			<div className='mx-auto w-full max-w-[720px] rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white px-9 py-10'>
 				{view === Steps.LOGIN && renderLoginForm()}
 				{view === Steps.ACCOUNT && renderAccountStep()}
 				{view === Steps.COMPANY_PROFILE && renderCompanyProfileStep()}
