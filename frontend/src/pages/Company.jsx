@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
 import toast from 'react-hot-toast'
-import { Building2, Image as ImageIcon, Link as LinkIcon, Phone } from 'lucide-react'
+import { Building2, Image as ImageIcon, Link as LinkIcon, Phone, Lock } from 'lucide-react'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { uploadCompanyLogo } from '../services/supabase.js'
+import { changePassword } from '../services/auth.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import FormSection from '../components/FormSection.jsx'
 import PageHeader from '../components/PageHeader.jsx'
@@ -35,6 +36,12 @@ const Company = () => {
   const [logoPreview, setLogoPreview] = useState('')
   const [logoError, setLogoError] = useState('')
   const [isUploadingLogo, setIsUploadingLogo] = useState(false)
+  const [passwordForm, setPasswordForm] = useState({
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: ''
+  })
+  const [isUpdatingPassword, setIsUpdatingPassword] = useState(false)
 
   const companyEmail = useMemo(() => user?.email ?? '', [user])
 
@@ -92,6 +99,11 @@ const Company = () => {
     setLogoError('')
     setLogoFile(file)
     setLogoPreview(URL.createObjectURL(file))
+  }
+
+  const handlePasswordFieldChange = (event) => {
+    const { name, value } = event.target
+    setPasswordForm((prev) => ({ ...prev, [name]: value }))
   }
 
   const handleLogoReset = () => {
@@ -156,6 +168,40 @@ const Company = () => {
   }
 
   const disabled = isLoading || isSaving || isUploadingLogo
+
+  const handleChangePassword = async (event) => {
+    event.preventDefault()
+    if (!passwordForm.currentPassword || !passwordForm.newPassword) {
+      toast.error('Renseignez votre mot de passe actuel et le nouveau.')
+      return
+    }
+    if (passwordForm.newPassword.length < 8) {
+      toast.error('Le nouveau mot de passe doit contenir au moins 8 caractères.')
+      return
+    }
+    if (passwordForm.newPassword === passwordForm.currentPassword) {
+      toast.error('Choisissez un mot de passe différent de l’actuel.')
+      return
+    }
+    if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+      toast.error('La confirmation ne correspond pas au nouveau mot de passe.')
+      return
+    }
+
+    setIsUpdatingPassword(true)
+    try {
+      await changePassword({
+        currentPassword: passwordForm.currentPassword,
+        newPassword: passwordForm.newPassword
+      })
+      toast.success('Mot de passe mis à jour ✅')
+      setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' })
+    } catch (error) {
+      showErrorToast(toast.error, error)
+    } finally {
+      setIsUpdatingPassword(false)
+    }
+  }
 
   const renderLogoUploader = () => (
     <div
@@ -334,6 +380,65 @@ const Company = () => {
           </button>
         </div>
       </form>
+
+      <FormSection
+        title='Sécurité du compte'
+        description='Modifiez régulièrement votre mot de passe pour protéger l’accès à Kadi.'
+        icon={Lock}
+      >
+        <form onSubmit={handleChangePassword} className='space-y-4'>
+          <div className='grid gap-4 md:grid-cols-2'>
+            <div className='flex flex-col gap-2'>
+              <label className='label'>Mot de passe actuel</label>
+              <input
+                type='password'
+                name='currentPassword'
+                value={passwordForm.currentPassword}
+                onChange={handlePasswordFieldChange}
+                className='input'
+                placeholder='••••••••'
+                autoComplete='current-password'
+                required
+              />
+            </div>
+            <div className='flex flex-col gap-2'>
+              <label className='label'>Nouveau mot de passe</label>
+              <input
+                type='password'
+                name='newPassword'
+                value={passwordForm.newPassword}
+                onChange={handlePasswordFieldChange}
+                className='input'
+                placeholder='8 caractères minimum'
+                autoComplete='new-password'
+                required
+              />
+            </div>
+            <div className='flex flex-col gap-2 md:col-span-2'>
+              <label className='label'>Confirmer le nouveau mot de passe</label>
+              <input
+                type='password'
+                name='confirmPassword'
+                value={passwordForm.confirmPassword}
+                onChange={handlePasswordFieldChange}
+                className='input'
+                placeholder='Répétez le nouveau mot de passe'
+                autoComplete='new-password'
+                required
+              />
+            </div>
+          </div>
+          <div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end'>
+            <button
+              type='submit'
+              className='btn-primary justify-center'
+              disabled={isUpdatingPassword}
+            >
+              {isUpdatingPassword ? 'Mise à jour…' : 'Mettre à jour le mot de passe'}
+            </button>
+          </div>
+        </form>
+      </FormSection>
     </div>
   )
 }

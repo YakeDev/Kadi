@@ -7,12 +7,13 @@ import {
   FileText,
   Users,
   Package,
-  Building2
+  Building2,
+  LogOut
 } from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 
 const mobileIcons = {
   LayoutDashboard,
@@ -23,11 +24,45 @@ const mobileIcons = {
 }
 
 const Topbar = () => {
-  const { user, profile } = useAuth()
+  const { user, profile, logout } = useAuth()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
+  const profileMenuRef = useRef(null)
 
   const companyName = profile?.company?.trim() || import.meta.env.VITE_APP_NAME || 'Kadi'
   const companyTagline = profile?.tagline?.trim() || ''
+  const accountLabel =
+    profile?.manager_name?.trim() ||
+    profile?.company?.trim() ||
+    user?.email?.split('@')[0] ||
+    'Mon compte'
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!profileMenuRef.current?.contains(event.target)) {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') {
+        setIsProfileMenuOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    document.addEventListener('keydown', handleKeyDown)
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      document.removeEventListener('keydown', handleKeyDown)
+    }
+  }, [])
+
+  const handleLogout = async () => {
+    setIsProfileMenuOpen(false)
+    await logout()
+  }
 
   return (
     <header className='fixed top-0 right-0 left-0 z-50 border-b border-[var(--border)] bg-[var(--bg-elevated)] shadow-glass backdrop-blur-xl lg:left-64'>
@@ -86,12 +121,57 @@ const Topbar = () => {
             <Plus className='h-4 w-4' />
             Nouvelle facture
           </Link>
-          <button
-            type='button'
-            className='inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-muted)] shadow-soft transition hover:shadow-card'
-          >
-            <CircleUser className='h-5 w-5' />
-          </button>
+          <div className='relative' ref={profileMenuRef}>
+            <button
+              type='button'
+              onClick={() => setIsProfileMenuOpen((prev) => !prev)}
+              className={[
+                'inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-muted)] shadow-soft transition',
+                isProfileMenuOpen ? 'ring-2 ring-[var(--primary)] shadow-card' : 'hover:shadow-card'
+              ].join(' ')}
+              aria-haspopup='true'
+              aria-expanded={isProfileMenuOpen}
+            >
+              {profile?.logo_url ? (
+                <img
+                  src={profile.logo_url}
+                  alt={accountLabel}
+                  className='h-10 w-10 rounded-full object-cover'
+                />
+              ) : (
+                <CircleUser className='h-5 w-5' />
+              )}
+            </button>
+
+            {isProfileMenuOpen ? (
+              <div className='absolute right-0 mt-3 w-64 rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_28px_80px_-48px_rgba(28,28,30,0.32)]'>
+                <div className='border-b border-[var(--border)] px-4 py-3'>
+                  <p className='text-sm font-semibold text-[var(--text-dark)]'>{accountLabel}</p>
+                  <p className='text-xs text-[var(--text-muted)]'>
+                    {user?.email ?? '—'}
+                  </p>
+                </div>
+                <div className='p-2'>
+                  <Link
+                    to='/entreprise'
+                    onClick={() => setIsProfileMenuOpen(false)}
+                    className='flex items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm font-semibold text-[var(--text-muted)] transition hover:bg-[rgba(255,255,255,0.75)] hover:text-[var(--text-dark)]'
+                  >
+                    <Building2 className='h-4 w-4' />
+                    Mon entreprise
+                  </Link>
+                  <button
+                    type='button'
+                    onClick={handleLogout}
+                    className='flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm font-semibold text-[#ff453a] transition hover:bg-[rgba(255,69,58,0.12)]'
+                  >
+                    <LogOut className='h-4 w-4' />
+                    Déconnexion
+                  </button>
+                </div>
+              </div>
+            ) : null}
+          </div>
         </div>
       </div>
     </header>

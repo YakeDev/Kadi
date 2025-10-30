@@ -6,7 +6,8 @@ import {
   createProfile,
   getProfile,
   resendVerificationEmail,
-  requestPasswordReset
+  requestPasswordReset,
+  changePassword
 } from '../controllers/authController.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 
@@ -19,5 +20,6 @@ router.post('/profile', requireAuth, createProfile)
 router.get('/profile', requireAuth, getProfile)
 router.post('/resend-verification', resendVerificationEmail)
 router.post('/password/forgot', requestPasswordReset)
+router.post('/password/change', requireAuth, changePassword)
 
 export default router

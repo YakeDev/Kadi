@@ -145,6 +145,19 @@ const resolveLogoUrlForResponse = async (value) => {
   if (!storagePath) return null
 
   try {
+    const { data, error } = await supabase.storage
+      .from(LOGO_BUCKET)
+      .createSignedUrl(storagePath, 60 * 60 * 24)
+    if (error) {
+      console.warn('[Auth] createSignedUrl error:', error.message)
+    } else if (data?.signedUrl) {
+      return data.signedUrl
+    }
+  } catch (error) {
+    console.warn('[Auth] createSignedUrl exception:', error.message)
+  }
+
+  try {
     const { data: publicData, error: publicError } = supabase.storage
       .from(LOGO_BUCKET)
       .getPublicUrl(storagePath)
@@ -158,19 +171,7 @@ const resolveLogoUrlForResponse = async (value) => {
     console.warn('[Auth] getPublicUrl exception:', error.message)
   }
 
-  try {
-    const { data, error } = await supabase.storage
-      .from(LOGO_BUCKET)
-      .createSignedUrl(storagePath, 60 * 60 * 24)
-    if (error) {
-      console.warn('[Auth] createSignedUrl error:', error.message)
-      return null
-    }
-    return data?.signedUrl ?? null
-  } catch (error) {
-    console.warn('[Auth] createSignedUrl exception:', error.message)
-    return null
-  }
+  return null
 }
 
 const serializeProfile = async (record = {}, fallbackCompany = '') => ({
@@ -609,6 +610,58 @@ export const requestPasswordReset = async (req, res, next) => {
         ? 'Un email de réinitialisation vient de vous être envoyé.'
         : "Impossible d'envoyer le lien de réinitialisation pour le moment."
     })
+  } catch (error) {
+    next(error)
+  }
+}
+
+export const changePassword = async (req, res, next) => {
+  try {
+    const userId = req.user?.id
+    const email = req.user?.email
+    const currentPassword = req.body?.currentPassword
+    const newPassword = req.body?.newPassword
+
+    if (!userId || !email) {
+      return res.status(401).json({ message: 'Authentification requise.' })
+    }
+
+    if (!currentPassword || !newPassword) {
+      return res
+        .status(400)
+        .json({ message: 'Mot de passe actuel et nouveau mot de passe requis.' })
+    }
+
+    if (newPassword.length < 8) {
+      return res
+        .status(400)
+        .json({ message: 'Le nouveau mot de passe doit contenir au moins 8 caractères.' })
+    }
+
+    if (newPassword === currentPassword) {
+      return res
+        .status(400)
+        .json({ message: 'Le nouveau mot de passe doit être différent de l’actuel.' })
+    }
+
+    const {
+      error: verificationError
+    } = await supabase.auth.signInWithPassword({
+      email,
+      password: currentPassword
+    })
+
+    if (verificationError) {
+      return res.status(400).json({ message: 'Mot de passe actuel invalide.' })
+    }
+
+    const { error: updateError } = await supabase.auth.admin.updateUserById(userId, {
+      password: newPassword
+    })
+
+    if (updateError) throw updateError
+
+    res.json({ message: 'Mot de passe mis à jour.' })
   } catch (error) {
     next(error)
   }
