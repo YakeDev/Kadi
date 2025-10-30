@@ -55,7 +55,7 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
       setIsCatalogLoading(true)
       try {
         const data = await fetchCatalogItems({ active: 'true' })
-        setCatalog(data ?? [])
+        setCatalog(data?.data ?? [])
       } catch (error) {
         showErrorToast(toast.error, error)
       } finally {
@@ -69,7 +69,7 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
     setIsCatalogLoading(true)
     try {
       const data = await fetchCatalogItems({ active: 'true' })
-      setCatalog(data ?? [])
+      setCatalog(data?.data ?? [])
       toast.success('Catalogue mis à jour.')
     } catch (error) {
       showErrorToast(toast.error, error)

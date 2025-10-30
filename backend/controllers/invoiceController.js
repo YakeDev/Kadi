@@ -7,6 +7,9 @@ import { supabase } from '../models/supabaseClient.js'
 import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
+const ABSOLUTE_URL_REGEX = /^https?:\/\//i
+const DATA_URL_REGEX = /^data:/i
 
 const computeTotals = (items = []) =>
 	items.reduce(
@@ -17,6 +20,65 @@ const computeTotals = (items = []) =>
 		},
 		{ subtotal: 0 }
 	)
+
+const sanitizeStoragePath = (value = '') => value.toString().replace(/^\/+/, '')
+
+const resolveLogoUrlForPdf = async (value) => {
+	if (!value || typeof value !== 'string') return null
+	if (ABSOLUTE_URL_REGEX.test(value) || DATA_URL_REGEX.test(value)) {
+		return value.trim()
+	}
+
+	const storagePath = sanitizeStoragePath(value)
+	if (!storagePath) return null
+
+	try {
+		const { data, error } = await supabase.storage
+			.from(LOGO_BUCKET)
+			.createSignedUrl(storagePath, 60 * 60)
+		if (!error && data?.signedUrl) {
+			return data.signedUrl
+		}
+		if (error) {
+			console.warn('[Invoice PDF] createSignedUrl error:', error.message)
+		}
+	} catch (error) {
+		console.warn('[Invoice PDF] createSignedUrl exception:', error.message)
+	}
+
+	try {
+		const { data: publicData, error: publicError } = supabase.storage
+			.from(LOGO_BUCKET)
+			.getPublicUrl(storagePath)
+		if (publicError) {
+			console.warn('[Invoice PDF] getPublicUrl error:', publicError.message)
+		} else if (publicData?.publicUrl) {
+			return publicData.publicUrl
+		}
+	} catch (error) {
+		console.warn('[Invoice PDF] getPublicUrl exception:', error.message)
+	}
+
+	return null
+}
+
+const fetchLogoBuffer = async (url) => {
+	if (!url || typeof globalThis.fetch !== 'function') return null
+	try {
+		const response = await fetch(url)
+		if (!response.ok) {
+			throw new Error(`HTTP ${response.status}`)
+		}
+		const arrayBuffer = await response.arrayBuffer()
+		if (!arrayBuffer.byteLength) {
+			return null
+		}
+		return Buffer.from(arrayBuffer)
+	} catch (error) {
+		console.warn('[Invoice PDF] Impossible de charger le logo:', error.message)
+		return null
+	}
+}
 
 export const listInvoices = async (req, res, next) => {
 	try {
@@ -386,6 +448,9 @@ export const streamInvoicePdf = async (req, res, next) => {
 		if (!invoice)
 			return res.status(404).json({ message: 'Facture introuvable.' })
 
+		const resolvedLogoUrl = await resolveLogoUrlForPdf(req.profile?.logo_url)
+		const logoBuffer = await fetchLogoBuffer(resolvedLogoUrl)
+
 		const doc = new PDFDocument({ margin: 48 })
 
 		res.setHeader('Content-Type', 'application/pdf')
@@ -447,20 +512,43 @@ export const streamInvoicePdf = async (req, res, next) => {
 			req.profile?.nif ? `NIF : ${req.profile.nif}` : null
 		].filter(Boolean)
 
-		let headerY = 50
-		doc
-			.font(semiBoldFont)
-			.fontSize(26)
-			.fillColor(baseColor)
-			.text(companyName, startX, headerY, { width: pageWidth / 2 })
-		headerY = doc.y + 6
+		const headerTop = 50
+		const logoSize = 96
+		const logoGap = 18
+		let textStartX = startX
+		let logoBottom = headerTop
+
+		if (logoBuffer) {
+			try {
+				doc.image(logoBuffer, startX, headerTop, {
+					fit: [logoSize, logoSize],
+					width: logoSize,
+					height: logoSize,
+				})
+				textStartX = startX + logoSize + logoGap
+				logoBottom = headerTop + logoSize
+			} catch (error) {
+				console.warn('[Invoice PDF] Impossible d’intégrer le logo:', error.message)
+			}
+		}
+
+		let headerY = headerTop
+		const leftColumnWidth = Math.max(pageWidth / 2 - (textStartX - startX), 180)
+		if (!logoBuffer) {
+			doc
+				.font(semiBoldFont)
+				.fontSize(26)
+				.fillColor(baseColor)
+				.text(companyName, textStartX, headerY, { width: leftColumnWidth })
+			headerY = doc.y + 6
+		}
 
 		if (companyTagline) {
 			doc
 				.font(regularFont)
 				.fontSize(11)
 				.fillColor(greyMedium)
-				.text(companyTagline, startX, headerY, { width: pageWidth / 2 })
+				.text(companyTagline, textStartX, headerY, { width: leftColumnWidth })
 			headerY = doc.y + 6
 		}
 
@@ -469,7 +557,7 @@ export const streamInvoicePdf = async (req, res, next) => {
 				.font(regularFont)
 				.fontSize(10)
 				.fillColor(greyMedium)
-				.text(line, startX, headerY, { width: pageWidth / 2 })
+				.text(line, textStartX, headerY, { width: leftColumnWidth })
 			headerY = doc.y + 4
 		})
 
@@ -491,7 +579,7 @@ export const streamInvoicePdf = async (req, res, next) => {
 				width: pageWidth / 2,
 			})
 
-		const headerSeparatorY = Math.max(headerY + 12, 100)
+		const headerSeparatorY = Math.max(headerY + 12, logoBottom + 12, 100)
 		doc
 			.moveTo(startX, headerSeparatorY)
 			.lineTo(startX + pageWidth, headerSeparatorY)
