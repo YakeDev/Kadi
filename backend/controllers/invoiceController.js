@@ -674,19 +674,22 @@ export const streamInvoicePdf = async (req, res, next) => {
 
 			// Calcule la hauteur nécessaire pour la description
 			const descWidth = cols.qty - cols.desc - 12
-			const descHeight = doc.heightOfString(item.description || '-', {
+			const desc = item.description || '-'
+			const descHeight = doc.heightOfString(desc, {
 				width: descWidth,
 			})
-			const rowHeight = Math.max(descHeight, 22) // hauteur uniforme
+			const minRowHeight = 22
+			const rowHeight = Math.max(descHeight, minRowHeight)
+			const verticalAdjust = (rowHeight - descHeight) / 2
 
 			// --- Colonne Description ---
-			doc.text(item.description || '-', cols.desc, y, {
+			doc.text(desc, cols.desc, y, {
 				width: descWidth,
 				lineBreak: true,
 			})
 
 			// --- Colonne Quantité ---
-			doc.text(String(qty || '-'), cols.qty, y, {
+			doc.text(String(qty || '-'), cols.qty, y + verticalAdjust, {
 				width: 50,
 				align: 'center',
 				lineBreak: false,
@@ -694,7 +697,7 @@ export const streamInvoicePdf = async (req, res, next) => {
 
 			// --- Colonne Prix unitaire ---
 			const unitText = `${unitPrice.toFixed(2)}\u00A0${invoice.currency}`
-			doc.text(unitText, cols.unit, y, {
+			doc.text(unitText, cols.unit, y + verticalAdjust, {
 				width: 100,
 				align: 'right',
 				lineBreak: false,
@@ -702,7 +705,7 @@ export const streamInvoicePdf = async (req, res, next) => {
 
 			// --- Colonne Total ---
 			const totalText = `${lineTotal.toFixed(2)}\u00A0${invoice.currency}`
-			doc.text(totalText, cols.total, y, {
+			doc.text(totalText, cols.total, y + verticalAdjust, {
 				width: 100,
 				align: 'right',
 				lineBreak: false,
