@@ -21,6 +21,37 @@ const sanitizePathSegment = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9-_]/g, '-')
 
+const normalizeStoragePathForDeletion = (value, userId) => {
+  const sanitizedUser = sanitizePathSegment(userId || '')
+  if (!value) return null
+  const sanitizedValue = value.replace(/^\/+/, '')
+  if (!sanitizedValue) return null
+  if (sanitizedValue.startsWith(`${sanitizedUser}/`)) {
+    return sanitizedValue
+  }
+  return `${sanitizedUser}/${sanitizedValue}`
+}
+
+const extractStoragePathFromUrl = (value) => {
+  try {
+    const url = new URL(value)
+    const publicMarker = `/object/public/${logoBucket}/`
+    const signedMarker = `/object/sign/${logoBucket}/`
+
+    let storagePath = null
+    if (url.pathname.includes(publicMarker)) {
+      storagePath = url.pathname.split(publicMarker)[1]
+    } else if (url.pathname.includes(signedMarker)) {
+      storagePath = url.pathname.split(signedMarker)[1]
+    }
+
+    if (!storagePath) return null
+    return storagePath.replace(/^\/+/, '')
+  } catch {
+    return null
+  }
+}
+
 export const uploadCompanyLogo = async (file, userId) => {
   if (!file || !userId) {
     throw new Error("Fichier ou identifiant utilisateur manquant pour l'upload du logo.")
@@ -42,29 +73,38 @@ export const uploadCompanyLogo = async (file, userId) => {
     throw uploadError
   }
 
+  const storagePath = filePath
+  let previewUrl = null
+
   const { data: publicData } = supabase.storage.from(logoBucket).getPublicUrl(filePath)
   if (publicData?.publicUrl) {
-    return publicData.publicUrl
+    previewUrl = publicData.publicUrl
+  } else {
+    const { data: signedData, error: signedError } = await supabase
+      .storage.from(logoBucket)
+      .createSignedUrl(filePath, 60 * 60)
+
+    if (signedError || !signedData?.signedUrl) {
+      throw new Error("Impossible de récupérer l'URL du logo uploadé.")
+    }
+    previewUrl = signedData.signedUrl
   }
 
-  const { data: signedData, error: signedError } = await supabase
-    .storage.from(logoBucket)
-    .createSignedUrl(filePath, 60 * 60) // URL temporaire valide 1 h
-
-  if (signedError || !signedData?.signedUrl) {
-    throw new Error("Impossible de récupérer l'URL du logo uploadé.")
+  return {
+    storagePath,
+    previewUrl
   }
-
-  return signedData.signedUrl
 }
 
 export const deleteCompanyLogo = async (logoUrl, userId) => {
   if (!logoUrl || !userId) return
   try {
-    const url = new URL(logoUrl)
-    const parts = url.pathname.split(`/object/public/${logoBucket}/`)
-    const storagePath = parts[1]
-    if (storagePath && storagePath.startsWith(`${sanitizePathSegment(userId)}/`)) {
+    const isPath = !logoUrl.includes('://')
+    const storagePath = isPath
+      ? normalizeStoragePathForDeletion(logoUrl, userId)
+      : extractStoragePathFromUrl(logoUrl)
+
+    if (storagePath) {
       await supabase.storage.from(logoBucket).remove([storagePath])
     }
   } catch (error) {

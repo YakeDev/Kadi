@@ -1,4 +1,5 @@
 import { supabase } from '../models/supabaseClient.js'
+import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.js'
 
 const TABLE_NAME = 'catalog_items'
 const ITEM_TYPES = ['product', 'service']
@@ -59,8 +60,9 @@ export const listProducts = async (req, res, next) => {
   try {
     const tenantId = req.tenantId
     const { search, type, active } = req.query
+    const { page, pageSize, from, to } = getPaginationParams(req.query)
 
-    let query = supabase.from(TABLE_NAME).select('*').eq('tenant_id', tenantId)
+    let query = supabase.from(TABLE_NAME).select('*', { count: 'exact' }).eq('tenant_id', tenantId)
 
     if (type && ITEM_TYPES.includes(type.toLowerCase())) {
       query = query.eq('item_type', type.toLowerCase())
@@ -77,10 +79,15 @@ export const listProducts = async (req, res, next) => {
       query = query.or(`name.ilike.${term},description.ilike.${term},sku.ilike.${term}`)
     }
 
-    const { data, error } = await query.order('created_at', { ascending: false })
+    const { data, error, count } = await query
+      .order('created_at', { ascending: false })
+      .range(from, to)
     if (error) throw error
 
-    res.json(data)
+    res.json({
+      data: data ?? [],
+      pagination: buildPaginationMeta(count ?? 0, page, pageSize)
+    })
   } catch (error) {
     next(error)
   }

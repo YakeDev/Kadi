@@ -37,13 +37,18 @@ const SidebarLink = ({ to, label, icon: Icon }) => (
 const Sidebar = () => {
 	const { logout, profile } = useAuth()
 
-	const appName = import.meta.env.VITE_APP_NAME || 'Kadi'
-	const appTagline =
+	const fallbackName = import.meta.env.VITE_APP_NAME || 'Kadi'
+	const fallbackTagline =
 		import.meta.env.VITE_APP_TAGLINE || 'Facturation simple pour PME locales'
-	const appLogo =
-		(import.meta.env.VITE_APP_LOGO && import.meta.env.VITE_APP_LOGO.trim()) ||
-		null
-	const appInitial = (appName?.trim().charAt(0) || 'K').toUpperCase()
+
+	const companyName = profile?.company?.trim() || fallbackName
+	const companyTagline = profile?.tagline?.trim() || fallbackTagline
+	const companyLogo = profile?.logo_url?.trim?.() || null
+	const companyInitial = (companyName?.trim().charAt(0) || 'K').toUpperCase()
+
+	const locationHint = profile?.city || profile?.state
+		? [profile.city, profile.state].filter(Boolean).join(', ')
+		: `${companyName} – votre copilote de facturation.`
 
 	return (
 		<aside className='fixed inset-y-0 hidden w-64 flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-soft backdrop-blur-xl lg:flex'>
@@ -51,36 +56,32 @@ const Sidebar = () => {
 				<div className='flex items-center gap-3 rounded-[var(--radius-lg)] border border-white/60 bg-[rgba(255,255,255,0.85)] px-4 py-3 shadow-[0_14px_38px_-32px_rgba(28,28,30,0.28)]'>
 					<div className='relative h-11 w-11'>
 						<div className='absolute inset-0 rounded-full border border-white/60 bg-white/70 blur-sm' />
-						{appLogo ? (
+						{companyLogo ? (
 							<img
-								src={appLogo}
-								alt={`${appName} logo`}
+								src={companyLogo}
+								alt={`${companyName} logo`}
 								className='relative z-10 h-11 w-11 rounded-full object-cover shadow-soft'
 								width={44}
 								height={44}
 							/>
 						) : (
 							<div className='relative z-10 grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[#0a7aea] text-base font-semibold text-white shadow-soft'>
-								{appInitial}
+								{companyInitial}
 							</div>
 						)}
 					</div>
 					<div className='leading-tight'>
 						<p className='text-lg font-semibold text-[var(--text-dark)]'>
-							{appName}
+							{companyName}
 						</p>
-						{appTagline ? (
+						{companyTagline ? (
 							<p className='text-[11px] font-medium text-[var(--text-muted)]'>
-								{appTagline}
+								{companyTagline}
 							</p>
 						) : null}
 					</div>
 				</div>
-				<p className='mt-4 text-xs text-[var(--text-muted)]'>
-					{profile?.city || profile?.state
-						? [profile.city, profile.state].filter(Boolean).join(', ')
-						: `${appName} – votre copilote de facturation.`}
-				</p>
+				<p className='mt-4 text-xs text-[var(--text-muted)]'>{locationHint}</p>
 			</div>
 
 			<nav className='flex-1 space-y-1 px-4 pt-8'>

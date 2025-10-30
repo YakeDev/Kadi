@@ -1,4 +1,14 @@
-import { Menu, Plus, Bell, CircleUser, LayoutDashboard, FileText, Users, Package, Building2 } from 'lucide-react'
+import {
+  Menu,
+  Plus,
+  Bell,
+  CircleUser,
+  LayoutDashboard,
+  FileText,
+  Users,
+  Package,
+  Building2
+} from 'lucide-react'
 import { Link, NavLink } from 'react-router-dom'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
@@ -12,24 +22,12 @@ const mobileIcons = {
   Users
 }
 
-const LOGO_SIZE = 36 // pixels
-const TRUNCATED_TAGLINE_LENGTH = 22
-
 const Topbar = () => {
   const { user, profile } = useAuth()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
 
-  const companyName = profile?.company || import.meta.env.VITE_APP_NAME || 'Kadi'
-  const companyLogo = (profile?.logo_url && profile.logo_url.trim()) || import.meta.env.VITE_APP_LOGO || ''
-  const taglineSource = profile?.tagline || import.meta.env.VITE_APP_TAGLINE || 'Invoices'
-  const companyTagline =
-    taglineSource.length > TRUNCATED_TAGLINE_LENGTH
-      ? `${taglineSource.slice(0, TRUNCATED_TAGLINE_LENGTH - 1)}…`
-      : taglineSource
-  const companyInitial =
-    (companyName && companyName.trim().charAt(0)?.toUpperCase()) ||
-    (companyTagline && companyTagline.trim().charAt(0)?.toUpperCase()) ||
-    'K'
+  const companyName = profile?.company?.trim() || import.meta.env.VITE_APP_NAME || 'Kadi'
+  const companyTagline = profile?.tagline?.trim() || ''
 
   return (
     <header className='fixed top-0 right-0 left-0 z-50 border-b border-[var(--border)] bg-[var(--bg-elevated)] shadow-glass backdrop-blur-xl lg:left-64'>
@@ -43,30 +41,11 @@ const Topbar = () => {
           Menu
         </button>
 
-        <div className='flex items-center gap-3'>
-          <div className='relative h-9 w-9'>
-            <div className='absolute inset-0 rounded-full border border-white/60 bg-white/70 blur-[2px]' />
-            {companyLogo ? (
-              <img
-                src={companyLogo}
-                alt={`${companyName} logo`}
-                width={LOGO_SIZE}
-                height={LOGO_SIZE}
-                className='relative z-10 h-9 w-9 rounded-full object-cover shadow-soft'
-                loading='lazy'
-              />
-            ) : (
-              <div className='relative z-10 grid h-9 w-9 place-items-center rounded-full bg-[var(--primary-soft)] text-sm font-semibold uppercase text-[var(--primary)] shadow-soft'>
-                {companyInitial}
-              </div>
-            )}
-          </div>
-          <div className='leading-tight'>
-            <p className='text-sm font-semibold text-[var(--text-dark)]'>{companyName}</p>
-            {companyTagline ? (
-              <p className='text-[11px] font-medium text-[var(--text-muted)]'>{companyTagline}</p>
-            ) : null}
-          </div>
+        <div className='hidden flex-col items-start leading-tight text-[var(--text-muted)] md:flex'>
+          <span className='text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]'>
+            {companyName}
+          </span>
+          {companyTagline ? <span className='text-[11px]'>{companyTagline}</span> : null}
         </div>
 
         <nav

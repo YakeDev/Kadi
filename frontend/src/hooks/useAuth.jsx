@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
-import { supabase } from '../services/supabase.js'
+import { supabase, LOGO_BUCKET } from '../services/supabase.js'
 import { api } from '../services/api.js'
 
 const AuthContext = createContext()
@@ -35,6 +35,80 @@ const OPTIONAL_PROFILE_FIELDS = [
   'website'
 ]
 
+const ABSOLUTE_URL_REGEX = /^https?:\/\//i
+const DATA_OR_BLOB_REGEX = /^(data:|blob:)/i
+
+const SUPABASE_SIGNED_SEGMENT = '/object/sign/'
+
+const isDirectLogoUrl = (value) => {
+  if (!value || typeof value !== 'string') return false
+  return ABSOLUTE_URL_REGEX.test(value) || DATA_OR_BLOB_REGEX.test(value)
+}
+
+const extractStoragePathFromSignedUrl = (value) => {
+  try {
+    const url = new URL(value)
+    const marker = `${SUPABASE_SIGNED_SEGMENT}${LOGO_BUCKET}/`
+    if (!url.pathname.includes(marker)) {
+      return null
+    }
+    const storagePath = url.pathname.split(marker)[1]
+    return storagePath ? storagePath.replace(/^\/+/, '') : null
+  } catch {
+    return null
+  }
+}
+
+const normalizeStoragePath = (value) => {
+  if (!value || typeof value !== 'string') return ''
+  return value.replace(/^\/+/, '')
+}
+
+const resolveLogoUrl = async (rawValue) => {
+  if (!rawValue || typeof rawValue !== 'string') {
+    return null
+  }
+
+  let sanitizedPath = null
+
+  if (isDirectLogoUrl(rawValue)) {
+    const signedPath = extractStoragePathFromSignedUrl(rawValue)
+    if (!signedPath) {
+      return rawValue.trim()
+    }
+    sanitizedPath = signedPath
+  } else {
+    sanitizedPath = normalizeStoragePath(rawValue)
+  }
+
+  if (!sanitizedPath || !LOGO_BUCKET) {
+    return null
+  }
+
+  try {
+    const { data: publicData } = supabase.storage.from(LOGO_BUCKET).getPublicUrl(sanitizedPath)
+    if (publicData?.publicUrl) {
+      return publicData.publicUrl
+    }
+  } catch (error) {
+    console.warn('Impossible de générer une URL publique pour le logo:', error.message)
+  }
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(LOGO_BUCKET)
+      .createSignedUrl(sanitizedPath, 60 * 60)
+    if (error) {
+      console.warn('Impossible de générer une URL signée pour le logo:', error.message)
+      return null
+    }
+    return data?.signedUrl ?? null
+  } catch (error) {
+    console.warn('Erreur lors de la récupération du logo Supabase:', error.message)
+    return null
+  }
+}
+
 const deriveFallbackProfile = (user) => {
   if (!user) {
     return { ...emptyProfile }
@@ -55,10 +129,11 @@ export const AuthProvider = ({ children }) => {
     }
     try {
       const { data } = await api.get('/auth/profile')
+      const resolvedLogoUrl = await resolveLogoUrl(data?.logo_url)
       setProfile({
         company: data?.company ?? deriveFallbackProfile(user).company,
         tagline: data?.tagline ?? '',
-        logo_url: data?.logo_url ?? null,
+        logo_url: resolvedLogoUrl ?? null,
         manager_name: data?.manager_name ?? '',
         address: data?.address ?? '',
         city: data?.city ?? '',
@@ -71,7 +146,7 @@ export const AuthProvider = ({ children }) => {
       })
     } catch (error) {
       console.warn('Impossible de récupérer le profil:', error.message)
-      setProfile(deriveFallbackProfile(user))
+      setProfile((prev) => prev ?? deriveFallbackProfile(user))
     }
   }, [])
 
@@ -200,12 +275,16 @@ export const AuthProvider = ({ children }) => {
         return
       }
 
+      const resolvedLogoUrl = await resolveLogoUrl(
+        data?.logo_url ?? sanitizedPayload.logo_url ?? null
+      )
+
       setProfile((prev) => {
         const fallback = prev ?? deriveFallbackProfile(session?.user)
         return {
           company: data.company ?? sanitizedPayload.company ?? fallback.company ?? '',
           tagline: data.tagline ?? sanitizedPayload.tagline ?? fallback.tagline ?? '',
-          logo_url: data.logo_url ?? sanitizedPayload.logo_url ?? fallback.logo_url ?? null,
+          logo_url: resolvedLogoUrl ?? fallback.logo_url ?? null,
           manager_name:
             data.manager_name ?? sanitizedPayload.manager_name ?? fallback.manager_name ?? '',
           address: data.address ?? sanitizedPayload.address ?? fallback.address ?? '',

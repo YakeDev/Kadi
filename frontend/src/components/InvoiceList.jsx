@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   FileText,
@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
+import Pagination from './Pagination.jsx'
 
 const statusStyles = {
   draft: 'bg-[var(--primary-soft)] text-[var(--primary)]',
@@ -47,52 +48,92 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
     draftSearch: '',
     status: 'all'
   })
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 10, total: 0, totalPages: 1 })
+
+  const resetPageToFirst = useCallback(() => {
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }))
+  }, [])
 
   useEffect(() => {
-    const handler = setTimeout(
-      () => setFilters((prev) => ({ ...prev, search: prev.draftSearch })),
-      250
-    )
+    const value = filters.draftSearch
+    const handler = setTimeout(() => {
+      let changed = false
+      setFilters((prev) => {
+        if (prev.search === value) {
+          return prev
+        }
+        changed = true
+        return { ...prev, search: value }
+      })
+      if (changed) {
+        resetPageToFirst()
+      }
+    }, 250)
     return () => clearTimeout(handler)
-  }, [filters.draftSearch])
+  }, [filters.draftSearch, resetPageToFirst])
 
-  const fetchInvoices = async () => {
-    setIsLoading(true)
-    try {
-      const { data } = await api.get('/invoices')
-      setInvoices(data)
-    } catch (error) {
-      showErrorToast(toast.error, error)
-    } finally {
-      setIsLoading(false)
-    }
-  }
+  const fetchInvoices = useCallback(
+    async ({ page, pageSize, search, status }) => {
+      try {
+        setIsLoading(true)
+        const params = { page, pageSize }
+        if (status && status !== 'all') {
+          params.status = status
+        }
+        if (search) {
+          params.search = search
+        }
+
+        const { data } = await api.get('/invoices', { params })
+        setInvoices(data?.data ?? [])
+        const meta = data?.pagination ?? {}
+        setPagination((prev) => {
+          const next = {
+            page: meta.page ?? page,
+            pageSize: meta.pageSize ?? pageSize,
+            total: meta.total ?? prev.total,
+            totalPages: meta.totalPages ?? prev.totalPages
+          }
+          if (
+            next.page === prev.page &&
+            next.pageSize === prev.pageSize &&
+            next.total === prev.total &&
+            next.totalPages === prev.totalPages
+          ) {
+            return prev
+          }
+          return next
+        })
+      } catch (error) {
+        showErrorToast(toast.error, error)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    []
+  )
 
   useEffect(() => {
-    fetchInvoices()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [refreshKey])
-
-  const filteredInvoices = useMemo(() => {
-    const term = filters.search.trim().toLowerCase()
-    return invoices.filter((invoice) => {
-      const matchesStatus = filters.status === 'all' || invoice.status === filters.status
-      const matchesSearch =
-        term.length === 0 ||
-        [invoice.invoice_number, invoice.client?.company_name, invoice.total_amount, invoice.status]
-          .filter(Boolean)
-          .some((value) => value?.toString().toLowerCase().includes(term))
-      return matchesStatus && matchesSearch
+    fetchInvoices({
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      search: filters.search,
+      status: filters.status
     })
-  }, [filters.search, filters.status, invoices])
+  }, [fetchInvoices, filters.search, filters.status, pagination.page, pagination.pageSize, refreshKey])
 
-  const isEmpty = !isLoading && filteredInvoices.length === 0
+  const isEmpty = !isLoading && invoices.length === 0 && pagination.total === 0
 
   const handleStatusChange = async (id, status) => {
     try {
       await api.patch(`/invoices/${id}`, { status })
       toast.success('Statut mis à jour', { icon: '✅' })
-      fetchInvoices()
+      await fetchInvoices({
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        search: filters.search,
+        status: filters.status
+      })
     } catch (error) {
       showErrorToast(toast.error, error)
     }
@@ -117,7 +158,36 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
   }
 
   const handleStatusFilterChange = (status) => {
-    setFilters((prev) => ({ ...prev, status }))
+    let changed = false
+    setFilters((prev) => {
+      if (prev.status === status) {
+        return prev
+      }
+      changed = true
+      return { ...prev, status }
+    })
+    if (changed) {
+      resetPageToFirst()
+    }
+  }
+
+  const handlePageChange = (nextPage) => {
+    setPagination((prev) => {
+      const target = Math.max(1, nextPage)
+      if (target === prev.page) {
+        return prev
+      }
+      return { ...prev, page: target }
+    })
+  }
+
+  const handlePageSizeChange = (size) => {
+    setPagination((prev) => {
+      if (size === prev.pageSize) {
+        return prev
+      }
+      return { ...prev, pageSize: size, page: 1 }
+    })
   }
 
   return (
@@ -125,7 +195,9 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
       <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
         <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
           <div>
-            <h2 className='text-lg font-semibold text-[var(--text-dark)]'>Factures</h2>
+            <h2 className='text-lg font-semibold text-[var(--text-dark)]'>
+              Factures ({pagination.total})
+            </h2>
             <p className='text-xs text-[var(--text-muted)]'>
               Consultez, mettez à jour et exportez vos factures.
             </p>
@@ -133,7 +205,14 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
           <div className='flex items-center gap-2'>
             <button
               type='button'
-              onClick={fetchInvoices}
+              onClick={() =>
+                fetchInvoices({
+                  page: pagination.page,
+                  pageSize: pagination.pageSize,
+                  search: filters.search,
+                  status: filters.status
+                })
+              }
               className='btn-ghost h-9 px-3 text-xs font-semibold'
               disabled={isLoading}
             >
@@ -168,7 +247,10 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
             {filters.draftSearch ? (
               <button
                 type='button'
-                onClick={() => setFilters((prev) => ({ ...prev, draftSearch: '', search: '' }))}
+                onClick={() => {
+                  setFilters((prev) => ({ ...prev, draftSearch: '', search: '' }))
+                  resetPageToFirst()
+                }}
                 className='text-xs font-semibold text-[var(--text-muted)] hover:text-[var(--text-dark)]'
               >
                 Effacer
@@ -238,7 +320,7 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
               </tr>
             ) : null}
 
-            {isEmpty ? (
+            {!isLoading && isEmpty ? (
               <tr>
                 <td colSpan={6} className='py-16 text-center text-sm text-[var(--text-muted)]'>
                   <div className='flex flex-col items-center gap-4'>
@@ -265,46 +347,69 @@ const InvoiceList = ({ refreshKey, onCreate, canCreate = true }) => {
               </tr>
             ) : null}
 
-            {filteredInvoices.map((invoice) => (
-              <tr key={invoice.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
-                <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>#{invoice.invoice_number}</td>
-                <td className='px-4 py-3 text-[var(--text-muted)]'>{invoice.client?.company_name || '—'}</td>
-                <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
-                  {Number(invoice.total_amount || 0).toFixed(2)} {invoice.currency || 'USD'}
-                </td>
-                <td className='px-4 py-3'>
-                  <span className={`badge ${statusStyles[invoice.status] || statusStyles.draft}`}>
-                    {statusLabels[invoice.status] ?? invoice.status}
-                  </span>
-                </td>
-                <td className='px-4 py-3 text-[var(--text-muted)]'>{invoice.issue_date}</td>
-                <td className='px-4 py-3 text-right'>
-                  <div className='flex items-center justify-end gap-2'>
-                    <select
-                      value={invoice.status}
-                      onChange={(event) => handleStatusChange(invoice.id, event.target.value)}
-                      className='input-compact h-9 w-36 border-[var(--border)] bg-[var(--bg-panel)] text-xs'
-                    >
-                      <option value='draft'>Brouillon</option>
-                      <option value='sent'>Envoyée</option>
-                      <option value='paid'>Payée</option>
-                      <option value='overdue'>En retard</option>
-                    </select>
-                    <button
-                      type='button'
-                      onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}
-                      className='btn-ghost text-xs font-semibold'
-                    >
-                      <Download className='h-4 w-4' />
-                      PDF
-                    </button>
-                  </div>
-                </td>
-              </tr>
-            ))}
+            {!isLoading && !isEmpty
+              ? invoices.map((invoice) => (
+                  <tr key={invoice.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
+                    <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
+                      #{invoice.invoice_number}
+                    </td>
+                    <td className='px-4 py-3 text-[var(--text-muted)]'>
+                      {invoice.client?.company_name || '—'}
+                    </td>
+                    <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
+                      {Number(invoice.total_amount || 0).toLocaleString('fr-FR', {
+                        minimumFractionDigits: 2,
+                        maximumFractionDigits: 2
+                      })}{' '}
+                      {invoice.currency || 'USD'}
+                    </td>
+                    <td className='px-4 py-3'>
+                      <span className={`badge ${statusStyles[invoice.status] || statusStyles.draft}`}>
+                        {statusLabels[invoice.status] ?? invoice.status}
+                      </span>
+                    </td>
+                    <td className='px-4 py-3 text-[var(--text-muted)]'>
+                      {invoice.issue_date
+                        ? new Date(invoice.issue_date).toLocaleDateString('fr-FR')
+                        : '—'}
+                    </td>
+                    <td className='px-4 py-3 text-right'>
+                      <div className='flex items-center justify-end gap-2'>
+                        <select
+                          value={invoice.status}
+                          onChange={(event) => handleStatusChange(invoice.id, event.target.value)}
+                          className='input-compact h-9 w-36 border-[var(--border)] bg-[var(--bg-panel)] text-xs'
+                        >
+                          <option value='draft'>Brouillon</option>
+                          <option value='sent'>Envoyée</option>
+                          <option value='paid'>Payée</option>
+                          <option value='overdue'>En retard</option>
+                        </select>
+                        <button
+                          type='button'
+                          onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}
+                          className='btn-ghost text-xs font-semibold'
+                        >
+                          <Download className='h-4 w-4' />
+                          PDF
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              : null}
           </tbody>
         </table>
       </div>
+      <Pagination
+        page={pagination.page}
+        pageSize={pagination.pageSize}
+        total={pagination.total}
+        totalPages={pagination.totalPages}
+        onPageChange={handlePageChange}
+        onPageSizeChange={handlePageSizeChange}
+        isLoading={isLoading}
+      />
     </div>
   )
 }

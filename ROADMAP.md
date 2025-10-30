@@ -42,19 +42,33 @@ Voici comment les différents services communiquent entre eux :
 
 ## Phase 2 – Amélioration UX & Dashboard analytique
 
- Objectif : offrir une meilleure visibilité sur les ventes et la performance client.
+Objectif : offrir une meilleure visibilité sur les ventes et la performance client.
 
-**Nouvelles fonctionnalités prévues :**
+**Nouvelles fonctionnalités prévues**
 
-- [ ] Tableau de bord avec graphiques (ventes mensuelles, top clients, produits les plus vendus).
-- [ ] Intégration de **Recharts** ou **Chart.js**.
-- [ ] Filtrage par période (jour / mois / année).
-- [ ] Ajout de notifications visuelles (toasts, loaders, états de succès/erreur).
+- [ ] Implémenter un tableau de bord avec graphiques (ventes mensuelles, top clients, produits les plus vendus).
+- [ ] Intégrer **Recharts** ou **Chart.js** pour la visualisation des données.
+- [ ] Ajouter un filtrage par période (jour / mois / année).
+- [ ] Ajouter des notifications visuelles (toasts, loaders, états de succès/erreur).
 
-**Livrables :**
+**Livrables**
 
-- Nouveaux composants `DashboardChart.jsx` et `StatsCard.jsx`.
-- Endpoint `/api/invoices/summary` enrichi pour les KPI.
+- Composant `DashboardChart.jsx`
+- Composant `StatsCard.jsx`
+- Endpoint enrichi `/api/invoices/summary` pour les KPI
+
+**Notes techniques**
+
+- Prévoir un design responsive et clair (hiérarchie visuelle des KPI).
+- Les données doivent être récupérées dynamiquement depuis l’API.
+- Les toasts et loaders doivent être intégrés avec le système d’état global existant.
+
+**Critères d’acceptation**
+
+- Les graphiques se chargent correctement avec les données réelles.
+- Le filtrage par période met à jour les graphiques dynamiquement.
+- Les notifications s’affichent selon les actions utilisateur (succès, erreur, chargement).
+- Le design respecte la charte UX globale de l’application.
 
 ---
 

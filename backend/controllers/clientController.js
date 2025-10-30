@@ -1,15 +1,33 @@
 import { supabase } from '../models/supabaseClient.js'
+import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.js'
 
 export const listClients = async (req, res, next) => {
   try {
     const tenantId = req.tenantId
-    const { data, error } = await supabase
+    const { page, pageSize, from, to } = getPaginationParams(req.query)
+    const searchTerm = req.query.search?.trim()
+
+    let query = supabase
       .from('clients')
-      .select('*')
+      .select('*', { count: 'exact' })
       .eq('tenant_id', tenantId)
+
+    if (searchTerm) {
+      const term = `%${searchTerm}%`
+      query = query.or(
+        `company_name.ilike.${term},contact_name.ilike.${term},email.ilike.${term},phone.ilike.${term}`
+      )
+    }
+
+    const { data, error, count } = await query
       .order('created_at', { ascending: false })
+      .range(from, to)
+
     if (error) throw error
-    res.json(data)
+    res.json({
+      data: data ?? [],
+      pagination: buildPaginationMeta(count ?? 0, page, pageSize)
+    })
   } catch (error) {
     next(error)
   }

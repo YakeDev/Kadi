@@ -129,12 +129,12 @@ const Company = () => {
       if (logoFile) {
         setIsUploadingLogo(true)
         try {
-          const url = await uploadCompanyLogo(logoFile, user?.id)
+          const { storagePath, previewUrl } = await uploadCompanyLogo(logoFile, user?.id)
           if (logoPreview && logoPreview.startsWith('blob:')) {
             URL.revokeObjectURL(logoPreview)
           }
-          payload.logo_url = url
-          setLogoPreview(url)
+          payload.logo_url = storagePath
+          setLogoPreview(previewUrl || '')
           setLogoFile(null)
           setLogoError('')
         } catch (error) {
