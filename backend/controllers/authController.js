@@ -145,6 +145,19 @@ const resolveLogoUrlForResponse = async (value) => {
   if (!storagePath) return null
 
   try {
+    const { data, error } = await supabase.storage
+      .from(LOGO_BUCKET)
+      .createSignedUrl(storagePath, 60 * 60 * 24)
+    if (error) {
+      console.warn('[Auth] createSignedUrl error:', error.message)
+    } else if (data?.signedUrl) {
+      return data.signedUrl
+    }
+  } catch (error) {
+    console.warn('[Auth] createSignedUrl exception:', error.message)
+  }
+
+  try {
     const { data: publicData, error: publicError } = supabase.storage
       .from(LOGO_BUCKET)
       .getPublicUrl(storagePath)
@@ -158,19 +171,7 @@ const resolveLogoUrlForResponse = async (value) => {
     console.warn('[Auth] getPublicUrl exception:', error.message)
   }
 
-  try {
-    const { data, error } = await supabase.storage
-      .from(LOGO_BUCKET)
-      .createSignedUrl(storagePath, 60 * 60 * 24)
-    if (error) {
-      console.warn('[Auth] createSignedUrl error:', error.message)
-      return null
-    }
-    return data?.signedUrl ?? null
-  } catch (error) {
-    console.warn('[Auth] createSignedUrl exception:', error.message)
-    return null
-  }
+  return null
 }
 
 const serializeProfile = async (record = {}, fallbackCompany = '') => ({
