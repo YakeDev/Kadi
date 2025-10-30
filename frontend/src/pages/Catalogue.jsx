@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
   PackagePlus,
@@ -16,6 +16,7 @@ import { showErrorToast } from '../utils/errorToast.js'
 import FormSection from '../components/FormSection.jsx'
 import PageHeader from '../components/PageHeader.jsx'
 import FloatingActionButton from '../components/FloatingActionButton.jsx'
+import Pagination from '../components/Pagination.jsx'
 
 const emptyForm = {
   name: '',
@@ -43,6 +44,7 @@ const Catalogue = () => {
   const [isCreating, setIsCreating] = useState(false)
   const [blockingId, setBlockingId] = useState(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 10, total: 0, totalPages: 1 })
 
   const [filters, setFilters] = useState({
     search: '',
@@ -53,40 +55,19 @@ const Catalogue = () => {
 
   const [form, setForm] = useState(emptyForm)
 
-  const filteredCount = useMemo(() => items.length, [items])
+  const isEmpty = !isLoading && items.length === 0 && pagination.total === 0
+
+  const resetPageToFirst = useCallback(() => {
+    setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }))
+  }, [])
 
   useEffect(() => {
     const timer = setTimeout(() => {
       setFilters((prev) => ({ ...prev, search: prev.draftSearch }))
+      resetPageToFirst()
     }, 250)
     return () => clearTimeout(timer)
-  }, [filters.draftSearch])
-
-  const loadItems = useCallback(async () => {
-    try {
-      setIsLoading(true)
-      const params = {}
-      if (filters.type !== 'all') {
-        params.type = filters.type
-      }
-      if (!filters.showInactive) {
-        params.active = 'true'
-      }
-      if (filters.search.trim()) {
-        params.search = filters.search.trim()
-      }
-      const data = await fetchCatalogItems(params)
-      setItems(data ?? [])
-    } catch (error) {
-      showErrorToast(toast.error, error)
-    } finally {
-      setIsLoading(false)
-    }
-  }, [filters.search, filters.showInactive, filters.type])
-
-  useEffect(() => {
-    loadItems()
-  }, [loadItems])
+  }, [filters.draftSearch, resetPageToFirst])
 
   const openDrawer = () => {
     setForm(emptyForm)
@@ -99,6 +80,21 @@ const Catalogue = () => {
   }
 
   const resetForm = () => setForm(emptyForm)
+
+  const handlePageChange = (nextPage) => {
+    setPagination((prev) => {
+      const target = Math.max(1, nextPage)
+      if (target === prev.page) return prev
+      return { ...prev, page: target }
+    })
+  }
+
+  const handlePageSizeChange = (size) => {
+    setPagination((prev) => {
+      if (size === prev.pageSize) return prev
+      return { ...prev, pageSize: size, page: 1 }
+    })
+  }
 
   const handleCreate = async (event) => {
     event.preventDefault()
@@ -119,7 +115,17 @@ const Catalogue = () => {
       }
       await createCatalogItem(payload)
       toast.success('Article ajouté au catalogue 🎉')
-      await loadItems()
+      if (pagination.page === 1) {
+        fetchItems({
+          page: 1,
+          pageSize: pagination.pageSize,
+          search: filters.search,
+          type: filters.type,
+          showInactive: filters.showInactive
+        })
+      } else {
+        setPagination((prev) => ({ ...prev, page: 1 }))
+      }
       closeDrawer()
     } catch (error) {
       showErrorToast(toast.error, error)
@@ -133,7 +139,13 @@ const Catalogue = () => {
     try {
       await updateCatalogItem(item.id, { is_active: !item.is_active })
       toast.success(item.is_active ? 'Article archivé.' : 'Article réactivé.')
-      await loadItems()
+      await fetchItems({
+        page: pagination.page,
+        pageSize: pagination.pageSize,
+        search: filters.search,
+        type: filters.type,
+        showInactive: filters.showInactive
+      })
     } catch (error) {
       showErrorToast(toast.error, error)
     } finally {
@@ -143,7 +155,65 @@ const Catalogue = () => {
 
   const handleFilterChange = (type) => {
     setFilters((prev) => ({ ...prev, type }))
+    resetPageToFirst()
   }
+
+  const fetchItems = useCallback(
+    async ({ page, pageSize, search, type, showInactive }) => {
+      try {
+        setIsLoading(true)
+        const params = {
+          page,
+          pageSize
+        }
+        if (type && type !== 'all') {
+          params.type = type
+        }
+        if (!showInactive) {
+          params.active = 'true'
+        }
+        if (search) {
+          params.search = search
+        }
+
+        const data = await fetchCatalogItems(params)
+        setItems(data?.data ?? [])
+        const meta = data?.pagination ?? {}
+        setPagination((prev) => {
+          const next = {
+            page: meta.page ?? page,
+            pageSize: meta.pageSize ?? pageSize,
+            total: meta.total ?? prev.total,
+            totalPages: meta.totalPages ?? prev.totalPages
+          }
+          if (
+            next.page === prev.page &&
+            next.pageSize === prev.pageSize &&
+            next.total === prev.total &&
+            next.totalPages === prev.totalPages
+          ) {
+            return prev
+          }
+          return next
+        })
+      } catch (error) {
+        showErrorToast(toast.error, error)
+      } finally {
+        setIsLoading(false)
+      }
+    },
+    []
+  )
+
+  useEffect(() => {
+    fetchItems({
+      page: pagination.page,
+      pageSize: pagination.pageSize,
+      search: filters.search,
+      type: filters.type,
+      showInactive: filters.showInactive
+    })
+  }, [fetchItems, filters.search, filters.showInactive, filters.type, pagination.page, pagination.pageSize])
 
   const renderCatalogueFormSections = () => (
     <div className='space-y-4'>
@@ -260,7 +330,15 @@ const Catalogue = () => {
           <button
             key='refresh'
             type='button'
-            onClick={loadItems}
+            onClick={() =>
+              fetchItems({
+                page: pagination.page,
+                pageSize: pagination.pageSize,
+                search: filters.search,
+                type: filters.type,
+                showInactive: filters.showInactive
+              })
+            }
             className='btn-ghost h-11 justify-center'
             disabled={isLoading}
           >
@@ -278,7 +356,7 @@ const Catalogue = () => {
         <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
           <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
             <div>
-              <p className='text-sm font-semibold text-[var(--text-dark)]'>Catalogue ({filteredCount})</p>
+              <p className='text-sm font-semibold text-[var(--text-dark)]'>Catalogue ({pagination.total})</p>
               <p className='text-xs text-[var(--text-muted)]'>
                 {filters.showInactive ? 'Affichage des articles actifs et archivés.' : 'Affichage des articles actifs uniquement.'}
               </p>
@@ -341,9 +419,10 @@ const Catalogue = () => {
                   type='checkbox'
                   className='h-4 w-4 accent-[var(--primary)]'
                   checked={filters.showInactive}
-                  onChange={(event) =>
+                  onChange={(event) => {
                     setFilters((prev) => ({ ...prev, showInactive: event.target.checked }))
-                  }
+                    resetPageToFirst()
+                  }}
                 />
                 Inclure les éléments archivés
               </label>
@@ -373,7 +452,8 @@ const Catalogue = () => {
                     </div>
                   </td>
                 </tr>
-              ) : items.length === 0 ? (
+              ) : null}
+              {!isLoading && isEmpty ? (
                 <tr>
                   <td colSpan={6} className='py-16 text-center text-sm text-[var(--text-muted)]'>
                     <div className='flex flex-col items-center gap-4'>
@@ -395,122 +475,134 @@ const Catalogue = () => {
                     </div>
                   </td>
                 </tr>
-              ) : (
-                items.map((item) => (
-                  <tr key={item.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
-                    <td className='px-4 py-3'>
-                      <p className='font-semibold text-[var(--text-dark)]'>{item.name}</p>
-                      {item.description ? (
-                        <p className='text-xs text-[var(--text-muted)]'>{item.description}</p>
-                      ) : null}
-                    </td>
-                    <td className='px-4 py-3'>
-                      <span className='badge bg-[var(--primary-soft)] text-[var(--primary)]'>
-                        {ITEM_TYPE_LABELS[item.item_type] || 'Produit'}
-                      </span>
-                    </td>
-                    <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
-                      {formatAmount(item.unit_price, item.currency)}
-                    </td>
-                    <td className='px-4 py-3 text-[var(--text-muted)]'>{item.sku || '—'}</td>
-                    <td className='px-4 py-3'>
-                      {item.is_active ? (
-                        <span className='inline-flex items-center gap-2 text-xs font-semibold text-[#30d058]'>
-                          <BadgeCheck className='h-4 w-4' />
-                          Actif
+              ) : null}
+              {!isLoading && !isEmpty
+                ? items.map((item) => (
+                    <tr key={item.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
+                      <td className='px-4 py-3'>
+                        <p className='font-semibold text-[var(--text-dark)]'>{item.name}</p>
+                        {item.description ? (
+                          <p className='text-xs text-[var(--text-muted)]'>{item.description}</p>
+                        ) : null}
+                      </td>
+                      <td className='px-4 py-3'>
+                        <span className='badge bg-[var(--primary-soft)] text-[var(--primary)]'>
+                          {ITEM_TYPE_LABELS[item.item_type] || 'Produit'}
                         </span>
-                      ) : (
-                        <span className='inline-flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)]'>
-                          <Archive className='h-4 w-4' />
-                          Archivé
-                        </span>
-                      )}
-                    </td>
-                    <td className='px-4 py-3 text-right'>
-                      <button
-                        type='button'
-                        onClick={() => handleToggleActive(item)}
-                        disabled={blockingId === item.id}
-                        className='btn-ghost h-9 justify-end text-xs font-semibold'
-                      >
-                        {blockingId === item.id ? (
-                          <RefreshCcw className='h-4 w-4 animate-spin' />
-                        ) : item.is_active ? (
-                          <>
-                            <Archive className='mr-2 h-4 w-4' />
-                            Archiver
-                          </>
+                      </td>
+                      <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
+                        {formatAmount(item.unit_price, item.currency)}
+                      </td>
+                      <td className='px-4 py-3 text-[var(--text-muted)]'>{item.sku || '—'}</td>
+                      <td className='px-4 py-3'>
+                        {item.is_active ? (
+                          <span className='inline-flex items-center gap-2 text-xs font-semibold text-[#30d058]'>
+                            <BadgeCheck className='h-4 w-4' />
+                            Actif
+                          </span>
                         ) : (
-                          <>
-                            <BadgeCheck className='mr-2 h-4 w-4' />
-                            Réactiver
-                          </>
+                          <span className='inline-flex items-center gap-2 text-xs font-semibold text-[var(--text-muted)]'>
+                            <Archive className='h-4 w-4' />
+                            Archivé
+                          </span>
                         )}
-                      </button>
-                    </td>
-                  </tr>
-                ))
-              )}
+                      </td>
+                      <td className='px-4 py-3 text-right'>
+                        <button
+                          type='button'
+                          onClick={() => handleToggleActive(item)}
+                          disabled={blockingId === item.id}
+                          className='btn-ghost h-9 justify-end text-xs font-semibold'
+                        >
+                          {blockingId === item.id ? (
+                            <RefreshCcw className='h-4 w-4 animate-spin' />
+                          ) : item.is_active ? (
+                            <>
+                              <Archive className='mr-2 h-4 w-4' />
+                              Archiver
+                            </>
+                          ) : (
+                            <>
+                              <BadgeCheck className='mr-2 h-4 w-4' />
+                              Réactiver
+                            </>
+                          )}
+                        </button>
+                      </td>
+                    </tr>
+                  ))
+                : null}
             </tbody>
           </table>
         </div>
+        <Pagination
+          page={pagination.page}
+          pageSize={pagination.pageSize}
+          total={pagination.total}
+          totalPages={pagination.totalPages}
+          onPageChange={handlePageChange}
+          onPageSizeChange={handlePageSizeChange}
+          isLoading={isLoading || isCreating || Boolean(blockingId)}
+        />
       </section>
 
       {isDrawerOpen ? (
-        <div className='fixed inset-0 z-50 flex justify-end bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
-          <div className='relative flex h-full w-full max-w-lg flex-col border border-white/45 bg-[var(--bg-panel)] shadow-[0_28px_80px_-48px_rgba(28,28,30,0.32)]'>
-            <div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
-              <div>
-                <h2 className='text-lg font-semibold text-[var(--text-dark)]'>Ajouter un article</h2>
-                <p className='text-xs text-[var(--text-muted)]'>
-                  Enregistrez vos tarifs pour générer vos devis et factures en un clic.
-                </p>
-              </div>
-              <button
-                type='button'
-                onClick={closeDrawer}
-                className='rounded-full border border-[var(--border)] bg-white/70 p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
-              >
-                <X className='h-4 w-4' />
-              </button>
-            </div>
-            <form onSubmit={handleCreate} className='flex h-full flex-col'>
-              <div className='flex-1 space-y-4 overflow-y-auto px-6 py-6'>
-                {renderCatalogueFormSections()}
-              </div>
-              <div className='flex items-center justify-between gap-2 border-t border-[var(--border)] px-6 py-4'>
+        <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
+          <div className='flex min-h-full items-stretch justify-end'>
+            <div className='relative flex h-full min-h-full w-full max-w-lg flex-col border border-white/45 bg-[var(--bg-panel)] shadow-[0_28px_80px_-48px_rgba(28,28,30,0.32)]'>
+              <div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
+                <div>
+                  <h2 className='text-lg font-semibold text-[var(--text-dark)]'>Ajouter un article</h2>
+                  <p className='text-xs text-[var(--text-muted)]'>
+                    Enregistrez vos tarifs pour générer vos devis et factures en un clic.
+                  </p>
+                </div>
                 <button
                   type='button'
-                  onClick={resetForm}
-                  className='btn-ghost h-10 px-4 text-sm font-semibold'
-                  disabled={isCreating}
+                  onClick={closeDrawer}
+                  className='rounded-full border border-[var(--border)] bg-white/70 p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
                 >
-                  Réinitialiser
+                  <X className='h-4 w-4' />
                 </button>
-                <div className='flex items-center gap-2'>
+              </div>
+              <form onSubmit={handleCreate} className='flex h-full flex-col'>
+                <div className='flex-1 space-y-4 overflow-y-auto px-6 py-6'>
+                  {renderCatalogueFormSections()}
+                </div>
+                <div className='flex items-center justify-between gap-2 border-t border-[var(--border)] px-6 py-4'>
                   <button
                     type='button'
-                    onClick={closeDrawer}
+                    onClick={resetForm}
                     className='btn-ghost h-10 px-4 text-sm font-semibold'
                     disabled={isCreating}
                   >
-                    Annuler
+                    Réinitialiser
                   </button>
-                  <button
-                    type='submit'
-                    className='btn-primary h-10 px-4 text-sm font-semibold'
-                    disabled={isCreating}
-                  >
-                    {isCreating ? (
-                      <RefreshCcw className='mr-2 h-4 w-4 animate-spin' />
-                    ) : (
-                      <PackagePlus className='mr-2 h-4 w-4' />
-                    )}
-                    {isCreating ? 'Enregistrement…' : 'Enregistrer'}
-                  </button>
+                  <div className='flex items-center gap-2'>
+                    <button
+                      type='button'
+                      onClick={closeDrawer}
+                      className='btn-ghost h-10 px-4 text-sm font-semibold'
+                      disabled={isCreating}
+                    >
+                      Annuler
+                    </button>
+                    <button
+                      type='submit'
+                      className='btn-primary h-10 px-4 text-sm font-semibold'
+                      disabled={isCreating}
+                    >
+                      {isCreating ? (
+                        <RefreshCcw className='mr-2 h-4 w-4 animate-spin' />
+                      ) : (
+                        <PackagePlus className='mr-2 h-4 w-4' />
+                      )}
+                      {isCreating ? 'Enregistrement…' : 'Enregistrer'}
+                    </button>
+                  </div>
                 </div>
-              </div>
-            </form>
+              </form>
+            </div>
           </div>
         </div>
       ) : null}

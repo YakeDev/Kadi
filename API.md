@@ -264,15 +264,41 @@ Génère et télécharge le PDF d’une facture.
 ---
 
 ### `GET /api/invoices/summary`
-Retourne un résumé des ventes et KPI (pour le dashboard).
+Retourne les indicateurs et jeux de données nécessaires au tableau de bord.
+
+Paramètres de requête :
+
+- `period` (optionnel) : `day` | `month` | `year` (défaut `month`).
+- `start` / `end` (optionnels) : bornes personnalisées au format `YYYY-MM-DD`.
 
 **Réponse exemple :**
 ```json
 {
-  "total_clients": 5,
-  "total_invoices": 23,
-  "total_amount": 12450,
-  "recent_invoices": [ ... ]
+  "totals": {
+    "revenue": 12850.5,
+    "outstanding": 2350,
+    "totalAmount": 15640.5,
+    "invoiceCount": 18,
+    "draftCount": 2,
+    "averagePaymentDelay": 4.2
+  },
+  "charts": {
+    "revenue": [
+      { "label": "2024-10-01", "total": 2400 },
+      { "label": "2024-10-02", "total": 1800 }
+    ],
+    "topClients": [
+      { "clientId": "uuid-1", "company": "Alpha SARL", "total": 6500 }
+    ],
+    "topProducts": [
+      { "label": "Maintenance serveur", "total": 3200, "quantity": 4 }
+    ]
+  },
+  "meta": {
+    "period": "month",
+    "startDate": "2024-10-01T00:00:00.000Z",
+    "endDate": "2024-10-31T23:59:59.999Z"
+  }
 }
 ```
 

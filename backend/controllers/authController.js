@@ -19,6 +19,8 @@ const PROFILE_OPTIONAL_FIELDS = [
 
 const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
 const APP_NAME = process.env.APP_NAME || 'Kadi'
+const ABSOLUTE_URL_REGEX = /^https?:\/\//i
+const DATA_URL_REGEX = /^data:/i
 
 const sanitizeUrl = (value, fallback) => {
   if (!value) return fallback
@@ -128,19 +130,63 @@ const uploadLogoForUser = async (userId, base64Content, originalFilename = '') =
     })
   }
 
-  const { data: publicUrlData, error: publicUrlError } = supabase.storage
-    .from(LOGO_BUCKET)
-    .getPublicUrl(filePath)
+  return filePath
+}
 
-  if (publicUrlError) {
-    throw Object.assign(new Error("Impossible de générer l'URL publique du logo."), {
-      status: 500,
-      cause: publicUrlError
-    })
+const sanitizeStoragePath = (value) => (value || '').toString().replace(/^\/+/, '')
+
+const resolveLogoUrlForResponse = async (value) => {
+  if (!value || typeof value !== 'string') return null
+  if (ABSOLUTE_URL_REGEX.test(value) || DATA_URL_REGEX.test(value)) {
+    return value.trim()
   }
 
-  return publicUrlData?.publicUrl || null
+  const storagePath = sanitizeStoragePath(value)
+  if (!storagePath) return null
+
+  try {
+    const { data: publicData, error: publicError } = supabase.storage
+      .from(LOGO_BUCKET)
+      .getPublicUrl(storagePath)
+
+    if (publicError) {
+      console.warn('[Auth] getPublicUrl error:', publicError.message)
+    } else if (publicData?.publicUrl) {
+      return publicData.publicUrl
+    }
+  } catch (error) {
+    console.warn('[Auth] getPublicUrl exception:', error.message)
+  }
+
+  try {
+    const { data, error } = await supabase.storage
+      .from(LOGO_BUCKET)
+      .createSignedUrl(storagePath, 60 * 60 * 24)
+    if (error) {
+      console.warn('[Auth] createSignedUrl error:', error.message)
+      return null
+    }
+    return data?.signedUrl ?? null
+  } catch (error) {
+    console.warn('[Auth] createSignedUrl exception:', error.message)
+    return null
+  }
 }
+
+const serializeProfile = async (record = {}, fallbackCompany = '') => ({
+  company: record.company ?? fallbackCompany ?? '',
+  tagline: record.tagline ?? '',
+  logo_url: await resolveLogoUrlForResponse(record.logo_url),
+  manager_name: record.manager_name ?? '',
+  address: record.address ?? '',
+  city: record.city ?? '',
+  state: record.state ?? '',
+  national_id: record.national_id ?? '',
+  rccm: record.rccm ?? '',
+  nif: record.nif ?? '',
+  phone: record.phone ?? '',
+  website: record.website ?? ''
+})
 
 const dispatchVerificationEmail = async ({ email, companyName }) => {
   const { data, error } = await supabase.auth.admin.generateLink({
@@ -256,6 +302,7 @@ export const signup = async (req, res, next) => {
     }
 
     const profileData = await createProfileInternal(profilePayload)
+    const serializedProfile = await serializeProfile(profileData, profileData?.company || company || APP_NAME)
     let verificationStatus = { sent: false }
     try {
       verificationStatus = await dispatchVerificationEmail({
@@ -280,7 +327,7 @@ export const signup = async (req, res, next) => {
         id: data.user.id,
         email: data.user.email
       },
-      profile: profileData,
+      profile: serializedProfile,
       emailConfirmationRequired: true,
       emailVerificationSent: Boolean(verificationStatus?.sent),
       verificationUrl: verificationStatus?.verificationUrl ?? null,
@@ -432,7 +479,8 @@ export const createProfile = async (req, res, next) => {
       .single()
 
     if (error) throw error
-    res.status(200).json(data)
+    const serialized = await serializeProfile(data, payload.company || email)
+    res.status(200).json(serialized)
   } catch (error) {
     next(error)
   }
@@ -474,21 +522,11 @@ export const getProfile = async (req, res, next) => {
     if (error && error.code !== 'PGRST116') throw error
 
     const fallbackCompany = req.user?.user_metadata?.company || req.user?.email?.split('@')[0] || ''
+    const serialized = hasExtendedColumns
+      ? await serializeProfile(data, fallbackCompany)
+      : await serializeProfile({ company: data?.company }, fallbackCompany)
 
-    res.json({
-      company: data?.company ?? fallbackCompany,
-      tagline: hasExtendedColumns ? data?.tagline ?? '' : '',
-      logo_url: hasExtendedColumns ? data?.logo_url ?? null : null,
-      manager_name: hasExtendedColumns ? data?.manager_name ?? '' : '',
-      address: hasExtendedColumns ? data?.address ?? '' : '',
-      city: hasExtendedColumns ? data?.city ?? '' : '',
-      state: hasExtendedColumns ? data?.state ?? '' : '',
-      national_id: hasExtendedColumns ? data?.national_id ?? '' : '',
-      rccm: hasExtendedColumns ? data?.rccm ?? '' : '',
-      nif: hasExtendedColumns ? data?.nif ?? '' : '',
-      phone: hasExtendedColumns ? data?.phone ?? '' : '',
-      website: hasExtendedColumns ? data?.website ?? '' : ''
-    })
+    res.json(serialized)
   } catch (error) {
     next(error)
   }

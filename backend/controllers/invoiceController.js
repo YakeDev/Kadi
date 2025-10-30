@@ -4,6 +4,7 @@ import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { supabase } from '../models/supabaseClient.js'
+import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
@@ -20,14 +21,35 @@ const computeTotals = (items = []) =>
 export const listInvoices = async (req, res, next) => {
 	try {
 		const tenantId = req.tenantId
-		const { data, error } = await supabase
+		const { page, pageSize, from, to } = getPaginationParams(req.query)
+		const searchTerm = req.query.search?.trim()
+		const statusFilter = req.query.status?.trim()?.toLowerCase()
+
+		let query = supabase
 			.from('invoices')
-			.select('*, client:clients(*)')
+			.select('*, client:clients(*)', { count: 'exact' })
 			.eq('tenant_id', tenantId)
+
+		if (statusFilter && statusFilter !== 'all') {
+			query = query.eq('status', statusFilter)
+		}
+
+		if (searchTerm) {
+			const term = `%${searchTerm}%`
+			query = query.or(
+				`invoice_number.ilike.${term},status.ilike.${term},client.company_name.ilike.${term},client.contact_name.ilike.${term}`
+			)
+		}
+
+		const { data, error, count } = await query
 			.order('issue_date', { ascending: false })
+			.range(from, to)
 
 		if (error) throw error
-		res.json(data)
+		res.json({
+			data: data ?? [],
+			pagination: buildPaginationMeta(count ?? 0, page, pageSize)
+		})
 	} catch (error) {
 		next(error)
 	}
@@ -160,35 +182,187 @@ export const deleteInvoice = async (req, res, next) => {
 	}
 }
 
+const PERIOD_UNITS = new Set(['day', 'month', 'year'])
+
+const parsePeriodRange = ({ period = 'month', start, end }) => {
+	const safePeriod = PERIOD_UNITS.has(period) ? period : 'month'
+
+	let startDate = start ? dayjs(start) : null
+	let endDate = end ? dayjs(end) : null
+
+	if (!startDate || !startDate.isValid()) {
+		startDate = dayjs().startOf(safePeriod)
+	}
+
+	if (!endDate || !endDate.isValid()) {
+		endDate = dayjs().endOf(safePeriod)
+	}
+
+	if (endDate.isBefore(startDate)) {
+		;[startDate, endDate] = [endDate, startDate]
+	}
+
+	return {
+		period: safePeriod,
+		startDate: startDate.startOf('day'),
+		endDate: endDate.endOf('day')
+	}
+}
+
+const groupInvoicesByUnit = (invoices, unit) => {
+	const buckets = new Map()
+
+	invoices.forEach((invoice) => {
+		const date = dayjs(invoice.issue_date)
+		if (!date.isValid()) return
+
+		const label =
+			unit === 'year'
+				? date.format('YYYY')
+				: unit === 'month'
+					? date.format('YYYY-MM')
+					: date.format('YYYY-MM-DD')
+
+		const prev = buckets.get(label) || { label, total: 0 }
+		const amount = Number(invoice.total_amount || 0)
+		prev.total += amount
+		buckets.set(label, prev)
+	})
+
+	return Array.from(buckets.values()).sort((a, b) => a.label.localeCompare(b.label))
+}
+
+const rankClients = (invoices) => {
+	const totals = new Map()
+
+	invoices.forEach((invoice) => {
+		const amount = Number(invoice.total_amount || 0)
+		const key = invoice.client_id || invoice.client?.company_name || 'inconnu'
+		if (!totals.has(key)) {
+			totals.set(key, {
+				clientId: invoice.client_id,
+				company: invoice.client?.company_name || 'Client inconnu',
+				total: 0
+			})
+		}
+		totals.get(key).total += amount
+	})
+
+	return Array.from(totals.values())
+		.sort((a, b) => b.total - a.total)
+		.slice(0, 5)
+}
+
+const rankProducts = (invoices) => {
+	const products = new Map()
+
+	invoices.forEach((invoice) => {
+		const items = Array.isArray(invoice.items) ? invoice.items : []
+		items.forEach((item) => {
+			const quantity = Number(item.quantity || 0)
+			const unitPrice = Number(item.unitPrice || item.unit_price || 0)
+			const total = quantity * unitPrice
+			const label = item.description || item.name || 'Article sans nom'
+
+			if (!products.has(label)) {
+				products.set(label, {
+					label,
+					total: 0,
+					quantity: 0
+				})
+			}
+
+			const bucket = products.get(label)
+			bucket.total += total
+			bucket.quantity += quantity
+		})
+	})
+
+	return Array.from(products.values())
+		.sort((a, b) => b.total - a.total)
+		.slice(0, 5)
+}
+
 export const getSummary = async (req, res, next) => {
 	try {
 		const tenantId = req.tenantId
-		const startOfMonth = dayjs().startOf('month').format('YYYY-MM-DD')
-		const { data: monthly, error: monthlyError } = await supabase
+		const { period, startDate, endDate } = parsePeriodRange(req.query || {})
+
+		const { data: invoices, error } = await supabase
 			.from('invoices')
-			.select('total_amount')
-			.gte('issue_date', startOfMonth)
-			.eq('status', 'paid')
+			.select('id, total_amount, status, issue_date, items, client_id, client:clients(company_name)')
 			.eq('tenant_id', tenantId)
+			.gte('issue_date', startDate.format('YYYY-MM-DD'))
+			.lte('issue_date', endDate.format('YYYY-MM-DD'))
 
-		if (monthlyError) throw monthlyError
+		if (error) throw error
 
-		const { data: outstanding, error: outstandingError } = await supabase
-			.from('invoices')
-			.select('total_amount, status')
-			.eq('tenant_id', tenantId)
+		const records = invoices ?? []
 
-		if (outstandingError) throw outstandingError
+		const totals = records.reduce(
+			(acc, invoice) => {
+				const amount = Number(invoice.total_amount || 0)
+				acc.totalInvoices += 1
+				acc.totalAmount += amount
+
+				switch (invoice.status) {
+					case 'paid':
+						acc.revenue += amount
+						break
+					case 'sent':
+					case 'overdue':
+						acc.outstanding += amount
+						break
+					case 'draft':
+						acc.drafts += 1
+						break
+					default:
+						break
+				}
+
+				if (invoice.status === 'paid') {
+					const issue = dayjs(invoice.issue_date)
+					if (issue.isValid()) {
+						const days = dayjs().diff(issue, 'day')
+						acc.paymentDelays.push(Math.max(days, 0))
+					}
+				}
+
+				return acc
+			},
+			{
+				revenue: 0,
+				outstanding: 0,
+				totalAmount: 0,
+				totalInvoices: 0,
+				drafts: 0,
+				paymentDelays: []
+			}
+		)
+
+		const averageDelay = totals.paymentDelays.length
+			? totals.paymentDelays.reduce((sum, value) => sum + value, 0) / totals.paymentDelays.length
+			: 0
 
 		const summary = {
-			monthlyRevenue: monthly.reduce(
-				(sum, inv) => sum + Number(inv.total_amount || 0),
-				0
-			),
-			outstanding: outstanding
-				.filter((inv) => inv.status === 'overdue' || inv.status === 'sent')
-				.reduce((sum, inv) => sum + Number(inv.total_amount || 0), 0),
-			paid: outstanding.filter((inv) => inv.status === 'paid').length,
+			totals: {
+				revenue: totals.revenue,
+				outstanding: totals.outstanding,
+				totalAmount: totals.totalAmount,
+				invoiceCount: totals.totalInvoices,
+				draftCount: totals.drafts,
+				averagePaymentDelay: Number(averageDelay.toFixed(1))
+			},
+			charts: {
+				revenue: groupInvoicesByUnit(records, period),
+				topClients: rankClients(records),
+				topProducts: rankProducts(records)
+			},
+			meta: {
+				period,
+				startDate: startDate.toISOString(),
+				endDate: endDate.toISOString()
+			}
 		}
 
 		res.json(summary)
