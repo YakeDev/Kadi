@@ -1,13 +1,13 @@
 import clsx from 'clsx'
 
-const baseCard = 'rounded-[var(--radius-xl)] border border-[var(--border)] bg-white/85 p-6 shadow-soft'
+const baseCard = 'rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6'
 
 const FormSection = ({ title, description, icon: Icon, children, className }) => (
   <section className={clsx(baseCard, 'space-y-4', className)}>
     {(title || description || Icon) && (
       <header className='flex items-start gap-3'>
         {Icon ? (
-          <span className='inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)] shadow-soft'>
+          <span className='inline-flex h-10 w-10 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)]'>
             <Icon className='h-4 w-4' />
           </span>
         ) : null}

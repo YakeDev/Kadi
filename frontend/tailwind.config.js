@@ -9,8 +9,8 @@ export default {
         'text-dark': '#1d1d1f',
         'text-muted': '#6e6e73',
         'bg-base': '#f5f5f7',
-        'bg-elevated': 'rgba(255,255,255,0.78)',
-        'bg-panel': 'rgba(255,255,255,0.92)',
+        'bg-elevated': '#ffffff',
+        'bg-panel': '#ffffff',
         border: 'rgba(15,23,42,0.08)'
       },
       borderRadius: {
@@ -18,9 +18,9 @@ export default {
         xl: '20px'
       },
       boxShadow: {
-        soft: '0 28px 60px -45px rgba(28,28,30,0.32)',
-        card: '0 40px 90px -60px rgba(28,28,30,0.36)',
-        glass: '0 20px 48px -32px rgba(28,28,30,0.26)'
+        soft: '0 0 0 0 rgba(0,0,0,0)',
+        card: '0 0 0 0 rgba(0,0,0,0)',
+        glass: '0 0 0 0 rgba(0,0,0,0)'
       },
       fontFamily: {
         sans: [

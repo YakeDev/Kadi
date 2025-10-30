@@ -25,8 +25,8 @@ const SidebarLink = ({ to, label, icon: Icon }) => (
 			[
 				'group flex items-center gap-3 rounded-[var(--radius-md)] px-3 py-2 text-sm font-medium transition-all',
 				isActive
-					? 'bg-[var(--primary-soft)] text-[var(--primary)] shadow-soft'
-					: 'text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.75)] hover:text-[var(--text-dark)] hover:shadow-soft',
+					? 'bg-[var(--primary-soft)] text-[var(--primary)]'
+					: 'text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.75)] hover:text-[var(--text-dark)]',
 			].join(' ')
 		}>
 		<Icon className='h-5 w-5 opacity-80' />
@@ -51,23 +51,22 @@ const Sidebar = () => {
 		: `${companyName} – votre copilote de facturation.`
 
 	return (
-		<aside className='fixed inset-y-0 hidden w-64 flex-col border-r border-[var(--border)] bg-[var(--bg-elevated)] shadow-soft backdrop-blur-xl lg:flex'>
+		<aside className='fixed inset-y-0 hidden w-64 flex-col border-r border-[var(--border)] bg-white lg:flex'>
 			<div className='px-6 pt-4'>
-				<div className='flex items-center gap-3 rounded-[var(--radius-lg)] border border-white/60 bg-[rgba(255,255,255,0.85)] px-4 py-3 shadow-[0_14px_38px_-32px_rgba(28,28,30,0.28)]'>
-					<div className='relative h-11 w-11'>
-						<div className='absolute inset-0 rounded-full border border-white/60 bg-white/70 blur-sm' />
+				<div className='flex items-center gap-3 rounded-[var(--radius-lg)] border border-[var(--border)] bg-white px-4 py-3'>
+					<div className='grid h-11 w-11 place-items-center overflow-hidden rounded-full border border-[var(--border)] bg-white'>
 						{companyLogo ? (
 							<img
 								src={companyLogo}
 								alt={`${companyName} logo`}
-								className='relative z-10 h-11 w-11 rounded-full object-cover shadow-soft'
+								className='h-full w-full object-cover'
 								width={44}
 								height={44}
 							/>
 						) : (
-							<div className='relative z-10 grid h-11 w-11 place-items-center rounded-full bg-gradient-to-br from-[var(--primary)] to-[#0a7aea] text-base font-semibold text-white shadow-soft'>
+							<span className='text-base font-semibold text-[var(--primary)]'>
 								{companyInitial}
-							</div>
+							</span>
 						)}
 					</div>
 					<div className='leading-tight'>

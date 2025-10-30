@@ -10,17 +10,17 @@
   --text-dark: #1d1d1f;
   --text-muted: #6e6e73;
   --bg-base: #f5f5f7;
-  --bg-elevated: rgba(255, 255, 255, 0.82);
-  --bg-panel: rgba(255, 255, 255, 0.92);
+  --bg-elevated: #ffffff;
+  --bg-panel: #ffffff;
   --border: rgba(15, 23, 42, 0.08);
   --radius-md: 14px;
   --radius-lg: 20px;
   --radius-xl: 28px;
   --radius-2xl: 36px;
   --radius-3xl: 48px;
-  --shadow-soft: 0 28px 60px -45px rgba(28, 28, 30, 0.32);
-  --shadow-card: 0 40px 90px -60px rgba(28, 28, 30, 0.36);
-  --shadow-glass: 0 20px 48px -32px rgba(28, 28, 30, 0.26);
+  --shadow-soft: 0 0 0 0 rgba(0, 0, 0, 0);
+  --shadow-card: 0 0 0 0 rgba(0, 0, 0, 0);
+  --shadow-glass: 0 0 0 0 rgba(0, 0, 0, 0);
 }
 
 @layer base {
@@ -50,15 +50,15 @@
   }
 
   .btn-primary {
-    @apply btn bg-[var(--primary)] text-[var(--primary-contrast)] shadow-glass hover:bg-[#0a7aea] focus:ring-4 focus:ring-[rgba(10,132,255,0.2)];
+    @apply btn bg-[var(--primary)] text-[var(--primary-contrast)] hover:bg-[#0a7aea] focus:ring-4 focus:ring-[rgba(10,132,255,0.2)];
   }
 
   .btn-secondary {
-    @apply btn bg-[var(--bg-panel)] text-[var(--text-dark)] border border-[var(--border)] shadow-soft hover:shadow-card hover:border-[rgba(10,132,255,0.2)];
+    @apply btn bg-[var(--bg-panel)] text-[var(--text-dark)] border border-[var(--border)] hover:border-[rgba(10,132,255,0.2)];
   }
 
   .btn-ghost {
-    @apply btn bg-transparent border border-[var(--border)] text-[var(--text-muted)] shadow-none hover:bg-[rgba(255,255,255,0.65)];
+    @apply btn bg-transparent border border-[var(--border)] text-[var(--text-muted)] hover:bg-[rgba(255,255,255,0.65)];
   }
 
   .badge {
@@ -66,11 +66,11 @@
   }
 
   .card {
-    @apply rounded-[var(--radius-lg)] border border-white/60 bg-[var(--bg-panel)] shadow-soft backdrop-blur-xl transition-all duration-200 ease-out hover:-translate-y-[1px] hover:shadow-card;
+    @apply rounded-[var(--radius-lg)] border border-[var(--border)] bg-white;
   }
 
   .input {
-    @apply w-full rounded-[var(--radius-lg)] border border-[var(--border)] bg-[rgba(255,255,255,0.92)] px-4 py-2 text-sm text-[var(--text-dark)] shadow-[0_18px_45px_-40px_rgba(28,28,30,0.22)] transition focus:border-[var(--primary)] focus:bg-[var(--bg-panel)] focus:outline-none focus:ring-2 focus:ring-[rgba(10,132,255,0.25)];
+    @apply w-full rounded-[var(--radius-lg)] border border-[var(--border)] bg-white px-4 py-2 text-sm text-[var(--text-dark)] transition focus:border-[var(--primary)] focus:bg-white focus:outline-none focus:ring-2 focus:ring-[rgba(10,132,255,0.25)];
   }
 
   .input-compact {
@@ -82,7 +82,7 @@
   }
 
   .surface {
-    @apply rounded-[var(--radius-lg)] border border-white/60 bg-[var(--bg-elevated)] shadow-soft backdrop-blur-xl;
+    @apply rounded-[var(--radius-lg)] border border-[var(--border)] bg-white;
   }
 
   .separator {
@@ -90,7 +90,7 @@
   }
 
   .textarea {
-    @apply w-full rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-panel)] px-4 py-3 text-sm text-[var(--text-dark)] leading-relaxed backdrop-blur transition focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(10,132,255,0.25)];
+    @apply w-full rounded-[var(--radius-lg)] border border-[var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-dark)] leading-relaxed transition focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(10,132,255,0.25)];
   }
 
   .textarea-compact {

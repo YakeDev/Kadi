@@ -9,6 +9,10 @@ import {
 	TrendingDown,
 	CalendarRange,
 	Calendar,
+	FileText,
+	UserPlus,
+	PackagePlus,
+	ListTodo,
 } from 'lucide-react'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
@@ -38,6 +42,9 @@ const formatNumber = (value) =>
 		maximumFractionDigits: 0,
 	})
 
+const formatDate = (value) =>
+	value ? new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) : '—'
+
 const Dashboard = () => {
 	const { user, profile } = useAuth()
 	const [period, setPeriod] = useState('month')
@@ -48,6 +55,8 @@ const Dashboard = () => {
 	const [range, setRange] = useState(null)
 	const [rangeDraft, setRangeDraft] = useState({ start: '', end: '' })
 	const [isCustomRange, setIsCustomRange] = useState(false)
+	const [todo, setTodo] = useState({ overdue: [], dueSoon: [], drafts: [] })
+	const [isTodoLoading, setIsTodoLoading] = useState(true)
 
 	const fetchData = async (selectedPeriod, rangeOverride) => {
 		setIsRefreshing(true)
@@ -70,7 +79,8 @@ const Dashboard = () => {
 				params.end = appliedRange.end
 			}
 
-			const [{ data: summaryData }, { data: invoicesResponse }] = await Promise.all([
+			setIsTodoLoading(true)
+			const [{ data: summaryData }, { data: invoicesResponse }, { data: todoResponse }] = await Promise.all([
 				api.get('/invoices/summary', { params }),
 				api.get('/invoices', {
 					params: {
@@ -78,9 +88,15 @@ const Dashboard = () => {
 						pageSize: 5,
 					},
 				}),
+				api.get('/invoices/todo'),
 			])
 			setSummary(summaryData)
 			setRecentInvoices(invoicesResponse?.data ?? [])
+			setTodo({
+				overdue: todoResponse?.overdue ?? [],
+				dueSoon: todoResponse?.dueSoon ?? [],
+				drafts: todoResponse?.drafts ?? [],
+			})
 			const startISO = summaryData?.meta?.startDate?.slice(0, 10) || ''
 			const endISO = summaryData?.meta?.endDate?.slice(0, 10) || ''
 			const nextRange = { start: startISO, end: endISO }
@@ -94,6 +110,7 @@ const Dashboard = () => {
 		} finally {
 			setIsLoading(false)
 			setIsRefreshing(false)
+			setIsTodoLoading(false)
 		}
 	}
 
@@ -153,6 +170,97 @@ const Dashboard = () => {
 			rangeDraft.end !== currentRange.end)
 	const isApplyDisabled = !isRangeDraftValid || !isRangeChanged || isRefreshing
 	const isResetDisabled = !isCustomRange || isRefreshing
+	const quickActions = [
+		{
+			label: 'Nouvelle facture',
+			description: 'Créez et envoyez en quelques secondes.',
+			to: '/factures',
+			icon: FileText,
+			variant: 'primary',
+		},
+		{
+			label: 'Ajouter un client',
+			description: 'Renseignez un nouveau client dans votre CRM.',
+			to: '/clients',
+			icon: UserPlus,
+			variant: 'ghost',
+		},
+		{
+			label: 'Ajouter un article',
+			description: 'Enrichissez votre catalogue produits / services.',
+			to: '/catalogue',
+			icon: PackagePlus,
+			variant: 'ghost',
+		},
+	]
+
+	const statsCards = [
+		{
+			key: 'revenue',
+			title: 'Revenus encaissés',
+			icon: TrendingUp,
+			value: isLoading ? '—' : formatCurrency(totals.revenue || 0),
+			helperText: 'Montant des factures payées sur la période',
+			actions: [
+				<Link key='revenue-link' to='/factures?status=paid' className='btn-ghost h-8 px-3 text-[11px] font-semibold'>
+					Voir les factures payées
+				</Link>,
+			],
+		},
+		{
+			key: 'outstanding',
+			title: 'Montant en attente',
+			icon: TrendingDown,
+			value: isLoading ? '—' : formatCurrency(totals.outstanding || 0),
+			helperText: 'Factures envoyées ou en retard',
+			actions: [
+				<Link key='outstanding-link' to='/factures?status=sent' className='btn-ghost h-8 px-3 text-[11px] font-semibold'>
+					Relancer un client
+				</Link>,
+			],
+		},
+		{
+			key: 'count',
+			title: 'Factures émises',
+			value: isLoading ? '—' : formatNumber(totals.invoiceCount || 0),
+			helperText: 'Nombre total sur la période',
+			actions: [
+				<Link key='all-link' to='/factures' className='btn-ghost h-8 px-3 text-[11px] font-semibold'>
+					Ouvrir la liste
+				</Link>,
+			],
+		},
+		{
+			key: 'delay',
+			title: 'Délai moyen de paiement',
+			value: isLoading ? '—' : `${Number(totals.averagePaymentDelay || 0).toFixed(1)} j`,
+			helperText: 'Entre émission et règlement',
+		},
+	]
+
+	const todoSections = [
+		{
+			key: 'overdue',
+			title: 'En retard',
+			accent: 'text-[#ff453a]',
+			items: todo.overdue,
+			empty: 'Aucune relance urgente.',
+		},
+		{
+			key: 'dueSoon',
+			title: 'À échéance',
+			accent: 'text-[var(--primary)]',
+			items: todo.dueSoon,
+			empty: 'Rien à prévoir pour aujourd’hui.',
+		},
+		{
+			key: 'drafts',
+			title: 'Brouillons',
+			accent: 'text-[var(--text-muted)]',
+			items: todo.drafts,
+			empty: 'Aucun brouillon en attente.',
+		},
+	]
 
 	return (
 		<div className='space-y-8'>
@@ -177,10 +285,44 @@ const Dashboard = () => {
 				]}
 			/>
 
-			<div className='rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-panel)]/90 px-4 py-4 shadow-soft'>
+			<div className='grid gap-3 sm:grid-cols-2 xl:grid-cols-3'>
+				{quickActions.map((action) => {
+					const ActionIcon = action.icon
+					const isPrimary = action.variant === 'primary'
+					const actionClass = clsx(
+						'group flex flex-col justify-between rounded-[var(--radius-xl)] border border-[var(--border)] p-4 transition focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2',
+						isPrimary
+							? 'border-transparent bg-[var(--primary)] text-white shadow-[0_30px_80px_-48px_rgba(10,132,255,0.55)] focus-visible:ring-white'
+							: 'bg-white shadow-[0_26px_68px_-48px_rgba(6,31,78,0.34)] focus-visible:ring-[var(--primary)]'
+					)
+					const accentIconBg = isPrimary ? 'bg-white/15 text-white' : 'bg-[var(--primary-soft)]/70 text-[var(--primary)]'
+					const helperClass = clsx('mt-3 text-xs', isPrimary ? 'text-white/80' : 'text-[var(--text-muted)]')
+
+					return (
+						<Link key={action.label} to={action.to} className={actionClass}>
+							<div className='flex items-center justify-between gap-3'>
+								<div>
+									<p className={clsx('text-xs font-semibold uppercase tracking-[0.25em]', isPrimary ? 'text-white/70' : 'text-[var(--text-muted)]')}>
+										Action rapide
+									</p>
+									<h3 className={clsx('mt-1 text-sm font-semibold', isPrimary ? 'text-white' : 'text-[var(--text-dark)]')}>
+										{action.label}
+									</h3>
+								</div>
+								<span className={clsx('flex h-9 w-9 items-center justify-center rounded-full transition group-hover:scale-105', accentIconBg)}>
+									<ActionIcon className='h-4 w-4' />
+								</span>
+							</div>
+							<p className={helperClass}>{action.description}</p>
+						</Link>
+					)
+				})}
+			</div>
+
+			<div className='rounded-[var(--radius-xl)] border border-[var(--border)] bg-white px-4 py-4'>
 				<div className='flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between'>
 					<div className='flex items-start gap-3'>
-						<span className='hidden h-11 w-11 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)] shadow-soft sm:flex'>
+						<span className='hidden h-11 w-11 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)] sm:flex'>
 							<CalendarRange className='h-5 w-5' />
 						</span>
 						<div>
@@ -213,9 +355,9 @@ const Dashboard = () => {
 									type='button'
 									onClick={() => setPeriod(option.value)}
 									className={clsx(
-										'inline-flex h-9 items-center justify-center rounded-full border border-[var(--border)] bg-white/80 px-4 text-xs font-semibold text-[var(--text-muted)] shadow-[0_10px_25px_-20px_rgba(28,28,30,0.24)] transition hover:border-[var(--primary)] hover:text-[var(--text-dark)]',
+										'inline-flex h-9 items-center justify-center rounded-full border border-[var(--border)] bg-white px-4 text-xs font-semibold text-[var(--text-muted)] transition hover:border-[var(--primary)] hover:text-[var(--text-dark)]',
 										period === option.value &&
-											'border-[var(--primary)] bg-[rgba(10,132,255,0.12)] text-[var(--primary)] shadow-[0_14px_32px_-18px_rgba(10,132,255,0.45)]'
+											'border-[var(--primary)] bg-[rgba(10,132,255,0.12)] text-[var(--primary)]'
 									)}>
 									{option.label}
 								</button>
@@ -226,7 +368,7 @@ const Dashboard = () => {
 						</div>
 						<div className='flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-3'>
 							<div className='flex flex-1 flex-col gap-2 sm:flex-row sm:items-center sm:gap-2'>
-								<div className='flex min-w-[160px] flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-white/85 px-3 py-2 text-sm text-[var(--text-dark)] shadow-[0_18px_45px_-40px_rgba(28,28,30,0.22)] transition focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[rgba(10,132,255,0.2)]'>
+								<div className='flex min-w-[160px] flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-dark)] transition focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[rgba(10,132,255,0.2)]'>
 									<Calendar className='h-4 w-4 text-[var(--text-muted)]' />
 									<input
 										type='date'
@@ -241,7 +383,7 @@ const Dashboard = () => {
 								<span className='flex items-center justify-center text-[var(--text-muted)]'>
 									→
 								</span>
-								<div className='flex min-w-[160px] flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-white/85 px-3 py-2 text-sm text-[var(--text-dark)] shadow-[0_18px_45px_-40px_rgba(28,28,30,0.22)] transition focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[rgba(10,132,255,0.2)]'>
+								<div className='flex min-w-[160px] flex-1 items-center gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-white px-3 py-2 text-sm text-[var(--text-dark)] transition focus-within:border-[var(--primary)] focus-within:ring-2 focus-within:ring-[rgba(10,132,255,0.2)]'>
 									<Calendar className='h-4 w-4 text-[var(--text-muted)]' />
 									<input
 										type='date'
@@ -262,7 +404,7 @@ const Dashboard = () => {
 										'inline-flex h-10 items-center justify-center rounded-full px-5 text-xs font-semibold text-white transition',
 										isApplyDisabled
 											? 'bg-[var(--primary)]/50 opacity-70 cursor-not-allowed'
-											: 'bg-[var(--primary)] shadow-glass hover:bg-[#0a7aea]'
+											: 'bg-[var(--primary)] hover:bg-[#0a7aea]'
 									)}
 									disabled={isApplyDisabled}>
 									Appliquer
@@ -283,32 +425,16 @@ const Dashboard = () => {
 				</div>
 			</div>
 			<div className='grid gap-4 md:grid-cols-2 xl:grid-cols-4'>
-				<StatsCard
-					icon={TrendingUp}
-					title='Revenus encaissés'
-					value={isLoading ? '—' : formatCurrency(totals.revenue || 0)}
-					helperText='Montant des factures payées'
-				/>
-				<StatsCard
-					icon={TrendingDown}
-					title='Montant en attente'
-					value={isLoading ? '—' : formatCurrency(totals.outstanding || 0)}
-					helperText='Factures envoyées ou en retard'
-				/>
-				<StatsCard
-					title='Factures émises'
-					value={isLoading ? '—' : formatNumber(totals.invoiceCount || 0)}
-					helperText='Nombre de factures sur la période'
-				/>
-				<StatsCard
-					title='Délai moyen de paiement'
-					value={
-						isLoading
-							? '—'
-							: `${Number(totals.averagePaymentDelay || 0).toFixed(1)} j`
-					}
-					helperText='Entre émission et règlement'
-				/>
+				{statsCards.map((card) => (
+					<StatsCard
+						key={card.key}
+						icon={card.icon}
+						title={card.title}
+						value={card.value}
+						helperText={card.helperText}
+						actions={card.actions}
+					/>
+				))}
 			</div>
 
 			<div className='grid gap-6 xl:grid-cols-[1.4fr,1fr]'>
@@ -366,7 +492,7 @@ const Dashboard = () => {
 					</div>
 
 					{emptyState ? (
-						<div className='flex flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] bg-[var(--bg-panel)] py-10 text-center text-sm text-[var(--text-muted)] backdrop-blur'>
+						<div className='flex flex-col items-center justify-center gap-3 rounded-[var(--radius-lg)] border border-dashed border-[var(--border)] bg-white py-10 text-center text-sm text-[var(--text-muted)]'>
 							<Inbox className='h-8 w-8 text-[var(--text-muted)]' />
 							<div>
 								<p className='font-medium'>Aucune facture enregistrée</p>
@@ -374,7 +500,7 @@ const Dashboard = () => {
 							</div>
 						</div>
 					) : (
-						<div className='divide-y divide-[var(--border)] rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-panel)] backdrop-blur max-h-48 overflow-y-auto pr-1'>
+						<div className='divide-y divide-[var(--border)] rounded-[var(--radius-lg)] border border-[var(--border)] bg-white max-h-[346px] overflow-y-auto pr-1'>
 							{recentInvoices.map((invoice) => (
 								<div
 									key={invoice.id}
@@ -401,26 +527,66 @@ const Dashboard = () => {
 					)}
 				</div>
 
-				<div className='card flex flex-col gap-4 bg-gradient-to-br from-[var(--bg-panel)] via-[var(--bg-panel)] to-[rgba(10,132,255,0.08)] p-6'>
-					<div className='flex h-12 w-12 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)] shadow-soft'>
-						<LayoutDashboard className='h-5 w-5' />
+			<div className='card flex flex-col gap-4 p-6'>
+				<div className='flex items-center justify-between'>
+					<div className='flex items-center gap-3'>
+						<span className='flex h-12 w-12 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)]'>
+							<ListTodo className='h-5 w-5' />
+						</span>
+						<div>
+							<h3 className='text-lg font-semibold text-[var(--text-dark)]'>À faire aujourd’hui</h3>
+							<p className='text-xs text-[var(--text-muted)]'>Gardez un œil sur les factures à relancer et les brouillons.</p>
+						</div>
 					</div>
-					<h3 className='text-xl font-semibold text-[var(--text-dark)]'>
-						Connectez Kadi à vos outils
-					</h3>
-					<p className='text-sm text-[var(--text-muted)]'>
-						Synchronisez Kadi avec votre CRM et votre outil comptable pour
-						automatiser la création et le suivi des factures.
-					</p>
-					<div className='flex flex-col gap-2 sm:flex-row'>
-						<button type='button' className='btn-primary w-full justify-center'>
-							Configurer maintenant
-						</button>
-						<button type='button' className='btn-ghost w-full justify-center'>
-							En savoir plus
-						</button>
-					</div>
+					<Link to='/factures' className='text-xs font-semibold text-[var(--primary)] hover:underline'>Tout voir</Link>
 				</div>
+
+				{isTodoLoading ? (
+					<div className='flex items-center justify-center gap-2 py-10 text-sm text-[var(--text-muted)]'>
+						<Loader2 className='h-4 w-4 animate-spin' />
+						Chargement des éléments à traiter…
+					</div>
+				) : (
+					<div className='space-y-3 overflow-y-auto pr-2 max-h-[380px] sm:max-h-[420px] lg:max-h-[460px]'>
+						{todoSections.map((section) => (
+							<div key={section.key} className='space-y-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-4'>
+								<div className='flex items-center justify-between'>
+									<p className='text-xs font-semibold uppercase tracking-[0.15em] text-[var(--text-muted)]'>{section.title}</p>
+									<span className={clsx('text-[11px] font-semibold', section.accent)}>
+										{section.items.length}
+									</span>
+								</div>
+								{section.items.length === 0 ? (
+									<p className='rounded-[var(--radius-md)] border border-dashed border-[var(--border)] bg-white px-3 py-2 text-xs text-[var(--text-muted)]'>
+										{section.empty}
+									</p>
+								) : (
+									<ul className='space-y-2 text-xs'>
+										{section.items.map((item) => (
+											<li
+												key={item.id}
+												className='flex items-center justify-between gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-white px-3 py-2 text-[var(--text-dark)]'
+											>
+												<div>
+													<p className='text-sm font-semibold'>#{item.invoice_number}</p>
+													<p className='text-[11px] text-[var(--text-muted)]'>{item.client?.company_name ?? 'Client inconnu'}</p>
+												</div>
+												<div className='text-right text-[11px] text-[var(--text-muted)]'>
+													{item.due_date ? <p>Échéance {formatDate(item.due_date)}</p> : null}
+													<p className='font-semibold text-[var(--text-dark)]'>{formatCurrency(item.total_amount)}</p>
+													<Link to='/factures' className='mt-1 inline-flex items-center text-[var(--primary)] hover:underline'>
+														Consulter
+													</Link>
+												</div>
+											</li>
+										))}
+									</ul>
+								)}
+							</div>
+						))}
+					</div>
+				)}
+			</div>
 			</div>
 		</div>
 	)

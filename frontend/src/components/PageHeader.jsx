@@ -7,15 +7,14 @@ const PageHeader = ({ icon: Icon, title, subtitle, actions = [], className, alig
   return (
     <div
       className={clsx(
-        'flex flex-col gap-4 border border-[var(--border)] bg-[var(--bg-panel)]/80 px-5 py-4 shadow-soft backdrop-blur md:flex-row md:items-center md:justify-between',
-        'rounded-[var(--radius-xl)]',
+        'flex flex-col gap-4 rounded-[var(--radius-xl)] border border-[var(--border)] bg-white px-5 py-4 md:flex-row md:items-center md:justify-between',
         className
       )}
     >
       <div className={clsx('flex flex-1 flex-col gap-3', align === 'center' && 'md:items-center text-center')}>
         <div className={clsx('flex flex-col gap-3 md:flex-row md:items-center md:gap-4', align === 'center' && 'md:justify-center')}>
           {Icon ? (
-            <span className='inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)] shadow-soft'>
+            <span className='inline-flex h-11 w-11 items-center justify-center rounded-full bg-[var(--primary-soft)] text-[var(--primary)]'>
               <Icon className='h-5 w-5' />
             </span>
           ) : null}

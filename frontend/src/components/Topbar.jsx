@@ -65,7 +65,7 @@ const Topbar = () => {
   }
 
   return (
-    <header className='fixed top-0 right-0 left-0 z-50 border-b border-[var(--border)] bg-[var(--bg-elevated)] shadow-glass backdrop-blur-xl lg:left-64'>
+    <header className='fixed top-0 right-0 left-0 z-50 border-b border-[var(--border)] bg-white lg:left-64'>
       <div className='mx-auto flex w-full max-w-[1200px] items-center justify-between px-4 py-3 md:px-6'>
         <button
           onClick={() => setIsMobileNavOpen((prev) => !prev)}
@@ -86,7 +86,7 @@ const Topbar = () => {
         <nav
           className={`${
             isMobileNavOpen ? 'flex' : 'hidden'
-          } absolute left-4 right-4 top-16 flex-col gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-panel)] p-3 shadow-soft backdrop-blur-xl lg:hidden`}
+          } absolute left-4 right-4 top-16 flex-col gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-panel)] p-3 lg:hidden`}
         >
           {navigationLinks.map((link) => {
             const Icon = mobileIcons[link.icon]
@@ -126,8 +126,8 @@ const Topbar = () => {
               type='button'
               onClick={() => setIsProfileMenuOpen((prev) => !prev)}
               className={[
-                'inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-muted)] shadow-soft transition',
-                isProfileMenuOpen ? 'ring-2 ring-[var(--primary)] shadow-card' : 'hover:shadow-card'
+                'inline-flex h-10 w-10 items-center justify-center rounded-full border border-[var(--border)] bg-[var(--bg-panel)] text-[var(--text-muted)] transition',
+                isProfileMenuOpen ? 'ring-2 ring-[var(--primary)]' : 'hover:ring-2 hover:ring-[var(--primary)]/40'
               ].join(' ')}
               aria-haspopup='true'
               aria-expanded={isProfileMenuOpen}
@@ -144,7 +144,7 @@ const Topbar = () => {
             </button>
 
             {isProfileMenuOpen ? (
-              <div className='absolute right-0 mt-3 w-64 rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-panel)] shadow-[0_28px_80px_-48px_rgba(28,28,30,0.32)]'>
+              <div className='absolute right-0 mt-3 w-64 rounded-[var(--radius-xl)] border border-[var(--border)] bg-[var(--bg-panel)]'>
                 <div className='border-b border-[var(--border)] px-4 py-3'>
                   <p className='text-sm font-semibold text-[var(--text-dark)]'>{accountLabel}</p>
                   <p className='text-xs text-[var(--text-muted)]'>

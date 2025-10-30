@@ -33,7 +33,7 @@ const Pagination = ({
   }
 
   return (
-    <div className='flex flex-col gap-3 border-t border-[var(--border)] bg-white/40 px-4 py-3 text-sm text-[var(--text-muted)] sm:flex-row sm:items-center sm:justify-between'>
+    <div className='flex flex-col gap-3 border-t border-[var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-muted)] sm:flex-row sm:items-center sm:justify-between'>
       <div className='flex items-center gap-2'>
         <button
           type='button'
@@ -65,7 +65,7 @@ const Pagination = ({
           <label className='inline-flex items-center gap-2'>
             <span>Taille :</span>
             <select
-              className='input-compact h-8 w-20 rounded-[var(--radius-md)] border border-[var(--border)] bg-white text-xs'
+              className='input-compact h-8 w-24 rounded-[var(--radius-md)] border border-[var(--border)] bg-white text-xs'
               value={pageSize}
               onChange={handlePageSize}
               disabled={isLoading}

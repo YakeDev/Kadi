@@ -1,5 +1,7 @@
 import PDFDocument from 'pdfkit'
 import dayjs from 'dayjs'
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter.js'
+import isSameOrBefore from 'dayjs/plugin/isSameOrBefore.js'
 import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
@@ -13,6 +15,9 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
 const ABSOLUTE_URL_REGEX = /^https?:\/\//i
 const DATA_URL_REGEX = /^data:/i
+
+dayjs.extend(isSameOrAfter)
+dayjs.extend(isSameOrBefore)
 
 const computeTotals = (items = []) =>
 	items.reduce(
@@ -114,6 +119,62 @@ export const listInvoices = async (req, res, next) => {
 		res.json({
 			data: data ?? [],
 			pagination: buildPaginationMeta(count ?? 0, page, pageSize),
+		})
+	} catch (error) {
+		next(error)
+	}
+}
+
+export const getTodoItems = async (req, res, next) => {
+	try {
+		const tenantId = req.tenantId
+		const now = dayjs().startOf('day')
+		const upcomingLimit = now.add(7, 'day').endOf('day')
+
+		const { data, error } = await supabase
+			.from('invoices')
+			.select(
+				'id, invoice_number, status, due_date, issue_date, total_amount, client:clients(company_name)'
+			)
+			.eq('tenant_id', tenantId)
+			.in('status', ['draft', 'sent', 'overdue'])
+			.order('due_date', { ascending: true, nullsFirst: false })
+
+		if (error) throw error
+
+		const overdue = []
+		const dueSoon = []
+		const drafts = []
+
+		for (const invoice of data ?? []) {
+			const dueDate = invoice.due_date ? dayjs(invoice.due_date) : null
+
+			if (invoice.status === 'draft') {
+				if (drafts.length < 5) {
+					drafts.push(invoice)
+				}
+				continue
+			}
+
+			if (dueDate && dueDate.isBefore(now) && overdue.length < 5) {
+				overdue.push(invoice)
+				continue
+			}
+
+			if (
+				dueDate &&
+				dueDate.isSameOrAfter(now) &&
+				dueDate.isSameOrBefore(upcomingLimit) &&
+				dueSoon.length < 5
+			) {
+				dueSoon.push(invoice)
+			}
+		}
+
+		res.json({
+			overdue,
+			dueSoon,
+			drafts,
 		})
 	} catch (error) {
 		next(error)
