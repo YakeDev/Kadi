@@ -30,25 +30,65 @@ const statusOptions = [
 	{ value: 'overdue', label: 'En retard' },
 ]
 
-const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card' }) => {
+const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
+  if (!invoice) {
+    return {
+      client_id: fallbackClientId || '',
+      issue_date: new Date().toISOString().slice(0, 10),
+      due_date: '',
+      status: 'draft',
+      notes: '',
+      items: [createEmptyItem()]
+    }
+  }
+
+  const items = Array.isArray(invoice.items) && invoice.items.length > 0
+    ? invoice.items.map((line) => ({
+        catalogItemId: line.catalogItemId ?? line.catalog_item_id ?? null,
+        description: line.description ?? '',
+        quantity: Number(line.quantity ?? 1),
+        unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
+        currency: line.currency ?? invoice.currency
+      }))
+    : [createEmptyItem()]
+
+  return {
+    client_id: invoice.client_id ?? fallbackClientId ?? '',
+    issue_date: invoice.issue_date ?? new Date().toISOString().slice(0, 10),
+    due_date: invoice.due_date ?? '',
+    status: invoice.status ?? 'draft',
+    notes: invoice.notes ?? '',
+    items
+  }
+}
+
+const InvoiceForm = ({
+  clients = [],
+  onCreated,
+  onUpdated,
+  defaultClientId,
+  variant = 'card',
+  invoice = null
+}) => {
   const isDrawer = variant === 'drawer'
-  const [form, setForm] = useState({
-    client_id: defaultClientId || '',
-    issue_date: new Date().toISOString().slice(0, 10),
-    due_date: '',
-    status: 'draft',
-    notes: '',
-    items: [createEmptyItem()]
-  })
+  const [form, setForm] = useState(() => normalizeInvoiceForForm(invoice, defaultClientId))
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
   const [catalog, setCatalog] = useState([])
   const [isCatalogLoading, setIsCatalogLoading] = useState(false)
+  const isEditing = Boolean(invoice?.id)
 
   useEffect(() => {
-    setForm((prev) => ({ ...prev, client_id: defaultClientId || '' }))
-  }, [defaultClientId])
+    if (!isEditing) {
+      setForm((prev) => ({ ...prev, client_id: defaultClientId || '' }))
+    }
+  }, [defaultClientId, isEditing])
+
+  useEffect(() => {
+    setForm(normalizeInvoiceForForm(invoice, defaultClientId))
+    setAiPrompt('')
+  }, [invoice, defaultClientId])
 
   useEffect(() => {
     const loadCatalog = async () => {
@@ -159,10 +199,16 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
     event.preventDefault()
     setIsSubmitting(true)
     try {
-      await api.post('/invoices', form)
-      notifySuccess('Facture enregistrée avec succès')
-      resetForm()
-      onCreated?.()
+      if (isEditing) {
+        await api.patch(`/invoices/${invoice.id}`, form)
+        notifySuccess('Facture mise à jour')
+        onUpdated?.()
+      } else {
+        await api.post('/invoices', form)
+        notifySuccess('Facture enregistrée avec succès')
+        resetForm()
+        onCreated?.()
+      }
     } catch (error) {
       notifyError(error)
     } finally {
@@ -225,7 +271,7 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
               onChange={(event) => setAiPrompt(event.target.value)}
               placeholder='Décrivez votre facture…'
               className='w-full bg-transparent text-sm text-[var(--text-dark)] focus:outline-none'
-            />
+      />
             <button type='button' className='btn-secondary whitespace-nowrap' onClick={handleAIGenerate} disabled={isGenerating}>
               {isGenerating ? <Loader2 className='h-4 w-4 animate-spin' /> : <Sparkles className='h-4 w-4' />}
               {isGenerating ? 'Génération…' : 'Générer via IA'}
@@ -235,10 +281,14 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
       ) : (
         <div className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
           <div>
-            <p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>Factures</p>
-            <h2 className='mt-2 text-2xl font-semibold text-[var(--text-dark)]'>Nouvelle facture</h2>
+           <p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>Factures</p>
+            <h2 className='mt-2 text-2xl font-semibold text-[var(--text-dark)]'>
+              {isEditing ? 'Modifier la facture' : 'Nouvelle facture'}
+            </h2>
             <p className='text-sm text-[var(--text-muted)]'>
-              Renseignez les éléments ci-dessous ou laissez Kadi IA préparer la facture.
+              {isEditing
+                ? 'Mettez à jour les informations avant validation.'
+                : 'Renseignez les éléments ci-dessous ou laissez Kadi IA préparer la facture.'}
             </p>
           </div>
           <div className='w-full max-w-md space-y-2'>
@@ -340,7 +390,7 @@ const InvoiceForm = ({ clients = [], onCreated, defaultClientId, variant = 'card
         </section>
 
         <section className='space-y-4'>
-          <div className='flex flex-wrap items-center justify-between gap-3'>
+            <div className='flex flex-wrap items-center justify-between gap-3'>
             <h3 className='text-sm font-semibold text-[var(--text-dark)]'>Lignes de facturation</h3>
             <div className='flex items-center gap-2'>
               <button type='button' onClick={refreshCatalog} className='btn-ghost h-9 px-3 text-xs font-semibold' disabled={isCatalogLoading}>

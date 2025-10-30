@@ -4,7 +4,10 @@ import path from 'path'
 import fs from 'fs'
 import { fileURLToPath } from 'url'
 import { supabase } from '../models/supabaseClient.js'
-import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.js'
+import {
+	getPaginationParams,
+	buildPaginationMeta,
+} from '../utils/pagination.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
@@ -110,7 +113,7 @@ export const listInvoices = async (req, res, next) => {
 		if (error) throw error
 		res.json({
 			data: data ?? [],
-			pagination: buildPaginationMeta(count ?? 0, page, pageSize)
+			pagination: buildPaginationMeta(count ?? 0, page, pageSize),
 		})
 	} catch (error) {
 		next(error)
@@ -267,7 +270,7 @@ const parsePeriodRange = ({ period = 'month', start, end }) => {
 	return {
 		period: safePeriod,
 		startDate: startDate.startOf('day'),
-		endDate: endDate.endOf('day')
+		endDate: endDate.endOf('day'),
 	}
 }
 
@@ -291,7 +294,9 @@ const groupInvoicesByUnit = (invoices, unit) => {
 		buckets.set(label, prev)
 	})
 
-	return Array.from(buckets.values()).sort((a, b) => a.label.localeCompare(b.label))
+	return Array.from(buckets.values()).sort((a, b) =>
+		a.label.localeCompare(b.label)
+	)
 }
 
 const rankClients = (invoices) => {
@@ -304,7 +309,7 @@ const rankClients = (invoices) => {
 			totals.set(key, {
 				clientId: invoice.client_id,
 				company: invoice.client?.company_name || 'Client inconnu',
-				total: 0
+				total: 0,
 			})
 		}
 		totals.get(key).total += amount
@@ -330,7 +335,7 @@ const rankProducts = (invoices) => {
 				products.set(label, {
 					label,
 					total: 0,
-					quantity: 0
+					quantity: 0,
 				})
 			}
 
@@ -352,7 +357,9 @@ export const getSummary = async (req, res, next) => {
 
 		const { data: invoices, error } = await supabase
 			.from('invoices')
-			.select('id, total_amount, status, issue_date, items, client_id, client:clients(company_name)')
+			.select(
+				'id, total_amount, status, issue_date, items, client_id, client:clients(company_name)'
+			)
 			.eq('tenant_id', tenantId)
 			.gte('issue_date', startDate.format('YYYY-MM-DD'))
 			.lte('issue_date', endDate.format('YYYY-MM-DD'))
@@ -398,12 +405,13 @@ export const getSummary = async (req, res, next) => {
 				totalAmount: 0,
 				totalInvoices: 0,
 				drafts: 0,
-				paymentDelays: []
+				paymentDelays: [],
 			}
 		)
 
 		const averageDelay = totals.paymentDelays.length
-			? totals.paymentDelays.reduce((sum, value) => sum + value, 0) / totals.paymentDelays.length
+			? totals.paymentDelays.reduce((sum, value) => sum + value, 0) /
+				totals.paymentDelays.length
 			: 0
 
 		const summary = {
@@ -413,18 +421,18 @@ export const getSummary = async (req, res, next) => {
 				totalAmount: totals.totalAmount,
 				invoiceCount: totals.totalInvoices,
 				draftCount: totals.drafts,
-				averagePaymentDelay: Number(averageDelay.toFixed(1))
+				averagePaymentDelay: Number(averageDelay.toFixed(1)),
 			},
 			charts: {
 				revenue: groupInvoicesByUnit(records, period),
 				topClients: rankClients(records),
-				topProducts: rankProducts(records)
+				topProducts: rankProducts(records),
 			},
 			meta: {
 				period,
 				startDate: startDate.toISOString(),
-				endDate: endDate.toISOString()
-			}
+				endDate: endDate.toISOString(),
+			},
 		}
 
 		res.json(summary)
@@ -502,14 +510,11 @@ export const streamInvoicePdf = async (req, res, next) => {
 				? `Responsable : ${req.profile.manager_name}`
 				: null,
 			req.profile?.address || null,
-			[req.profile?.city, req.profile?.state]
-				.filter(Boolean)
-				.join(', ') || null,
-			req.profile?.national_id
-				? `ID. Nat. : ${req.profile.national_id}`
-				: null,
+			[req.profile?.city, req.profile?.state].filter(Boolean).join(', ') ||
+				null,
+			req.profile?.national_id ? `ID. Nat. : ${req.profile.national_id}` : null,
 			req.profile?.rccm ? `RCCM : ${req.profile.rccm}` : null,
-			req.profile?.nif ? `NIF : ${req.profile.nif}` : null
+			req.profile?.nif ? `NIF : ${req.profile.nif}` : null,
 		].filter(Boolean)
 
 		const headerTop = 50
@@ -528,7 +533,10 @@ export const streamInvoicePdf = async (req, res, next) => {
 				textStartX = startX + logoSize + logoGap
 				logoBottom = headerTop + logoSize
 			} catch (error) {
-				console.warn('[Invoice PDF] Impossible d’intégrer le logo:', error.message)
+				console.warn(
+					'[Invoice PDF] Impossible d’intégrer le logo:',
+					error.message
+				)
 			}
 		}
 
@@ -712,7 +720,7 @@ export const streamInvoicePdf = async (req, res, next) => {
 			})
 
 			// --- Ligne de séparation ---
-			y += rowHeight + 6
+			y += rowHeight + 4
 			doc
 				.moveTo(startX, y)
 				.lineTo(startX + pageWidth, y)
