@@ -2,6 +2,12 @@ import { randomBytes } from 'crypto'
 import { supabase } from '../models/supabaseClient.js'
 import { sendMail } from '../utils/mailer.js'
 import { emailVerificationTemplate, passwordResetTemplate } from '../utils/templates.js'
+import {
+  LOGO_BUCKET,
+  normalizeLogoStoragePath,
+  resolveStoredLogoUrl,
+  sanitizePathSegment
+} from '../utils/logoStorage.js'
 
 const PROFILE_OPTIONAL_FIELDS = [
   'logo_url',
@@ -17,10 +23,7 @@ const PROFILE_OPTIONAL_FIELDS = [
   'website'
 ]
 
-const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
 const APP_NAME = process.env.APP_NAME || 'Kadi'
-const ABSOLUTE_URL_REGEX = /^https?:\/\//i
-const DATA_URL_REGEX = /^data:/i
 
 const sanitizeUrl = (value, fallback) => {
   if (!value) return fallback
@@ -35,13 +38,6 @@ const PASSWORD_RESET_REDIRECT_URL = sanitizeUrl(
   process.env.PASSWORD_RESET_REDIRECT_URL,
   `${DEFAULT_APP_URL}/login?reset=1`
 )
-
-const sanitizePathSegment = (value = '') =>
-  value
-    .toString()
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9-_]/g, '-')
 
 const inferMimeFromExtension = (extension = '') => {
   switch (extension.toLowerCase()) {
@@ -133,51 +129,18 @@ const uploadLogoForUser = async (userId, base64Content, originalFilename = '') =
   return filePath
 }
 
-const sanitizeStoragePath = (value) => (value || '').toString().replace(/^\/+/, '')
-
-const resolveLogoUrlForResponse = async (value) => {
-  if (!value || typeof value !== 'string') return null
-  if (ABSOLUTE_URL_REGEX.test(value) || DATA_URL_REGEX.test(value)) {
-    return value.trim()
-  }
-
-  const storagePath = sanitizeStoragePath(value)
-  if (!storagePath) return null
-
-  try {
-    const { data, error } = await supabase.storage
-      .from(LOGO_BUCKET)
-      .createSignedUrl(storagePath, 60 * 60 * 24)
-    if (error) {
-      console.warn('[Auth] createSignedUrl error:', error.message)
-    } else if (data?.signedUrl) {
-      return data.signedUrl
-    }
-  } catch (error) {
-    console.warn('[Auth] createSignedUrl exception:', error.message)
-  }
-
-  try {
-    const { data: publicData, error: publicError } = supabase.storage
-      .from(LOGO_BUCKET)
-      .getPublicUrl(storagePath)
-
-    if (publicError) {
-      console.warn('[Auth] getPublicUrl error:', publicError.message)
-    } else if (publicData?.publicUrl) {
-      return publicData.publicUrl
-    }
-  } catch (error) {
-    console.warn('[Auth] getPublicUrl exception:', error.message)
-  }
-
-  return null
+const resolveLogoUrlForResponse = async (value, userId) => {
+  return resolveStoredLogoUrl(supabase, value, {
+    userId,
+    signedUrlTtl: 60 * 60 * 24,
+    logPrefix: '[Auth]'
+  })
 }
 
-const serializeProfile = async (record = {}, fallbackCompany = '') => ({
+const serializeProfile = async (record = {}, fallbackCompany = '', userId) => ({
   company: record.company ?? fallbackCompany ?? '',
   tagline: record.tagline ?? '',
-  logo_url: await resolveLogoUrlForResponse(record.logo_url),
+  logo_url: await resolveLogoUrlForResponse(record.logo_url, userId),
   manager_name: record.manager_name ?? '',
   address: record.address ?? '',
   city: record.city ?? '',
@@ -216,7 +179,7 @@ const dispatchVerificationEmail = async ({ email, companyName }) => {
   const hasSmtp = Boolean(smtpHost && smtpUser && smtpPass)
 
   if (!hasSmtp) {
-    return { sent: false, reason: 'transporter_not_configured', verificationUrl }
+    return { sent: false, reason: 'transporter_not_configured' }
   }
 
   const template = emailVerificationTemplate({ verificationUrl, companyName })
@@ -227,7 +190,7 @@ const dispatchVerificationEmail = async ({ email, companyName }) => {
     text: template.text
   })
 
-  return { sent: Boolean(result?.sent), verificationUrl, mailer: result }
+  return { sent: Boolean(result?.sent), mailer: result }
 }
 
 const dispatchPasswordResetEmail = async ({ email, companyName }) => {
@@ -303,7 +266,11 @@ export const signup = async (req, res, next) => {
     }
 
     const profileData = await createProfileInternal(profilePayload)
-    const serializedProfile = await serializeProfile(profileData, profileData?.company || company || APP_NAME)
+    const serializedProfile = await serializeProfile(
+      profileData,
+      profileData?.company || company || APP_NAME,
+      data.user.id
+    )
     let verificationStatus = { sent: false }
     try {
       verificationStatus = await dispatchVerificationEmail({
@@ -320,7 +287,7 @@ export const signup = async (req, res, next) => {
     const verificationMessage = verificationStatus?.sent
       ? 'Compte créé. Un email de confirmation vous a été envoyé.'
       : verificationStatus?.reason === 'transporter_not_configured'
-        ? "Compte créé. SMTP non configuré : utilisez le lien ci-dessous pour confirmer votre adresse."
+        ? "Compte créé. La confirmation par email est temporairement indisponible. Réessayez plus tard."
         : 'Compte créé. Vérifiez votre adresse email avant de vous connecter.'
 
     res.status(201).json({
@@ -331,7 +298,6 @@ export const signup = async (req, res, next) => {
       profile: serializedProfile,
       emailConfirmationRequired: true,
       emailVerificationSent: Boolean(verificationStatus?.sent),
-      verificationUrl: verificationStatus?.verificationUrl ?? null,
       logoUploaded: Boolean(uploadedLogoUrl),
       message: verificationMessage
     })
@@ -388,7 +354,8 @@ const createProfileInternal = async ({ email, company, userId, ...rest }) => {
 
   for (const field of PROFILE_OPTIONAL_FIELDS) {
     if (field in rest) {
-      profileRecord[field] = rest[field]
+      profileRecord[field] =
+        field === 'logo_url' ? normalizeLogoStoragePath(rest[field], userId) : rest[field]
     }
   }
 
@@ -480,7 +447,7 @@ export const createProfile = async (req, res, next) => {
       .single()
 
     if (error) throw error
-    const serialized = await serializeProfile(data, payload.company || email)
+    const serialized = await serializeProfile(data, payload.company || email, userId)
     res.status(200).json(serialized)
   } catch (error) {
     next(error)
@@ -524,8 +491,8 @@ export const getProfile = async (req, res, next) => {
 
     const fallbackCompany = req.user?.user_metadata?.company || req.user?.email?.split('@')[0] || ''
     const serialized = hasExtendedColumns
-      ? await serializeProfile(data, fallbackCompany)
-      : await serializeProfile({ company: data?.company }, fallbackCompany)
+      ? await serializeProfile(data, fallbackCompany, userId)
+      : await serializeProfile({ company: data?.company }, fallbackCompany, userId)
 
     res.json(serialized)
   } catch (error) {
@@ -551,7 +518,6 @@ export const resendVerificationEmail = async (req, res, next) => {
     if (!profile) {
       return res.status(200).json({
         emailVerificationSent: false,
-        verificationUrl: null,
         message: 'Si un compte existe pour cette adresse, un email vient de vous être envoyé.'
       })
     }
@@ -564,12 +530,11 @@ export const resendVerificationEmail = async (req, res, next) => {
     const verificationMessage = result.sent
       ? 'Un nouvel email de confirmation vous a été envoyé.'
       : result.reason === 'transporter_not_configured'
-        ? 'SMTP non configuré : utilisez le lien ci-dessous pour confirmer votre adresse.'
+        ? "La confirmation par email est temporairement indisponible. Réessayez plus tard."
         : "Impossible d'envoyer l'email de confirmation pour le moment."
 
     res.json({
       emailVerificationSent: Boolean(result.sent),
-      verificationUrl: result.verificationUrl ?? null,
       message: verificationMessage
     })
   } catch (error) {

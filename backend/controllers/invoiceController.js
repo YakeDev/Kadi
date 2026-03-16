@@ -10,11 +10,13 @@ import {
 	getPaginationParams,
 	buildPaginationMeta,
 } from '../utils/pagination.js'
+import {
+	generateInvoiceNumber,
+	sanitizeInvoicePayload,
+} from '../utils/validation.js'
+import { downloadStoredLogoBuffer } from '../utils/logoStorage.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
-const LOGO_BUCKET = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
-const ABSOLUTE_URL_REGEX = /^https?:\/\//i
-const DATA_URL_REGEX = /^data:/i
 
 dayjs.extend(isSameOrAfter)
 dayjs.extend(isSameOrBefore)
@@ -28,65 +30,6 @@ const computeTotals = (items = []) =>
 		},
 		{ subtotal: 0 }
 	)
-
-const sanitizeStoragePath = (value = '') => value.toString().replace(/^\/+/, '')
-
-const resolveLogoUrlForPdf = async (value) => {
-	if (!value || typeof value !== 'string') return null
-	if (ABSOLUTE_URL_REGEX.test(value) || DATA_URL_REGEX.test(value)) {
-		return value.trim()
-	}
-
-	const storagePath = sanitizeStoragePath(value)
-	if (!storagePath) return null
-
-	try {
-		const { data, error } = await supabase.storage
-			.from(LOGO_BUCKET)
-			.createSignedUrl(storagePath, 60 * 60)
-		if (!error && data?.signedUrl) {
-			return data.signedUrl
-		}
-		if (error) {
-			console.warn('[Invoice PDF] createSignedUrl error:', error.message)
-		}
-	} catch (error) {
-		console.warn('[Invoice PDF] createSignedUrl exception:', error.message)
-	}
-
-	try {
-		const { data: publicData, error: publicError } = supabase.storage
-			.from(LOGO_BUCKET)
-			.getPublicUrl(storagePath)
-		if (publicError) {
-			console.warn('[Invoice PDF] getPublicUrl error:', publicError.message)
-		} else if (publicData?.publicUrl) {
-			return publicData.publicUrl
-		}
-	} catch (error) {
-		console.warn('[Invoice PDF] getPublicUrl exception:', error.message)
-	}
-
-	return null
-}
-
-const fetchLogoBuffer = async (url) => {
-	if (!url || typeof globalThis.fetch !== 'function') return null
-	try {
-		const response = await fetch(url)
-		if (!response.ok) {
-			throw new Error(`HTTP ${response.status}`)
-		}
-		const arrayBuffer = await response.arrayBuffer()
-		if (!arrayBuffer.byteLength) {
-			return null
-		}
-		return Buffer.from(arrayBuffer)
-	} catch (error) {
-		console.warn('[Invoice PDF] Impossible de charger le logo:', error.message)
-		return null
-	}
-}
 
 export const listInvoices = async (req, res, next) => {
 	try {
@@ -204,10 +147,10 @@ export const getInvoice = async (req, res, next) => {
 export const createInvoice = async (req, res, next) => {
 	try {
 		const tenantId = req.tenantId
-		const payload = req.body
+		const payload = sanitizeInvoicePayload(req.body)
 		const items = payload.items || []
 		const totals = computeTotals(items)
-		const invoiceNumber = `FAC-${Date.now().toString().slice(-6)}`
+		const invoiceNumber = generateInvoiceNumber()
 
 		if (payload.client_id) {
 			const { error: clientError } = await supabase
@@ -235,7 +178,7 @@ export const createInvoice = async (req, res, next) => {
 				items,
 				subtotal_amount: totals.subtotal,
 				total_amount: totals.subtotal,
-				currency: payload.currency || '$',
+				currency: payload.currency || 'USD',
 				tenant_id: tenantId,
 			})
 			.select('*, client:clients(*)')
@@ -252,7 +195,7 @@ export const updateInvoice = async (req, res, next) => {
 	try {
 		const { id } = req.params
 		const tenantId = req.tenantId
-		let updates = { ...req.body }
+		let updates = sanitizeInvoicePayload(req.body, { partial: true })
 
 		if (updates.client_id) {
 			const { error: clientError } = await supabase
@@ -517,8 +460,10 @@ export const streamInvoicePdf = async (req, res, next) => {
 		if (!invoice)
 			return res.status(404).json({ message: 'Facture introuvable.' })
 
-		const resolvedLogoUrl = await resolveLogoUrlForPdf(req.profile?.logo_url)
-		const logoBuffer = await fetchLogoBuffer(resolvedLogoUrl)
+		const logoBuffer = await downloadStoredLogoBuffer(supabase, req.profile?.logo_url, {
+			userId: req.user?.id,
+			logPrefix: '[Invoice PDF]',
+		})
 
 		const doc = new PDFDocument({ margin: 48 })
 

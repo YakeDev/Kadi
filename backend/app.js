@@ -1,5 +1,6 @@
 import express from 'express'
 import cors from 'cors'
+import helmet from 'helmet'
 import morgan from 'morgan'
 import dotenv from 'dotenv'
 import invoicesRouter from './routes/invoices.js'
@@ -15,13 +16,18 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(normalizeOrigin)
   .filter(Boolean)
+const isProduction = process.env.NODE_ENV === 'production'
+const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '2mb'
+const trustProxy = process.env.TRUST_PROXY
 
 if (allowedOrigins.length > 0) {
   console.log(`[CORS] Origines autorisées : ${allowedOrigins.join(', ')}`)
-} else {
-  console.warn(
-    '[CORS] ALLOWED_ORIGINS est vide – toutes les origines sont autorisées (usage développement).'
+} else if (isProduction) {
+  console.error(
+    "[CORS] ALLOWED_ORIGINS est vide en production : les requêtes navigateur cross-origin seront refusées."
   )
+} else {
+  console.warn('[CORS] ALLOWED_ORIGINS est vide – mode développement permissif activé.')
 }
 
 const mapDatabaseError = (error) => {
@@ -80,6 +86,12 @@ const buildErrorResponse = (error) => {
 
 const app = express()
 
+if (trustProxy) {
+  app.set('trust proxy', trustProxy === 'true' ? 1 : trustProxy)
+}
+
+app.disable('x-powered-by')
+
 const corsOptions = {
   origin(origin, callback) {
     const normalizedOrigin = normalizeOrigin(origin)
@@ -88,21 +100,34 @@ const corsOptions = {
       return callback(null, true)
     }
 
-    if (allowedOrigins.length === 0 || allowedOrigins.includes(normalizedOrigin)) {
+    if (!isProduction && allowedOrigins.length === 0) {
+      return callback(null, true)
+    }
+
+    if (allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true)
     }
 
     console.warn(`[CORS] Origine refusée : ${normalizedOrigin}`)
-    return callback(new Error('Not allowed by CORS'))
+    return callback(
+      Object.assign(new Error('Origine non autorisée par la politique CORS.'), {
+        status: 403
+      })
+    )
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization']
 }
 
+app.use(
+  helmet({
+    crossOriginResourcePolicy: { policy: 'cross-origin' }
+  })
+)
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
-app.use(express.json({ limit: '10mb' }))
+app.use(express.json({ limit: jsonBodyLimit, strict: true }))
 app.use(morgan('tiny'))
 
 app.get('/api/health', (req, res) => {

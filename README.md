@@ -69,6 +69,9 @@ npm run dev
 
 Le frontend se lance sur `http://localhost:5173` et le backend sur `http://localhost:4000`.
 
+Le frontend gère la session utilisateur directement via le client **Supabase JS**.  
+Le backend consomme ensuite le token Bearer Supabase pour protéger les routes API métier.
+
 ---
 
 ## Architecture
@@ -133,6 +136,7 @@ npm test               # exécuter la suite Jest
 ```
 
 Les tests utilisent `supertest` pour vérifier les routes Express. Les variables de test sont dans `.env.test`.
+La couverture backend inclut désormais des scénarios de sécurité sur l’auth, la validation des payloads, les logos, le CORS, les rate limits et l’endpoint IA.
 
 ### Frontend
 

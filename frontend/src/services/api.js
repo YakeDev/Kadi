@@ -1,4 +1,5 @@
 import axios from 'axios'
+import { getAccessToken } from './session.js'
 
 const backendUrl = import.meta.env.VITE_BACKEND_URL || ''
 const baseURL = backendUrl ? backendUrl.replace(/\/$/, '') : ''
@@ -17,20 +18,17 @@ api.interceptors.response.use(
 )
 
 api.interceptors.request.use(
-  (config) => {
-    if (typeof window !== 'undefined') {
-      const storedSession = window.localStorage.getItem('kadi.session')
-      if (storedSession) {
-        try {
-          const session = JSON.parse(storedSession)
-          const token = session?.access_token
-          if (token) {
-            config.headers.Authorization = `Bearer ${token}`
-          }
-        } catch (error) {
-          console.warn('Session invalide dans le localStorage.', error)
-        }
+  async (config) => {
+    try {
+      const token = await getAccessToken()
+      config.headers = config.headers || {}
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`
+      } else if (config.headers?.Authorization) {
+        delete config.headers.Authorization
       }
+    } catch (error) {
+      console.warn('Impossible de récupérer la session Supabase courante.', error)
     }
     return config
   },

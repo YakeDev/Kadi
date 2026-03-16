@@ -7,6 +7,9 @@ Chaque requête doit être accompagnée d’un **token Bearer** (issu de Supabas
 
 ## Authentification
 
+Le frontend web authentifie désormais l’utilisateur directement avec le client **Supabase JS**.  
+Le backend reste responsable de l’inscription, du profil entreprise, des emails transactionnels et des routes métier protégées par le token Bearer Supabase.
+
 ### `POST /api/auth/signup`
 Inscription d’un nouvel utilisateur (email + mot de passe) et création du profil entreprise.
 
@@ -29,7 +32,6 @@ Inscription d’un nouvel utilisateur (email + mot de passe) et création du pro
   "profile": {"company": "Nom de l'entreprise"},
   "emailConfirmationRequired": true,
   "emailVerificationSent": true,
-  "verificationUrl": "https://example.com/verify",
   "logoUploaded": true,
   "message": "Compte créé. Un email de confirmation vous a été envoyé."
 }
@@ -38,6 +40,7 @@ Inscription d’un nouvel utilisateur (email + mot de passe) et création du pro
 ---
 
 ### `POST /api/auth/login`
+Compatibilité legacy. Cette route n’est pas utilisée par le frontend web actuel.
 Connexion utilisateur via Supabase.
 
 **Body JSON :**
@@ -61,12 +64,14 @@ Connexion utilisateur via Supabase.
 ---
 
 ### `POST /api/auth/logout`
+Compatibilité legacy. Cette route n’est pas utilisée par le frontend web actuel.
 Déconnexion. Répond `204 No Content`.
 
 ---
 
 ### `POST /api/auth/resend-verification`
-Renvoie un email de confirmation si le compte n’est pas encore validé (idempotent).
+Renvoie un email de confirmation si le compte n’est pas encore validé (idempotent).  
+La réponse ne renvoie jamais de lien de confirmation.
 
 **Body JSON :**
 ```json
@@ -79,7 +84,6 @@ Renvoie un email de confirmation si le compte n’est pas encore validé (idempo
 ```json
 {
   "emailVerificationSent": true,
-  "verificationUrl": "https://example.com/verify",
   "message": "Un nouvel email de confirmation vous a été envoyé."
 }
 ```
@@ -107,14 +111,16 @@ Déclenche l’envoi d’un email sécurisé pour réinitialiser le mot de passe
 ---
 
 ### `POST /api/auth/profile`
+Seuls `company`, `tagline`, `logo_url`, `manager_name`, `address`, `city`, `state`, `national_id`, `rccm`, `nif`, `phone`, `website` sont acceptés.
+Le champ `logo_url`, lorsqu'il est envoyé, doit être un chemin interne du bucket Supabase de l'utilisateur connecté, jamais une URL externe.
 Création ou mise à jour du profil d’entreprise associé à l’utilisateur connecté.
 
 **Body JSON :**
 ```json
 {
-  "tenant_id": "uuid",
   "company": "Nom de l'entreprise",
-  "email": "user@exemple.com"
+  "manager_name": "Responsable",
+  "address": "Lubumbashi, RDC"
 }
 ```
 
@@ -149,6 +155,9 @@ Retourne la liste des clients du tenant connecté.
 ### `POST /api/clients`
 Ajoute un client.
 
+Seuls les champs `company_name`, `contact_name`, `email`, `phone`, `address` sont acceptés.  
+Les champs système comme `tenant_id`, `id`, `created_at` sont rejetés.
+
 **Body JSON :**
 ```json
 {
@@ -169,6 +178,8 @@ Ajoute un client.
 
 ### `PATCH /api/clients/:id`
 Met à jour les informations d’un client.
+
+Seuls les champs `company_name`, `contact_name`, `email`, `phone`, `address` sont acceptés.
 
 **Body JSON :**
 ```json
@@ -232,6 +243,9 @@ Retourne une facture spécifique.
 ### `POST /api/invoices`
 Crée une nouvelle facture manuellement.
 
+Seuls les champs `client_id`, `issue_date`, `due_date`, `status`, `notes`, `items`, `currency` sont acceptés.  
+`invoice_number`, `subtotal_amount`, `total_amount` et `tenant_id` sont générés ou calculés côté serveur.
+
 **Body JSON :**
 ```json
 {
@@ -247,13 +261,15 @@ Crée une nouvelle facture manuellement.
 
 **Réponse :**
 ```json
-{"message": "Facture créée", "invoice_number": "INV-0001"}
+{"message": "Facture créée", "invoice_number": "FAC-20260316-1A2B3C4D"}
 ```
 
 ---
 
 ### `PATCH /api/invoices/:id`
 Met à jour une facture existante (statut, notes, items…).
+
+Les champs système `invoice_number`, `subtotal_amount`, `total_amount`, `tenant_id`, `id` sont rejetés.
 
 ### `DELETE /api/invoices/:id`
 Supprime une facture.
@@ -309,22 +325,27 @@ Paramètres de requête :
 ### `POST /api/ai/facture`
 Génère automatiquement une facture à partir d’un texte libre.
 
+Cette route attend le champ `texte`, applique une limite de taille côté serveur et peut être soumise à un rate limit.
+
 **Body JSON :**
 ```json
 {
-  "prompt": "Créer une facture pour Kivu Coffee : 3 sacs de café à 25 USD et 1 machine à 100 USD"
+  "texte": "Créer une facture pour Kivu Coffee : 3 sacs de café à 25 USD et 1 machine à 100 USD"
 }
 ```
 
 **Réponse :**
 ```json
 {
-  "client": "Kivu Coffee",
+  "client_id": null,
+  "issue_date": null,
+  "due_date": null,
+  "status": "draft",
+  "notes": "",
   "items": [
-    {"name": "Sac de café", "quantity": 3, "unit_price": 25},
-    {"name": "Machine", "quantity": 1, "unit_price": 100}
+    {"description": "Sac de café", "quantity": 3, "unitPrice": 25, "currency": "USD"},
+    {"description": "Machine", "quantity": 1, "unitPrice": 100, "currency": "USD"}
   ],
-  "total": 175,
   "currency": "USD"
 }
 ```

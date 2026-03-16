@@ -1,10 +1,9 @@
 import { createContext, useContext, useEffect, useMemo, useState, useCallback } from 'react'
 import { supabase, LOGO_BUCKET } from '../services/supabase.js'
 import { api } from '../services/api.js'
+import { getCurrentSession } from '../services/session.js'
 
 const AuthContext = createContext()
-
-const LOCAL_SESSION_KEY = 'kadi.session'
 
 const emptyProfile = {
   company: '',
@@ -152,22 +151,19 @@ export const AuthProvider = ({ children }) => {
 
   useEffect(() => {
     const initialiseSession = async () => {
-      const storedSession = window.localStorage.getItem(LOCAL_SESSION_KEY)
-      if (storedSession) {
-        const parsed = JSON.parse(storedSession)
-        setSession(parsed)
-        await hydrateProfile(parsed.user)
-      } else {
-        const {
-          data: { session: currentSession }
-        } = await supabase.auth.getSession()
+      try {
+        const currentSession = await getCurrentSession()
         if (currentSession) {
           setSession(currentSession)
-          window.localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(currentSession))
           await hydrateProfile(currentSession.user)
         }
+      } catch (error) {
+        console.warn('Impossible de récupérer la session Supabase initiale:', error.message)
+        setSession(null)
+        setProfile(null)
+      } finally {
+        setIsLoading(false)
       }
-      setIsLoading(false)
     }
 
     initialiseSession()
@@ -177,10 +173,8 @@ export const AuthProvider = ({ children }) => {
     } = supabase.auth.onAuthStateChange(async (_event, newSession) => {
       setSession(newSession)
       if (newSession) {
-        window.localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(newSession))
         await hydrateProfile(newSession.user)
       } else {
-        window.localStorage.removeItem(LOCAL_SESSION_KEY)
         setProfile(null)
       }
     })
@@ -194,7 +188,9 @@ export const AuthProvider = ({ children }) => {
       error
     } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    window.localStorage.setItem(LOCAL_SESSION_KEY, JSON.stringify(supabaseSession))
+    if (!supabaseSession) {
+      throw new Error("Aucune session Supabase n'a été retournée.")
+    }
     setSession(supabaseSession)
     await hydrateProfile(supabaseSession.user)
     return supabaseSession
@@ -233,7 +229,6 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(async () => {
     await supabase.auth.signOut()
-    window.localStorage.removeItem(LOCAL_SESSION_KEY)
     setSession(null)
     setProfile(null)
   }, [])

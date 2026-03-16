@@ -126,13 +126,13 @@ describe('Auth login', () => {
     expect(response.body).toEqual(
       expect.objectContaining({
         message: expect.stringContaining('Si un compte existe'),
-        emailVerificationSent: false,
-        verificationUrl: null
+        emailVerificationSent: false
       })
     )
+    expect(response.body.verificationUrl).toBeUndefined()
   })
 
-  test('resend verification retourne le lien quand SMTP absent', async () => {
+  test("resend verification n'expose jamais le lien quand SMTP absent", async () => {
     profilesQuery.maybeSingle.mockResolvedValue({
       data: { email: 'user@example.com', company: 'Acme' },
       error: null
@@ -156,9 +156,10 @@ describe('Auth login', () => {
     expect(response.body).toEqual(
       expect.objectContaining({
         emailVerificationSent: false,
-        verificationUrl: 'https://example.com/confirm'
+        message: expect.stringContaining('temporairement indisponible')
       })
     )
+    expect(response.body.verificationUrl).toBeUndefined()
   })
 
   test('resend verification sends email when profile found', async () => {
@@ -184,10 +185,10 @@ describe('Auth login', () => {
     )
     expect(response.body).toEqual(
       expect.objectContaining({
-        emailVerificationSent: true,
-        verificationUrl: 'https://example.com/confirm'
+        emailVerificationSent: true
       })
     )
+    expect(response.body.verificationUrl).toBeUndefined()
   })
 
   test('password reset sends email when profile found', async () => {
@@ -216,5 +217,68 @@ describe('Auth login', () => {
         resetEmailSent: true
       })
     )
+  })
+
+  test("signup n'expose jamais de lien de confirmation", async () => {
+    const tenantInsert = {
+      insert: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: { id: 'tenant-1' },
+        error: null
+      })
+    }
+    const profileQuery = {
+      select: jest.fn().mockReturnThis(),
+      eq: jest.fn().mockReturnThis(),
+      maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+      upsert: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({
+        data: { company: 'Acme', tagline: null, logo_url: null },
+        error: null
+      })
+    }
+
+    supabaseMock.auth.admin.createUser = jest.fn().mockResolvedValue({
+      data: {
+        user: { id: 'user-1', email: 'user@example.com' }
+      },
+      error: null
+    })
+    supabaseMock.auth.admin.getUserById.mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-1',
+          email: 'user@example.com',
+          user_metadata: { company: 'Acme' }
+        }
+      },
+      error: null
+    })
+    supabaseMock.auth.admin.generateLink.mockResolvedValue({
+      data: { properties: { action_link: 'https://example.com/confirm' } },
+      error: null
+    })
+
+    supabaseMock.from.mockImplementation((table) => {
+      if (table === 'profiles') return profileQuery
+      if (table === 'tenants') return tenantInsert
+      return {
+        select: jest.fn().mockReturnThis(),
+        eq: jest.fn().mockReturnThis(),
+        maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
+        single: jest.fn().mockResolvedValue({ data: null, error: null })
+      }
+    })
+
+    const response = await request(app).post('/api/auth/signup').send({
+      email: 'user@example.com',
+      password: 'Password123!',
+      company: 'Acme'
+    })
+
+    expect(response.status).toBe(201)
+    expect(response.body.emailVerificationSent).toBe(true)
+    expect(response.body.verificationUrl).toBeUndefined()
   })
 })

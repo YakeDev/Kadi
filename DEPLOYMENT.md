@@ -91,9 +91,19 @@ L’application doit être accessible à l’adresse :
 | `.env` (backend) | `SUPABASE_URL` | URL du projet Supabase |
 |  | `SUPABASE_KEY` | Clé service role (serveur uniquement) |
 |  | `OPENAI_API_KEY` | Clé API GPT‑5 |
-|  | `ALLOWED_ORIGINS` | Domaine du frontend (CORS) |
+|  | `ALLOWED_ORIGINS` | Domaine(s) du frontend autorisés pour CORS (obligatoire en production) |
+|  | `JSON_BODY_LIMIT` | Taille max du body JSON backend (`2mb` par défaut) |
+|  | `AUTH_RATE_LIMIT_MAX` | Nombre max de requêtes sensibles auth par fenêtre |
+|  | `AUTH_RATE_LIMIT_WINDOW_MS` | Fenêtre du rate limit auth en millisecondes |
+|  | `AI_RATE_LIMIT_MAX` | Nombre max d’appels IA par fenêtre et par utilisateur |
+|  | `AI_RATE_LIMIT_WINDOW_MS` | Fenêtre du rate limit IA en millisecondes |
+|  | `PDF_RATE_LIMIT_MAX` | Nombre max de téléchargements PDF par fenêtre |
+|  | `PDF_RATE_LIMIT_WINDOW_MS` | Fenêtre du rate limit PDF en millisecondes |
 |  | `APP_NAME` | Nom affiché dans les emails (ex: Kadi) |
 |  | `APP_URL` | URL publique de l’app (ex: https://kadi.app) |
+|  | `OPENAI_REQUEST_TIMEOUT_MS` | Timeout max d’un appel OpenAI |
+|  | `OPENAI_PROMPT_MAX_CHARS` | Taille max du prompt IA |
+|  | `TRUST_PROXY` | Active la confiance proxy si le backend est derrière un reverse proxy |
 |  | `EMAIL_REDIRECT_URL` | URL de redirection après confirmation (ex: https://app.kadi.app/login) |
 |  | `SMTP_HOST` | Serveur SMTP pour l’envoi d’emails |
 |  | `SMTP_PORT` | Port SMTP (465 pour SSL, 587 pour TLS) |

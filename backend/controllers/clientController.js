@@ -1,5 +1,6 @@
 import { supabase } from '../models/supabaseClient.js'
 import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.js'
+import { sanitizeClientPayload } from '../utils/validation.js'
 
 export const listClients = async (req, res, next) => {
   try {
@@ -53,7 +54,8 @@ export const getClient = async (req, res, next) => {
 export const createClient = async (req, res, next) => {
   try {
     const tenantId = req.tenantId
-    const payload = { ...req.body, tenant_id: tenantId }
+    const payload = sanitizeClientPayload(req.body)
+    payload.tenant_id = tenantId
     const { data, error } = await supabase.from('clients').insert(payload).select().single()
     if (error) throw error
     res.status(201).json(data)
@@ -65,7 +67,7 @@ export const createClient = async (req, res, next) => {
 export const updateClient = async (req, res, next) => {
   try {
     const { id } = req.params
-    const payload = req.body
+    const payload = sanitizeClientPayload(req.body, { partial: true })
     const tenantId = req.tenantId
     const { data, error } = await supabase
       .from('clients')

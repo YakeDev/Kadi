@@ -5,8 +5,6 @@ import {
 	ArrowLeft,
 	Building2,
 	CheckCircle2,
-	Copy,
-	ExternalLink,
 	FileText,
 	Image as ImageIcon,
 	KeyRound,
@@ -202,7 +200,6 @@ const Login = () => {
 	const [logoError, setLogoError] = useState('')
 	const [isLogoDragging, setIsLogoDragging] = useState(false)
 	const [pendingEmail, setPendingEmail] = useState('')
-	const [verificationLink, setVerificationLink] = useState('')
 	const [isResendingVerification, setIsResendingVerification] = useState(false)
 	const [isResetPasswordMode, setIsResetPasswordMode] = useState(false)
 	const [resetEmail, setResetEmail] = useState('')
@@ -231,7 +228,6 @@ const Login = () => {
 		setIsRegisterSubmitting(false)
 		setLogoError('')
 		setPendingEmail('')
-		setVerificationLink('')
 		setIsResetPasswordMode(false)
 		setResetEmail('')
 		setIsPasswordResetPending(false)
@@ -443,7 +439,6 @@ const Login = () => {
 
 			const response = await signup(payload)
 			setPendingEmail(response?.user?.email ?? accountForm.email.trim())
-			setVerificationLink(response?.verificationUrl || '')
 			if (response?.message) {
 				setSignupMessage(response.message)
 			} else {
@@ -482,11 +477,7 @@ const Login = () => {
 		}
 		setIsResendingVerification(true)
 		try {
-			const { message, verificationUrl } =
-				await resendVerificationEmail(targetEmail)
-			if (verificationUrl) {
-				setVerificationLink(verificationUrl)
-			}
+			const { message } = await resendVerificationEmail(targetEmail)
 			toast.success(message || 'Email de confirmation renvoyé.', { icon: '✉️' })
 		} catch (error) {
 			showErrorToast(toast.error, error)
@@ -514,24 +505,6 @@ const Login = () => {
 			showErrorToast(toast.error, error)
 		} finally {
 			setIsPasswordResetPending(false)
-		}
-	}
-
-	const handleCopyVerificationLink = async () => {
-		if (!verificationLink) return
-		try {
-			if (navigator?.clipboard?.writeText) {
-				await navigator.clipboard.writeText(verificationLink)
-				toast.success('Lien de confirmation copié 📋')
-			} else {
-				throw new Error('clipboard_unavailable')
-			}
-		} catch (error) {
-			console.warn('Clipboard error', error)
-			toast.error(
-				'Impossible de copier le lien, sélectionnez-le manuellement.',
-				{ icon: '⚠️' }
-			)
 		}
 	}
 
@@ -1107,36 +1080,6 @@ const Login = () => {
 					) : null}
 				</p>
 			</div>
-			{verificationLink ? (
-				<div className='space-y-3 rounded-[var(--radius-xl)] border border-[rgba(10,132,255,0.35)] bg-[rgba(10,132,255,0.08)] p-5 text-left'>
-					<p className='text-sm font-semibold text-[var(--text-dark)]'>
-						Lien direct de confirmation
-					</p>
-					<p className='text-sm text-[var(--text-muted)]'>
-						Aucun email reçu ? Utilisez ce lien sécurisé pour confirmer votre
-						compte immédiatement.
-					</p>
-					<div className='flex flex-col gap-2 rounded-[var(--radius-lg)] border border-[rgba(10,132,255,0.25)] bg-white p-3 text-sm'>
-						<a
-							href={verificationLink}
-							target='_blank'
-							rel='noopener noreferrer'
-							className='flex items-center gap-2 text-[var(--primary)] underline decoration-dotted underline-offset-4'>
-							<ExternalLink className='h-4 w-4' /> Ouvrir le lien de
-							confirmation
-						</a>
-						<code className='block overflow-x-auto rounded-[var(--radius-md)] bg-[var(--bg-base)] p-2 text-[12px] text-[var(--text-muted)]'>
-							{verificationLink}
-						</code>
-						<button
-							type='button'
-							onClick={handleCopyVerificationLink}
-							className='btn-ghost w-full justify-center text-xs font-semibold'>
-							<Copy className='mr-2 h-4 w-4' /> Copier le lien
-						</button>
-					</div>
-				</div>
-			) : null}
 			<div className='rounded-[var(--radius-xl)] border border-[var(--border)] bg-[rgba(15,23,42,0.02)] p-5 text-left'>
 				<p className='text-sm font-semibold text-[var(--text-dark)]'>
 					Étapes suivantes
