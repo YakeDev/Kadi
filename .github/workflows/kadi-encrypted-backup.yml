@@ -58,8 +58,9 @@ jobs:
 
           # Metadata count must match downloaded object count (fail closed).
           count="$(docker run --rm --network host \
-            -e KADI_BACKUP_DATABASE_URL -e PGSSLMODE=require postgres:17 \
-            sh -euc "psql --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 --dbname=\\"\$KADI_BACKUP_DATABASE_URL\\" --command=\\"select count(*) from storage.objects where bucket_id = 'company-logos'\\\"")"
+            -e KADI_BACKUP_DATABASE_URL -e PGSSLMODE=require \
+            -e KADI_COUNT_SQL="select count(*) from storage.objects where bucket_id = 'company-logos'" \
+            postgres:17 sh -euc 'psql --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 --dbname="$KADI_BACKUP_DATABASE_URL" --command="$KADI_COUNT_SQL"')"
           count="$(echo "$count" | tr -d '[:space:]')"
           [[ "$count" =~ ^[0-9]+$ ]] || { echo "::error::Invalid storage count"; exit 1; }
           KADI_EXPECTED_OBJECTS="$count" \
