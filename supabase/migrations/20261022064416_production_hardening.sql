@@ -10,6 +10,27 @@ begin
   ) then
     raise exception 'Cross-tenant invoice/client links exist. Reconcile before migrating.';
   end if;
+  if exists (
+    select 1 from public.invoices
+    where status is null or status not in ('draft', 'sent', 'paid', 'overdue')
+       or currency is null or currency not in ('USD', 'CDF')
+       or due_date < issue_date
+       or total_amount is null or subtotal_amount is null
+       or total_amount < 0 or total_amount > 1000000000000
+       or total_amount <> subtotal_amount or total_amount <> round(total_amount, 2)
+       or items is null or case when jsonb_typeof(items) = 'array'
+         then jsonb_array_length(items) > 100 else true end
+  ) then
+    raise exception 'Historical invoices require reconciliation before migrating. Review docs/sql/preflight.sql; do not rewrite currencies, taxes or amounts automatically.';
+  end if;
+  if exists (
+    select 1 from public.catalog_items
+    where unit_price is null or unit_price < 0 or unit_price > 1000000000
+       or unit_price <> round(unit_price, 2)
+       or currency is null or currency not in ('USD', 'CDF')
+  ) then
+    raise exception 'Historical catalog items require reconciliation before migrating. Review docs/sql/preflight.sql.';
+  end if;
 end $$;
 
 alter table public.profiles add column if not exists phone text;
@@ -21,6 +42,8 @@ alter table public.invoices add column if not exists issued_at timestamptz;
 alter table public.invoices add column if not exists paid_at timestamptz;
 
 create unique index clients_id_tenant_key on public.clients(id, tenant_id);
+create index profiles_tenant_id_idx on public.profiles(tenant_id);
+create index invoices_client_tenant_idx on public.invoices(client_id, tenant_id);
 -- Replace any existing single-column client FK, whatever its original name.
 do $$
 declare fk record;

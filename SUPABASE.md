@@ -2,6 +2,8 @@
 
 Les changements SQL de cette branche sont préparés et testés localement. Ils n’ont pas été appliqués au Supabase de production. Ne pas déployer cette version du serveur avant sa migration.
 
+Le projet hébergé `kadi-db` a pu être inspecté le 22 octobre 2026. Le [contrôle de l'existant](docs/supabase-live-review.md) identifie huit factures bloquant cette migration : sept devises `$` et une facture taxée. Ne pas remplacer ces devises, supprimer les taxes ni recalculer l'historique automatiquement. Le schéma réel contient également des colonnes fiscales absentes du schéma initial du dépôt ; cette différence doit être conservée et traitée avant de baseliner l'existant.
+
 ## Nouveau projet vide
 
 Les deux fichiers dans `supabase/migrations/`, créés par `supabase migration new`, sont ordonnés : schéma initial, puis protections. Ils supposent les rôles Supabase `anon`, `authenticated`, `service_role` et le schéma `auth` existants. Exécuter les deux dans un environnement de test dédié avant toute ouverture de l’application.
@@ -26,7 +28,9 @@ Les anciennes factures déjà émises restent verrouillées. Leur historique ne 
 
 ## Logos privés
 
-Configurer **le même bucket existant** dans `SUPABASE_LOGO_BUCKET` (Render) et `VITE_SUPABASE_LOGO_BUCKET` (Vercel). Le frontend KADI audité utilise `kadi-compnies-logo` ; vérifier son existence réelle avant configuration. Le dépôt conserve un défaut `company-logos` pour les installations génériques, donc renseigner explicitement les variables sur les deux services.
+Configurer **`company-logos`** dans `SUPABASE_LOGO_BUCKET` (Render) et `VITE_SUPABASE_LOGO_BUCKET` (Vercel). L'inspection du projet hébergé a confirmé que ce bucket privé contient les deux objets existants. `kadi-compnies-logo`, auparavant configuré sur Vercel, est vide et n'a pas de politiques d'accès aux objets. La variable Vercel a été corrigée ; elle prendra effet dans les prochains déploiements. La configuration Render reste à vérifier.
+
+Un profil référence un ancien objet de `company-logos` qui n'existe plus. Un autre référence un chemin privé existant et lui appartenant. La correction du nom du bucket ne recrée pas le fichier manquant : le propriétaire devra réimporter son logo. Aucun profil ni objet existant n'a été réécrit pendant le contrôle.
 
 Le bucket peut rester privé. L’interface garde les URL signées ; le serveur télécharge uniquement un chemin appartenant à l’utilisateur, sur son propre Supabase. Les anciennes URL de ce projet et de ce bucket sont reconnues. Les URL externes, autres buckets et chemins d’un autre utilisateur sont refusés. PNG, JPEG, WebP et SVG sont convertis en PNG borné pour le PDF. Le PDF signale un logo configuré mais introuvable au lieu de l’omettre silencieusement.
 

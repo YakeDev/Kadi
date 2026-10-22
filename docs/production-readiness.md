@@ -2,7 +2,7 @@
 
 Base auditée : `8c303f4452cf69d9e1d5bdf5ffd5edeba79cba53`.
 
-Cette branche corrige les problèmes reproductibles du dépôt. Elle ne certifie pas la production : le Supabase de KADI n’est pas accessible avec la connexion disponible, et les paramètres Render ne sont pas lisibles ici. Aucune migration distante, fusion dans `main` ni promotion en production n’a été effectuée.
+Cette branche corrige les problèmes reproductibles du dépôt. Le Supabase réel de KADI a maintenant été inspecté : voir [le contrôle de l'existant](supabase-live-review.md). Les factures historiques, les sauvegardes et la configuration Render empêchent encore la mise en service de cette version. Aucune migration distante, fusion dans `main` ni promotion en production n’a été effectuée. Le nom du bucket des logos a été corrigé dans Vercel pour les prochains déploiements.
 
 ## Corrections et preuves
 
@@ -29,12 +29,13 @@ Les mises à jour comprennent Supabase JS 2.118.0 (épinglé), React Router 7, T
 
 Exécution sur Node 22.23.4 avec données synthétiques :
 
-- Backend : 43 tests Vitest et 20 tests natifs Node (PostgreSQL, PDF, SDK et démarrage).
+- Backend : 43 tests Vitest et 22 tests natifs Node (PostgreSQL, PDF, SDK et démarrage), dont deux scénarios ajoutés après le contrôle hébergé : devise historique ambiguë et facture taxée laissées intactes après refus de migration.
 - Frontend : 12 tests de composants/parcours ; lint sans avertissement ; build réussi.
 - `npm ci` réussi indépendamment dans les deux répertoires.
 - `npm audit` complet : aucune vulnérabilité connue signalée dans les deux lockfiles au moment du contrôle. Ce résultat ne constitue pas une preuve d’absence de faille dans l’application.
 - GitHub Actions : jobs backend et frontend réussis sur la pull request #14. Aperçu Vercel construit et READY.
 - Inspection du navigateur sur cet aperçu : page de connexion lisible et route `/reset-password` avec message de lien invalide et retour à la connexion. L’accès temporaire Vercel créé pour cette inspection a été révoqué. Aucun parcours avec un véritable compte Supabase hébergé n’a été validé.
+- Supabase hébergé : les cinq tables ont RLS activée. Les lectures SQL sous les rôles de deux utilisateurs existants voient leurs propres clients/factures et aucune ligne étrangère ; le rôle anonyme voit zéro ligne métier. Ces contrôles en transaction de lecture seule ne sont pas un test de connexion dans le navigateur.
 
 ## Ordre de mise en service
 
@@ -51,5 +52,5 @@ Exécution sur Node 22.23.4 avec données synthétiques :
 - Les limiteurs en mémoire conviennent à un processus unique. Plusieurs instances exigent un compteur partagé. Configurer le proxy selon la topologie réelle.
 - La sortie IA reste un brouillon à contrôler. Les plafonds de tokens/requêtes et les logs d’usage ne remplacent pas un budget fournisseur et une mesure du coût réel.
 - Tailwind 4 cible des navigateurs modernes : vérifier les appareils mobiles visés. Le build conserve un avertissement de taille du bundle JavaScript (~643 Ko avant compression) ; le découpage des pages peut être traité ensuite.
-- La sécurité RLS, Auth, Storage, SMTP, les secrets et les sauvegardes de production restent à vérifier sur les services réels.
+- RLS et les métadonnées Storage ont été inspectées sur le service réel ; les protections supplémentaires ne sont pas encore appliquées. Les tests hébergés des écritures, d'Auth, SMTP, des fichiers eux-mêmes, des secrets Render et de la restauration restent à réaliser.
 

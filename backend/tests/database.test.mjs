@@ -120,6 +120,35 @@ test('preflight refuses inconsistent old data and leaves the schema unchanged', 
   } finally { await dirty.close() }
 })
 
+for (const historicalCase of [
+  { name: 'ambiguous dollar currency', currency: '$', subtotal: 100, total: 100, tax: 0 },
+  { name: 'an existing taxed invoice', currency: 'USD', subtotal: 100, total: 116, tax: 16 }
+]) {
+  test(`preflight preserves ${historicalCase.name} and the previous access policies`, async () => {
+    const historical = await bootstrap()
+    try {
+      await historical.exec(`
+        alter table invoices add column tax_rate numeric default 0;
+        alter table invoices add column tax_amount numeric default 0;
+        insert into tenants(id, name) values ('${t1}', 'Existing company');
+        create policy historical_read on invoices for select using (true);
+      `)
+      await historical.query(`insert into invoices(tenant_id, invoice_number, status,
+        currency, subtotal_amount, total_amount, tax_rate, tax_amount)
+        values ($1, 'HISTORY', 'sent', $2, $3, $4, $5, $5)`,
+      [t1, historicalCase.currency, historicalCase.subtotal, historicalCase.total, historicalCase.tax])
+      const original = (await historical.query('select * from invoices')).rows
+      await assert.rejects(historical.exec(await migration('production_hardening')), /Historical invoices require reconciliation/)
+      await historical.exec('rollback')
+      assert.deepEqual((await historical.query('select * from invoices')).rows, original)
+      assert.equal((await historical.query(`select 1 from information_schema.columns
+        where table_schema = 'public' and table_name = 'invoices' and column_name = 'version'`)).rows.length, 0)
+      assert.equal((await historical.query(`select 1 from pg_policies
+        where schemaname = 'public' and tablename = 'invoices' and policyname = 'historical_read'`)).rows.length, 1)
+    } finally { await historical.close() }
+  })
+}
+
 test('invoice search finds a current or archived client while keeping tenant boundaries', async () => {
   await asRole('service_role', async () => {
     const found = await db.query("select invoice_search(i) as value from invoices i where invoice_number = 'ONE'")
