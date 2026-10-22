@@ -47,6 +47,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
       status: 'draft',
       notes: '',
       currency: 'USD',
+      tax_rate: 0,
       items: [createEmptyItem()]
     }
   }
@@ -57,7 +58,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
         description: line.description ?? '',
         quantity: Number(line.quantity ?? 1),
         unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
-        currency: line.currency ?? invoice.currency ?? 'USD'
+        currency: (line.currency ?? invoice.currency) === '$' ? 'USD' : line.currency ?? invoice.currency ?? 'USD'
       }))
     : [createEmptyItem()]
 
@@ -67,7 +68,8 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
     due_date: invoice.due_date ?? '',
     status: invoice.status ?? 'draft',
     notes: invoice.notes ?? '',
-    currency: invoice.currency || 'USD',
+    currency: invoice.currency === '$' ? 'USD' : invoice.currency || 'USD',
+    tax_rate: Number(invoice.tax_rate || 0),
     items
   }
 }
@@ -367,6 +369,13 @@ const InvoiceForm = ({
                   <option value='CDF'>CDF — Franc congolais</option>
                 </select>
                 <p className='text-xs text-[var(--text-muted)]'>Changer de devise remet les prix à zéro.</p>
+              </div>
+              <div className='space-y-2'>
+                <label className='label' htmlFor='invoice-tax-rate'>Taxe optionnelle (%)</label>
+                <input id='invoice-tax-rate' type='number' min='0' max='100' step='0.01'
+                  value={form.tax_rate} onChange={(event) => updateField('tax_rate', event.target.value)}
+                  className={inputClass} aria-describedby='invoice-tax-help' />
+                <p id='invoice-tax-help' className='text-xs text-[var(--text-muted)]'>Laissez 0 si aucune taxe ne s’applique.</p>
               </div>
               <div className='space-y-2'>
                 <p className='text-xs font-semibold text-[var(--text-muted)]'>Client</p>

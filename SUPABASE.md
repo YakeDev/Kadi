@@ -2,7 +2,7 @@
 
 Les changements SQL de cette branche sont préparés et testés localement. Ils n’ont pas été appliqués au Supabase de production. Ne pas déployer cette version du serveur avant sa migration.
 
-Le projet hébergé `kadi-db` a pu être inspecté le 22 octobre 2026. Le [contrôle de l'existant](docs/supabase-live-review.md) identifie huit factures bloquant cette migration : sept devises `$` et une facture taxée. Ne pas remplacer ces devises, supprimer les taxes ni recalculer l'historique automatiquement. Le schéma réel contient également des colonnes fiscales absentes du schéma initial du dépôt ; cette différence doit être conservée et traitée avant de baseliner l'existant.
+Le projet hébergé `kadi-db` a pu être inspecté le 22 octobre 2026. Le [contrôle de l'existant](docs/supabase-live-review.md) a révélé sept factures avec la devise `$` et une facture taxée. L'utilisateur a confirmé `$ = USD` et demandé uniquement USD/CDF : la migration normalise cette étiquette dans les en-têtes et lignes, sans conversion ni modification des prix, totaux ou taxes enregistrées. Les colonnes `tax_rate` et `tax_amount` sont conservées ou ajoutées si absentes ; la contrainte vérifie `total = sous-total + taxe`. Les paramètres fiscaux existants des profils restent inchangés.
 
 ## Nouveau projet vide
 
@@ -11,7 +11,7 @@ Les deux fichiers dans `supabase/migrations/`, créés par `supabase migration n
 ## Projet existant
 
 1. Exporter le schéma réel et une sauvegarde restaurable. Comparer les cinq tables avec `20261022064406_initial_schema.sql`. Cette migration initiale ne doit pas être rejouée sur des tables existantes. Résoudre les différences avant de marquer sa version comme déjà appliquée.
-2. Exécuter `docs/sql/preflight.sql` en lecture seule. La migration refuse les liens entre entreprises, devises/statuts invalides, dates incohérentes et montants incompatibles. Ne pas effacer ces anomalies pour contourner le contrôle : les rapprocher des documents originaux.
+2. Exécuter `docs/sql/preflight.sql` en lecture seule. La migration refuse les liens entre entreprises, devises/statuts invalides, devises mélangées dans les lignes, dates incohérentes et montants incompatibles. Seul l'ancien libellé `$`, explicitement confirmé comme USD, est normalisé. Les autres anomalies doivent être rapprochées des originaux ; aucune taxe ni somme historique n'est recalculée pour passer les contrôles.
 3. Sur une copie de test, vérifier l’historique des migrations (`npx supabase@2.121.0 migration list`). Après comparaison du schéma uniquement, le baseliner avec `npx supabase@2.121.0 migration repair 20261022064406 --status applied`. Utiliser la liaison au bon projet ; ne jamais réparer un projet au hasard.
 4. Examiner `npx supabase@2.121.0 db push --dry-run --skip-vault`, puis appliquer uniquement les migrations attendues dans l’environnement choisi. La migration de protection est transactionnelle. Aucun lien erroné ni historique n’est réécrit automatiquement.
 5. Vérifier avec deux comptes réels les lectures et refus décrits ci-dessous, puis répéter après mise en production. L’exécution de ces commandes reste une opération d’administration distincte.
@@ -23,6 +23,7 @@ Les deux fichiers dans `supabase/migrations/`, créés par `supabase migration n
 - Clé étrangère composite `(client_id, tenant_id)` : une facture ne peut pas référencer le client d’une autre entreprise. Un client lié à une facture ne peut pas être supprimé ; ses coordonnées archivées restent disponibles.
 - Provisionnement atomique et idempotent par `provision_kadi_profile`, accessible uniquement à `service_role`. La vérification des sessions n’effectue aucune création de profil ni d’entreprise.
 - Une facture émise conserve `issuer_snapshot`, `client_snapshot`, `issued_at` et un PNG du logo. Les déclencheurs bloquent sa suppression ou la modification de son contenu. `paid_at` est enregistré lors du passage à « payée ». `version` protège les écritures simultanées.
+- USD et CDF sont les seules devises autorisées sur les nouvelles factures et leurs lignes. La taxe est facultative, à 0 par défaut : le serveur calcule son montant en centimes à partir du taux choisi et refuse un montant de taxe fourni par le navigateur. Les factures émises conservent leurs montants enregistrés lors d'un changement de statut ; ni leur taxe ni leur total ne sont recalculés.
 
 Les anciennes factures déjà émises restent verrouillées. Leur historique ne peut pas être reconstitué à partir des coordonnées actuelles : l’API refuse leur nouvel export tant qu’aucune archive fiable n’a été rapprochée de l’original. Ne pas remplir les snapshots avec les valeurs du jour pour masquer cette absence.
 

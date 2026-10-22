@@ -121,8 +121,8 @@ test('preflight refuses inconsistent old data and leaves the schema unchanged', 
 })
 
 for (const historicalCase of [
-  { name: 'ambiguous dollar currency', currency: '$', subtotal: 100, total: 100, tax: 0 },
-  { name: 'an existing taxed invoice', currency: 'USD', subtotal: 100, total: 116, tax: 16 }
+  { name: 'an unsupported currency', currency: 'EUR', subtotal: 100, total: 100, tax: 0 },
+  { name: 'an inconsistent taxed invoice', currency: 'USD', subtotal: 100, total: 115, tax: 16 }
 ]) {
   test(`preflight preserves ${historicalCase.name} and the previous access policies`, async () => {
     const historical = await bootstrap()
@@ -148,6 +148,35 @@ for (const historicalCase of [
     } finally { await historical.close() }
   })
 }
+
+test('migration normalizes confirmed dollar labels without recalculating historical amounts or taxes', async () => {
+  const legacy = await bootstrap()
+  try {
+    await legacy.exec(`alter table invoices add column tax_rate numeric default 0;
+      alter table invoices add column tax_amount numeric default 0;
+      insert into tenants(id,name) values ('${t1}', 'Existing company');`)
+    const items = [
+      { description: 'Original one', quantity: 1, unitPrice: 60, currency: '$', lineSubtotal: 60 },
+      { description: 'Original two', quantity: 1, unitPrice: 40, currency: '$', lineSubtotal: 40 }
+    ]
+    await legacy.query(`insert into invoices(tenant_id,invoice_number,status,currency,items,subtotal_amount,total_amount,tax_rate,tax_amount)
+      values ($1,'ORIGINAL','sent','$',$2,100,115,16,15)`, [t1, JSON.stringify(items)])
+    const before = (await legacy.query('select * from invoices')).rows[0]
+    await legacy.exec(await migration('production_hardening'))
+    const after = (await legacy.query('select * from invoices')).rows[0]
+    for (const [key, value] of Object.entries(before)) {
+      if (!['currency', 'items'].includes(key)) assert.deepEqual(after[key], value, key)
+    }
+    assert.equal(after.currency, 'USD')
+    assert.deepEqual(after.items, items.map((item) => ({ ...item, currency: 'USD' })))
+    assert.equal(after.issuer_snapshot, null)
+    assert.equal(after.client_snapshot, null)
+    await assert.rejects(legacy.query("update invoices set tax_amount=16,total_amount=116"), /immutable/)
+    await assert.rejects(legacy.query(`insert into invoices(tenant_id,invoice_number,currency) values ('${t1}','EURO','EUR')`), /invoices_currency_valid/)
+    await assert.rejects(legacy.query(`insert into invoices(tenant_id,invoice_number,currency,items) values ('${t1}','MIXED','CDF','[{"currency":"USD"}]')`), /invoices_line_currency_valid/)
+    await assert.rejects(legacy.query(`insert into invoices(tenant_id,invoice_number,currency,items) values ('${t1}','NULL-CURRENCY','USD','[{"currency":null}]')`), /invoices_line_currency_valid/)
+  } finally { await legacy.close() }
+})
 
 test('invoice search finds a current or archived client while keeping tenant boundaries', async () => {
   await asRole('service_role', async () => {

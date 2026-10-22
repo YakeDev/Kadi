@@ -121,6 +121,7 @@ describe('AI invoice generation', () => {
 
     expect(response.status).toBe(200)
     expect(response.body).toEqual({
+      tax_rate: 0,
       client_id: null,
       issue_date: null,
       due_date: null,

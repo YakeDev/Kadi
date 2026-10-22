@@ -21,6 +21,16 @@ const render = async (data, issuer = { company: 'Entreprise originale' }, logo =
   doc.end()
   return getDocument({ data: await ready, useSystemFonts: true }).promise
 }
+test('taxed PDF shows the recorded subtotal, tax and total without rewriting historical values', async () => {
+  const pdf = await render({ ...invoice(1), subtotal_amount: 100, tax_rate: 16, tax_amount: 15, total_amount: 115 })
+  try {
+    const content = await (await pdf.getPage(1)).getTextContent()
+    const text = content.items.map((item) => item.str).join(' ')
+    assert.ok(text.includes('Sous-total : 100.00 USD'))
+    assert.ok(text.includes('Taxe (16 %) : 15.00 USD'))
+    assert.ok(text.includes('Total : 115.00 USD'))
+  } finally { await pdf.loadingTask.destroy() }
+})
 for (const count of [1, 15, 30, 100]) {
   test(`${count} invoice rows remain readable and paginated`, async () => {
     const pdf = await render(invoice(count))

@@ -61,6 +61,24 @@ test('checks a currency-only PATCH against stored items', async () => {
   expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 400 }))
   expect(writes).toEqual([])
 })
+test('editing a taxed draft keeps the rate and recalculates only the draft totals', async () => {
+  existing.tax_rate = 16
+  const { next } = await invoke('updateInvoice', { notes: 'Draft note' })
+  expect(next).not.toHaveBeenCalled()
+  expect(updatePayload).toMatchObject({ subtotal_amount: 10, tax_rate: 16, tax_amount: 1.6, total_amount: 11.6 })
+})
+test('a taxed invoice can be created in CDF without changing currency or trusting client totals', async () => {
+  const { next } = await invoke('createInvoice', { currency: 'CDF', tax_rate: 16,
+    items: [{ description: 'Article', quantity: 1, unitPrice: 10000, currency: 'CDF' }] })
+  expect(next).not.toHaveBeenCalled()
+  expect(updatePayload).toMatchObject({ currency: 'CDF', subtotal_amount: 10000, tax_amount: 1600, total_amount: 11600 })
+})
+test('marking a historical taxed invoice paid never recalculates its recorded amounts', async () => {
+  Object.assign(existing, { status: 'sent', subtotal_amount: 100, tax_rate: 16, tax_amount: 15, total_amount: 115 })
+  const { next } = await invoke('updateInvoice', { status: 'paid' })
+  expect(next).not.toHaveBeenCalled()
+  expect(updatePayload).toEqual({ status: 'paid', paid_at: expect.any(String) })
+})
 test('issuing captures immutable issuer/client details and guards against concurrent updates', async () => {
   const { next, res } = await invoke('updateInvoice', { status: 'sent' })
   expect(next).not.toHaveBeenCalled()

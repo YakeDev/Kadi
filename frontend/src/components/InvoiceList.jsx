@@ -362,7 +362,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2
                       })}{' '}
-                      {invoice.currency || 'USD'}
+                      {invoice.currency === '$' ? 'USD' : invoice.currency || 'USD'}
                     </td>
                     <td className='px-4 py-3'>
                       <span className={`badge ${statusStyles[invoice.status] || statusStyles.draft}`}>

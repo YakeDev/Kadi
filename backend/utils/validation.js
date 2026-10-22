@@ -18,7 +18,8 @@ const INVOICE_ALLOWED_FIELDS = [
   'status',
   'notes',
   'items',
-  'currency'
+  'currency',
+  'tax_rate'
 ]
 const INVOICE_BLOCKED_FIELDS = [
   'id',
@@ -26,6 +27,7 @@ const INVOICE_BLOCKED_FIELDS = [
   'invoice_number',
   'subtotal_amount',
   'total_amount',
+  'tax_amount',
   'created_at',
   'updated_at'
 ]
@@ -303,6 +305,10 @@ export const sanitizeInvoicePayload = (body = {}, { partial = false } = {}) => {
     sanitized.currency = normalizeCurrency(payload.currency, 'USD')
   }
 
+  if (!partial || hasOwn(payload, 'tax_rate')) {
+    sanitized.tax_rate = computeTotals([], payload.tax_rate ?? 0).taxRate
+  }
+
   if (!partial || hasOwn(payload, 'items')) {
     const rawItems = payload.items ?? []
     if (!Array.isArray(rawItems)) {
@@ -321,7 +327,7 @@ export const sanitizeInvoicePayload = (body = {}, { partial = false } = {}) => {
   if (issueDate && dueDate && dueDate < issueDate) {
     throw createValidationError("La date d'échéance doit être postérieure ou égale à la date d'émission.")
   }
-  if (sanitized.items) computeTotals(sanitized.items)
+  if (sanitized.items) computeTotals(sanitized.items, sanitized.tax_rate)
   if (sanitized.items && sanitized.currency) assertInvoiceCurrency(sanitized)
 
   if (partial && Object.keys(sanitized).length === 0) {
@@ -340,7 +346,7 @@ export const assertInvoiceCurrency = ({ items = [], currency }) => {
 
 export const validateInvoiceState = (invoice) => {
   assertInvoiceCurrency(invoice)
-  computeTotals(invoice.items)
+  computeTotals(invoice.items, invoice.tax_rate)
   const issueDate = normalizeDate(invoice.issue_date, 'issue_date')
   const dueDate = normalizeDate(invoice.due_date, 'due_date')
   if (issueDate && dueDate && dueDate < issueDate) {

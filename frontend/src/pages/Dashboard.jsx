@@ -32,7 +32,7 @@ const PERIOD_OPTIONS = [
 const formatCurrency = (value, currency = 'USD') =>
 	new Intl.NumberFormat('fr-FR', {
 		style: 'currency',
-		currency,
+		currency: currency === '$' ? 'USD' : currency,
 		minimumFractionDigits: 0,
 	}).format(Number(value || 0))
 

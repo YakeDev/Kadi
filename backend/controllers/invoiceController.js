@@ -120,12 +120,12 @@ export const createInvoice = async (req, res, next) => {
     const payload = sanitizeInvoicePayload(req.body)
     validateInvoiceState(payload)
     const client = await getClient(payload.client_id, req.tenantId)
-    const totals = computeTotals(payload.items)
+    const totals = computeTotals(payload.items, payload.tax_rate)
     const snapshots = await issueSnapshot(payload, req, client)
     const { data, error } = await supabase.from('invoices').insert({
       ...payload, ...snapshots, tenant_id: req.tenantId,
       invoice_number: generateInvoiceNumber(), subtotal_amount: totals.subtotal,
-      total_amount: totals.subtotal, version: 0
+      tax_rate: totals.taxRate, tax_amount: totals.taxAmount, total_amount: totals.total, version: 0
     }).select('*, client:clients(*)').single()
     if (error) throw error
     res.status(201).json(presentInvoice(data, req.tenantId))
@@ -150,8 +150,9 @@ export const updateInvoice = async (req, res, next) => {
       const merged = { ...existing, ...updates }
       validateInvoiceState(merged)
       const client = await getClient(merged.client_id, req.tenantId)
-      const totals = computeTotals(merged.items)
-      updates = { ...updates, subtotal_amount: totals.subtotal, total_amount: totals.subtotal,
+      const totals = computeTotals(merged.items, merged.tax_rate)
+      updates = { ...updates, subtotal_amount: totals.subtotal, tax_rate: totals.taxRate,
+        tax_amount: totals.taxAmount, total_amount: totals.total,
         ...await issueSnapshot(merged, req, client) }
     }
     const { data, error } = await supabase.from('invoices').update(updates)

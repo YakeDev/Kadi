@@ -3,7 +3,7 @@
 Projet : `EricayStudio / kadi-db`, référence `giksqprkorjbgikprksb`.
 Lecture du schéma, des politiques, des droits, des métadonnées Storage, des alertes Supabase et des données agrégées. Aucun mot de passe, jeton, contenu client ou montant individuel n'est reproduit dans ce rapport.
 
-**Décision : ne pas déployer la PR avant rapprochement de l'historique et validation de la sauvegarde.** La migration reste préparée, sans exécution distante. La configuration Vercel des logos a été corrigée pour les prochains déploiements ; l'application publique n'a pas été redéployée.
+**Décision : ne pas déployer la PR avant validation de la sauvegarde, des archives fiables et de la configuration serveur.** L'utilisateur a confirmé `$ = USD` et demandé deux devises uniquement, USD et CDF. La migration a été adaptée pour normaliser cette étiquette et préserver les taxes et totaux existants. Elle reste préparée, sans exécution distante. La configuration Vercel des logos a été corrigée pour les prochains déploiements ; l'application publique n'a pas été redéployée.
 
 ## Données et historique
 
@@ -11,9 +11,9 @@ Lecture du schéma, des politiques, des droits, des métadonnées Storage, des a
 | --- | --- | --- |
 | Volume réel | 8 entreprises, 6 profils/utilisateurs, 12 clients, 21 factures, 2 articles | Les estimations de lignes du catalogue système ne suffisent pas ; ces valeurs proviennent de `count(*)`. |
 | Migrations | Aucun historique de migrations enregistré | Comparer le schéma réel avant tout baseline ; ne pas rejouer le schéma initial. |
-| Devises | 7 factures avec `$`, 14 avec `USD` | Faire confirmer la devise des originaux avant une normalisation. Les filtres USD de la nouvelle version n'incluraient pas les anciennes valeurs `$`. |
-| Fiscalité | 1 facture taxée ; 3 profils avec configuration fiscale | Le schéma réel contient `tax_rate`, `tax_amount`, `default_tax_rate`, `tax_rates`, absents du schéma initial et non gérés par les formulaires de cette branche. Adapter le calcul et l'affichage sans supprimer la taxe enregistrée. |
-| Compatibilité de migration | 8 factures incompatibles avec les contraintes préparées | Le contrôle préalable lève une erreur avant les changements de schéma ou de politiques ; aucun recalcul automatique. |
+| Devises | 7 factures et 2 lignes avec `$` ; 14 factures avec `USD` | `$ = USD` confirmé par l'utilisateur. La migration prépare uniquement la normalisation du libellé, y compris dans les lignes JSON, sans changement de prix ni conversion. Les nouvelles saisies autorisent uniquement USD/CDF. |
+| Fiscalité | 1 facture taxée ; 3 profils avec configuration fiscale | Les 21 factures respectent `total = sous-total + taxe`. La migration conserve les champs et sommes enregistrés ; les paramètres fiscaux des profils ne changent pas. Les nouveaux brouillons permettent un taux facultatif, 0 par défaut, avec calcul serveur en centimes et affichage dans l'aperçu/PDF. |
+| Compatibilité de migration | 0 en-tête et 0 ligne incompatibles avec le contrôle adapté, en lecture seule | Les sept libellés attendent toujours la migration. Les devises inconnues, lignes mélangées et montants incohérents restent bloqués avant toute modification de schéma ou de politique. Aucun recalcul historique. |
 | Factures émises | 20 documents sans les nouveaux snapshots | Réunir les archives fiables avant activation du nouvel export ; ne pas substituer les coordonnées actuelles aux originaux. |
 | Liens entre entreprises | 0 lien facture/client entre entreprises différentes ; 0 profil sans entreprise valide | Pas de correction automatique de rattachement nécessaire d'après ces contrôles. |
 | Articles | 0 prix/devise incompatible avec les contraintes préparées | Pas d'anomalie détectée par ce contrôle. |
@@ -53,4 +53,4 @@ La capture du tableau de bord indique « No backups ». Aucune sauvegarde restau
 
 Le serveur indique PostgreSQL **17.6**. Supabase publie une mise à jour **17.11** comprenant des corrections de sécurité : prévoir sa mise à jour après sauvegarde et vérification de compatibilité, sans lancer de changement du moteur pendant cet audit. Les extensions `ltree` et `btree_gist` ne sont pas installées. `pgcrypto` est installé ; vérifier un éventuel usage de chiffrement historique avant la mise à jour : [avis officiel](https://supabase.com/changelog/postgres-15-19-17-11-breaking-changes).
 
-Ordre restant : confirmer la devise historique et préserver la fiscalité ; établir une sauvegarde restaurable ; adapter et tester le schéma réel dans un environnement dédié ; contrôler Render, Auth/SMTP et les redirections ; appliquer la migration validée ; déployer API et frontend compatibles ; valider deux comptes et une facture avec logo dans le navigateur.
+Ordre restant : établir une sauvegarde restaurable et réunir les archives fiables ; comparer et tester le schéma réel dans un environnement dédié ; contrôler Render, Auth/SMTP et les redirections ; appliquer la migration validée (incluant la normalisation `$` → `USD`) ; déployer API et frontend compatibles ; valider deux comptes et une facture avec logo dans le navigateur.

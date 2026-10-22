@@ -26,12 +26,22 @@ const formatDate = (value) =>
 
 const InvoicePreview = ({ className, company, client, invoice }) => {
   const items = invoice.items ?? []
-  const subtotal = items.reduce(
+  const calculatedSubtotal = items.reduce(
     (acc, item) => acc + Math.round((Number(item.quantity || 0) * Number(item.unitPrice || 0) + Number.EPSILON) * 100) / 100,
     0
   )
 
-  const currency = invoice.currency || 'USD'
+  const isIssued = invoice.status && invoice.status !== 'draft'
+  const subtotal = isIssued && invoice.subtotal_amount != null ? Number(invoice.subtotal_amount) : calculatedSubtotal
+  const taxRate = Number(invoice.tax_rate || 0)
+  const roundedRate = Number.isFinite(taxRate) && taxRate >= 0 && taxRate <= 100 ? Math.round(taxRate * 100) : 0
+  const subtotalCents = Math.round(subtotal * 100)
+  const calculatedTax = Number.isSafeInteger(subtotalCents) && subtotalCents >= 0
+    ? Number((BigInt(subtotalCents) * BigInt(roundedRate) + 5000n) / 10000n) / 100
+    : 0
+  const taxAmount = isIssued && invoice.tax_amount != null ? Number(invoice.tax_amount) : calculatedTax
+  const total = isIssued && invoice.total_amount != null ? Number(invoice.total_amount) : subtotal + taxAmount
+  const currency = invoice.currency === '$' ? 'USD' : invoice.currency || 'USD'
 
   const companyLocation = [company?.city, company?.state].filter(Boolean).join(', ')
 
@@ -129,10 +139,16 @@ const InvoicePreview = ({ className, company, client, invoice }) => {
           <span>Sous-total</span>
           <span className='font-semibold'>{formatCurrency(subtotal, currency)}</span>
         </div>
+        {taxAmount !== 0 ? (
+          <div className='flex items-center justify-between'>
+            <span>Taxe ({taxRate} %)</span>
+            <span className='font-semibold'>{formatCurrency(taxAmount, currency)}</span>
+          </div>
+        ) : null}
         <div className='flex items-center justify-between border-t border-[rgba(10,132,255,0.18)] pt-2 text-base'>
           <span className='font-semibold'>Total</span>
           <span className='font-semibold'>
-            {formatCurrency(subtotal, currency)}
+            {formatCurrency(total, currency)}
           </span>
         </div>
       </div>

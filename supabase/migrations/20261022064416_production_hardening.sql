@@ -1,5 +1,6 @@
 -- Run only after the preflight and backup described in SUPABASE.md.
--- Fails without rewriting inconsistent historical records.
+-- The owner confirmed on 2026-10-22 that historical "$" means USD.
+-- Only that currency label is normalized; historical amounts and taxes stay intact.
 begin;
 
 do $$
@@ -11,17 +12,35 @@ begin
     raise exception 'Cross-tenant invoice/client links exist. Reconcile before migrating.';
   end if;
   if exists (
-    select 1 from public.invoices
+    select 1 from public.invoices i
     where status is null or status not in ('draft', 'sent', 'paid', 'overdue')
-       or currency is null or currency not in ('USD', 'CDF')
+       or currency is null or currency not in ('USD', 'CDF', '$')
        or due_date < issue_date
        or total_amount is null or subtotal_amount is null
        or total_amount < 0 or total_amount > 1000000000000
-       or total_amount <> subtotal_amount or total_amount <> round(total_amount, 2)
+       or subtotal_amount < 0 or subtotal_amount <> round(subtotal_amount, 2)
+       or coalesce((to_jsonb(i)->>'tax_rate')::numeric, 0) not between 0 and 100
+       or coalesce((to_jsonb(i)->>'tax_rate')::numeric, 0) <>
+         round(coalesce((to_jsonb(i)->>'tax_rate')::numeric, 0), 2)
+       or coalesce((to_jsonb(i)->>'tax_amount')::numeric, 0) < 0
+       or coalesce((to_jsonb(i)->>'tax_amount')::numeric, 0) <>
+         round(coalesce((to_jsonb(i)->>'tax_amount')::numeric, 0), 2)
+       or total_amount <> subtotal_amount + coalesce((to_jsonb(i)->>'tax_amount')::numeric, 0)
+       or total_amount <> round(total_amount, 2)
        or items is null or case when jsonb_typeof(items) = 'array'
          then jsonb_array_length(items) > 100 else true end
   ) then
-    raise exception 'Historical invoices require reconciliation before migrating. Review docs/sql/preflight.sql; do not rewrite currencies, taxes or amounts automatically.';
+    raise exception 'Historical invoices require reconciliation before migrating. Review docs/sql/preflight.sql; do not recalculate historical amounts or taxes.';
+  end if;
+  if exists (
+    select 1 from public.invoices i cross join lateral jsonb_array_elements(i.items) line
+    where line ? 'currency' and (
+      coalesce(line->>'currency', '') not in ('USD', 'CDF', '$') or
+      case when line->>'currency' = '$' then 'USD' else line->>'currency' end <>
+      case when i.currency = '$' then 'USD' else i.currency end
+    )
+  ) then
+    raise exception 'Historical invoice lines use an unsupported or mixed currency. Reconcile before migrating.';
   end if;
   if exists (
     select 1 from public.catalog_items
@@ -40,6 +59,17 @@ alter table public.invoices add column if not exists client_snapshot jsonb;
 alter table public.invoices add column if not exists issuer_snapshot jsonb;
 alter table public.invoices add column if not exists issued_at timestamptz;
 alter table public.invoices add column if not exists paid_at timestamptz;
+alter table public.invoices add column if not exists tax_rate numeric default 0;
+alter table public.invoices add column if not exists tax_amount numeric default 0;
+
+-- Preserve array order, all other JSON keys, totals and recorded tax amounts.
+update public.invoices i set
+  currency = case when i.currency = '$' then 'USD' else i.currency end,
+  items = coalesce((select jsonb_agg(
+    case when line->>'currency' = '$' then jsonb_set(line, '{currency}', '"USD"'::jsonb) else line end
+    order by ordinal)
+    from jsonb_array_elements(i.items) with ordinality as lines(line, ordinal)), '[]'::jsonb)
+where i.currency = '$' or exists (select 1 from jsonb_array_elements(i.items) line where line->>'currency' = '$');
 
 create unique index clients_id_tenant_key on public.clients(id, tenant_id);
 create index profiles_tenant_id_idx on public.profiles(tenant_id);
@@ -62,10 +92,18 @@ alter table public.invoices add constraint invoices_dates_valid
   check (issue_date is null or due_date is null or due_date >= issue_date);
 alter table public.invoices add constraint invoices_totals_valid
   check (total_amount is not null and subtotal_amount is not null and
-    total_amount >= 0 and total_amount <= 1000000000000 and total_amount = subtotal_amount
-    and total_amount = round(total_amount, 2));
+    subtotal_amount >= 0 and subtotal_amount = round(subtotal_amount, 2) and
+    total_amount >= 0 and total_amount <= 1000000000000 and
+    total_amount = subtotal_amount + coalesce(tax_amount, 0) and total_amount = round(total_amount, 2));
+alter table public.invoices add constraint invoices_tax_valid
+  check (coalesce(tax_rate, 0) between 0 and 100 and coalesce(tax_rate, 0) = round(coalesce(tax_rate, 0), 2)
+    and coalesce(tax_amount, 0) >= 0 and coalesce(tax_amount, 0) = round(coalesce(tax_amount, 0), 2));
 alter table public.invoices add constraint invoices_items_valid
   check (items is not null and jsonb_typeof(items) = 'array' and jsonb_array_length(items) <= 100);
+alter table public.invoices add constraint invoices_line_currency_valid
+  check (not jsonb_path_exists(items,
+    '$[*] ? (exists(@.currency) && (@.currency.type() != "string" || @.currency != $currency))',
+    jsonb_build_object('currency', currency)));
 alter table public.catalog_items add constraint catalog_price_valid
   check (unit_price is not null and unit_price >= 0 and unit_price <= 1000000000 and unit_price = round(unit_price, 2));
 alter table public.catalog_items add constraint catalog_currency_valid

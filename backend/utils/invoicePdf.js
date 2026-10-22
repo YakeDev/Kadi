@@ -10,7 +10,8 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   const left = 48
   const width = doc.page.width - 96
   const bottom = doc.page.height - 88
-  const money = (value) => `${Number(value || 0).toFixed(2)} ${invoice.currency || 'USD'}`
+  const currency = invoice.currency === '$' ? 'USD' : invoice.currency || 'USD'
+  const money = (value) => `${Number(value || 0).toFixed(2)} ${currency}`
   const text = (value, x, y, w = width, size = 10, bold = false, align = 'left') => {
     doc.font(bold ? 'Inter-Semibold' : 'Inter').fontSize(size).fillColor('#0f172a')
       .text(String(value ?? ''), x, y, { width: w, align, lineGap: 2 })
@@ -95,8 +96,16 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
     y += rowHeight
     rule(y)
   }
-  if (y + 80 > bottom) { doc.addPage(); y = 48 }
+  const hasTax = Number(invoice.tax_amount || 0) !== 0
+  if (y + (hasTax ? 130 : 80) > bottom) {
+    doc.addPage()
+    y = text(`Facture ${invoice.invoice_number} — suite`, left, 48, width, 11, true) + 16
+  }
   y += 22
+  if (hasTax) {
+    y = text(`Sous-total : ${money(invoice.subtotal_amount)}`, left, y, width, 11, false, 'right') + 8
+    y = text(`Taxe (${Number(invoice.tax_rate || 0)} %) : ${money(invoice.tax_amount)}`, left, y, width, 11, false, 'right') + 12
+  }
   y = text(`Total : ${money(invoice.total_amount)}`, left, y, width, 16, true, 'right') + 24
   if (invoice.notes) {
     if (y + 40 > bottom) { doc.addPage(); y = 48 }

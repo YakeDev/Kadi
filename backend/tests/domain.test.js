@@ -7,6 +7,17 @@ describe('Exact bounded invoice calculations', () => {
     expect(computeTotals([{ quantity: 1, unitPrice: 0.1 }, { quantity: 1, unitPrice: 0.2 }]).subtotal).toBe(0.3)
     expect(computeTotals([{ quantity: 0.5, unitPrice: 0.01 }]).subtotal).toBe(0.01)
   })
+  test('computes optional tax in cents and includes it in the invoice limit', () => {
+    expect(computeTotals([{ quantity: 1, unitPrice: 100 }], 16)).toEqual({ subtotal: 100, taxRate: 16, taxAmount: 16, total: 116 })
+    expect(computeTotals([{ quantity: 1, unitPrice: 0.01 }], 50).taxAmount).toBe(0.01)
+    expect(() => computeTotals([{ quantity: 1000, unitPrice: 1_000_000_000 }], 16)).toThrow('hors limites')
+    for (const rate of [-1, 101, 1.001, true, {}, NaN]) expect(() => computeTotals([], rate)).toThrow('taux de taxe')
+  })
+  test('new invoices accept only canonical USD/CDF and cannot supply their own calculated tax', () => {
+    for (const currency of ['USD', 'CDF']) expect(sanitizeInvoicePayload({ currency }).currency).toBe(currency)
+    for (const currency of ['$', 'EUR', 'GBP']) expect(() => sanitizeInvoicePayload({ currency })).toThrow('USD et CDF')
+    expect(() => sanitizeInvoicePayload({ tax_amount: 999 })).toThrow('protégés')
+  })
   test('rejects finite inputs whose product overflows and prices with excessive precision', () => {
     expect(() => computeTotals([{ quantity: 1e200, unitPrice: 1e200 }])).toThrow()
     expect(() => sanitizeInvoicePayload({ items: [{ description: 'x', quantity: 1, unitPrice: 1.001 }] })).toThrow()

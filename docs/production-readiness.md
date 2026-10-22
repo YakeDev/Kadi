@@ -2,7 +2,7 @@
 
 Base auditée : `8c303f4452cf69d9e1d5bdf5ffd5edeba79cba53`.
 
-Cette branche corrige les problèmes reproductibles du dépôt. Le Supabase réel de KADI a maintenant été inspecté : voir [le contrôle de l'existant](supabase-live-review.md). Les factures historiques, les sauvegardes et la configuration Render empêchent encore la mise en service de cette version. Aucune migration distante, fusion dans `main` ni promotion en production n’a été effectuée. Le nom du bucket des logos a été corrigé dans Vercel pour les prochains déploiements.
+Cette branche corrige les problèmes reproductibles du dépôt. Le Supabase réel de KADI a été inspecté : voir [le contrôle de l'existant](supabase-live-review.md). La compatibilité des devises historiques et de la taxe est maintenant préparée et testée. Les archives des factures émises, les sauvegardes et la configuration Render restent à valider avant mise en service. Aucune migration distante, fusion dans `main` ni promotion en production n’a été effectuée. Le nom du bucket des logos a été corrigé dans Vercel pour les prochains déploiements.
 
 ## Corrections et preuves
 
@@ -15,6 +15,7 @@ Cette branche corrige les problèmes reproductibles du dépôt. Le Supabase rée
 | Logos | URL signées conservées, anciens chemins du bucket reconnu, conversion bornée en PNG, échec d’upload bloquant | PNG/JPEG/WebP/SVG intégrés dans les PDF ; références externes et chemins étrangers refusés |
 | PDF longs | Police Inter embarquée, mesure des lignes, sauts de page, en-têtes répétés et pieds de page protégés | Documents de 1, 15, 30 et 100 lignes ; descriptions et notes longues |
 | Devises | Une seule devise par facture, catalogue cohérent, tableau de bord filtré USD/CDF | Rejet des mélanges et des PATCH incohérents ; aperçu et payload frontend |
+| Historique USD et taxe | `$` confirmé comme USD : migration des libellés sans changer les montants ; taxe facultative en centimes pour les nouveaux brouillons | Migration conservant tous les autres champs, total historique non recalculé, USD/CDF uniquement, aperçu et PDF avec taxe |
 | Historique des factures | Snapshots client/émetteur/logo, verrouillage après émission, horodatage du paiement, contrôle de version | Refus des modifications/suppressions émises et conflits simultanés ; transitions valides |
 | Mot de passe oublié | Écran de saisie du nouveau mot de passe, événement de récupération et anciens liens pris en charge | Session valide, lien absent/expiré et refus du fournisseur simulés |
 | Validation | Dates calendaires strictes, limites et arrondi des montants, prix/catalogue/booléens contrôlés | Débordements numériques, dates impossibles, prix négatifs et types invalides |
@@ -29,8 +30,8 @@ Les mises à jour comprennent Supabase JS 2.118.0 (épinglé), React Router 7, T
 
 Exécution sur Node 22.23.4 avec données synthétiques :
 
-- Backend : 43 tests Vitest et 22 tests natifs Node (PostgreSQL, PDF, SDK et démarrage), dont deux scénarios ajoutés après le contrôle hébergé : devise historique ambiguë et facture taxée laissées intactes après refus de migration.
-- Frontend : 12 tests de composants/parcours ; lint sans avertissement ; build réussi.
+- Backend : 48 tests Vitest et 24 tests natifs Node (PostgreSQL, PDF, SDK et démarrage). Les historiques incohérents restent intacts après refus de migration ; le libellé `$` confirmé est normalisé sans recalcul des sommes ni suppression de taxes.
+- Frontend : 14 tests de composants/parcours ; lint sans avertissement ; build réussi.
 - `npm ci` réussi indépendamment dans les deux répertoires.
 - `npm audit` complet : aucune vulnérabilité connue signalée dans les deux lockfiles au moment du contrôle. Ce résultat ne constitue pas une preuve d’absence de faille dans l’application.
 - GitHub Actions : jobs backend et frontend réussis sur la pull request #14. Aperçu Vercel construit et READY.
@@ -48,7 +49,7 @@ Exécution sur Node 22.23.4 avec données synthétiques :
 ## Limites à prendre en compte
 
 - Les factures anciennes sans snapshot fiable nécessitent leurs originaux avant nouvel export. Aucun historique n’a été inventé ou corrigé automatiquement.
-- Les calculs n’intègrent ni taxes, ni conversion, ni avoirs, ni journal comptable complet. Les statistiques sélectionnent la date d’émission ; `paid_at` est la date d’enregistrement du statut payé, pas une preuve de paiement bancaire.
+- Une taxe facultative au taux choisi est prise en charge (0 par défaut, aucune présomption de TVA due). Les conversions, remises, avoirs et journal comptable complet restent hors de ce correctif. Les statistiques sélectionnent la date d’émission ; `paid_at` est la date d’enregistrement du statut payé, pas une preuve de paiement bancaire.
 - Les limiteurs en mémoire conviennent à un processus unique. Plusieurs instances exigent un compteur partagé. Configurer le proxy selon la topologie réelle.
 - La sortie IA reste un brouillon à contrôler. Les plafonds de tokens/requêtes et les logs d’usage ne remplacent pas un budget fournisseur et une mesure du coût réel.
 - Tailwind 4 cible des navigateurs modernes : vérifier les appareils mobiles visés. Le build conserve un avertissement de taille du bundle JavaScript (~643 Ko avant compression) ; le découpage des pages peut être traité ensuite.
