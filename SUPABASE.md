@@ -1,228 +1,41 @@
-# SUPABASE.md – Configuration de la base de données et sécurité RLS
+# Supabase — installation et migration de KADI
 
-Ce document décrit la configuration complète de **Supabase** pour le projet KADI : création des tables, activation de la sécurité RLS, et définition des politiques d’accès multi-tenant.
+Les changements SQL de cette branche sont préparés et testés localement. Ils n’ont pas été appliqués au Supabase de production. Ne pas déployer cette version du serveur avant sa migration.
 
----
+## Nouveau projet vide
 
-## 1. Structure de la base de données
+Les deux fichiers dans `supabase/migrations/`, créés par `supabase migration new`, sont ordonnés : schéma initial, puis protections. Ils supposent les rôles Supabase `anon`, `authenticated`, `service_role` et le schéma `auth` existants. Exécuter les deux dans un environnement de test dédié avant toute ouverture de l’application.
 
-KADI utilise 5 tables principales :
+## Projet existant
 
-| Table       | Rôle                                                   |
-| ----------- | ------------------------------------------------------ |
-| `tenants`   | Gère les entreprises (espaces de travail indépendants) |
-| `profiles`  | Profils utilisateurs liés à Supabase Auth              |
-| `clients`   | Clients de chaque entreprise                           |
-| `catalog_items` | Produits ou services vendus                        |
-| `invoices`  | Factures et montants associés                          |
+1. Exporter le schéma réel et une sauvegarde restaurable. Comparer les cinq tables avec `20261022064406_initial_schema.sql`. Cette migration initiale ne doit pas être rejouée sur des tables existantes. Résoudre les différences avant de marquer sa version comme déjà appliquée.
+2. Exécuter `docs/sql/preflight.sql` en lecture seule. La migration refuse les liens entre entreprises, devises/statuts invalides, dates incohérentes et montants incompatibles. Ne pas effacer ces anomalies pour contourner le contrôle : les rapprocher des documents originaux.
+3. Sur une copie de test, vérifier l’historique des migrations (`npx supabase@2.121.0 migration list`). Après comparaison du schéma uniquement, le baseliner avec `npx supabase@2.121.0 migration repair 20261022064406 --status applied`. Utiliser la liaison au bon projet ; ne jamais réparer un projet au hasard.
+4. Examiner `npx supabase@2.121.0 db push --dry-run --skip-vault`, puis appliquer uniquement les migrations attendues dans l’environnement choisi. La migration de protection est transactionnelle. Aucun lien erroné ni historique n’est réécrit automatiquement.
+5. Vérifier avec deux comptes réels les lectures et refus décrits ci-dessous, puis répéter après mise en production. L’exécution de ces commandes reste une opération d’administration distincte.
 
----
+## Protections ajoutées
 
-## 2. Création des tables SQL
+- RLS activée sur **tenants, profiles, clients, catalog_items, invoices**. Toutes les anciennes politiques de ces tables sont remplacées afin de retirer les permissions permissives résiduelles.
+- `anon` n’a aucun accès aux tables métier. `authenticated` peut uniquement lire ses propres lignes ; toutes les écritures passent par l’API. Aucun secret serveur ne doit être injecté dans une variable `VITE_*`.
+- Clé étrangère composite `(client_id, tenant_id)` : une facture ne peut pas référencer le client d’une autre entreprise. Un client lié à une facture ne peut pas être supprimé ; ses coordonnées archivées restent disponibles.
+- Provisionnement atomique et idempotent par `provision_kadi_profile`, accessible uniquement à `service_role`. La vérification des sessions n’effectue aucune création de profil ni d’entreprise.
+- Une facture émise conserve `issuer_snapshot`, `client_snapshot`, `issued_at` et un PNG du logo. Les déclencheurs bloquent sa suppression ou la modification de son contenu. `paid_at` est enregistré lors du passage à « payée ». `version` protège les écritures simultanées.
 
-Copiez et exécutez le script suivant dans l’onglet **SQL Editor** de Supabase :
+Les anciennes factures déjà émises restent verrouillées. Leur historique ne peut pas être reconstitué à partir des coordonnées actuelles : l’API refuse leur nouvel export tant qu’aucune archive fiable n’a été rapprochée de l’original. Ne pas remplir les snapshots avec les valeurs du jour pour masquer cette absence.
 
-```sql
--- 1 Table des entreprises (tenants)
-create table tenants (
-  id uuid primary key default uuid_generate_v4(),
-  name text not null,
-  created_at timestamp default now()
-);
+## Logos privés
 
--- 2 Table des utilisateurs (liés à auth.users)
-create table profiles (
-  id uuid primary key references auth.users(id) on delete cascade,
-  tenant_id uuid references tenants(id) on delete cascade,
-  email text unique not null,
-  company text,
-  tagline text,
-  logo_url text,
-  manager_name text,
-  address text,
-  city text,
-  state text,
-  national_id text,
-  rccm text,
-  nif text,
-  phone text,
-  website text,
-  created_at timestamp default now()
-);
+Configurer **le même bucket existant** dans `SUPABASE_LOGO_BUCKET` (Render) et `VITE_SUPABASE_LOGO_BUCKET` (Vercel). Le frontend KADI audité utilise `kadi-compnies-logo` ; vérifier son existence réelle avant configuration. Le dépôt conserve un défaut `company-logos` pour les installations génériques, donc renseigner explicitement les variables sur les deux services.
 
--- 3 Table des clients (chaque client appartient à un tenant)
-create table clients (
-  id uuid primary key default uuid_generate_v4(),
-  tenant_id uuid not null references tenants(id) on delete cascade,
-  company_name text not null,
-  contact_name text,
-  email text,
-  phone text,
-  address text,
-  created_at timestamp default now()
-);
+Le bucket peut rester privé. L’interface garde les URL signées ; le serveur télécharge uniquement un chemin appartenant à l’utilisateur, sur son propre Supabase. Les anciennes URL de ce projet et de ce bucket sont reconnues. Les URL externes, autres buckets et chemins d’un autre utilisateur sont refusés. PNG, JPEG, WebP et SVG sont convertis en PNG borné pour le PDF. Le PDF signale un logo configuré mais introuvable au lieu de l’omettre silencieusement.
 
--- 4 Table du catalogue
-create table catalog_items (
-  id uuid primary key default uuid_generate_v4(),
-  tenant_id uuid not null references tenants(id) on delete cascade,
-  name text not null,
-  description text,
-  item_type text not null check (item_type in ('product', 'service')),
-  unit_price numeric default 0,
-  currency text default 'USD',
-  sku text,
-  is_active boolean default true,
-  created_at timestamp default now(),
-  updated_at timestamp default now()
-);
-create unique index catalog_items_tenant_sku_key on catalog_items (tenant_id, sku) where sku is not null;
+`docs/sql/logo_storage_review.sql` est un script de préparation à examiner avec les politiques réelles. Il n’est pas exécuté par les migrations : une politique Storage permissive préexistante doit être identifiée et remplacée séparément. Tester qu’un utilisateur ne peut pas lire, remplacer ou supprimer le logo d’un autre utilisateur.
 
--- 5 Table des factures
-create table invoices (
-  id uuid primary key default uuid_generate_v4(),
-  tenant_id uuid not null references tenants(id) on delete cascade,
-  client_id uuid references clients(id) on delete set null,
-  invoice_number text unique not null,
-  issue_date date,
-  due_date date,
-  status text default 'draft',
-  notes text,
-  items jsonb default '[]'::jsonb,
-  subtotal_amount numeric default 0,
-  total_amount numeric default 0,
-  currency text default 'USD',
-  created_at timestamp default now()
-);
+## Auth et vérifications avant ouverture
 
--- 6 Index pour performance
-create index on clients (tenant_id);
-create index on catalog_items (tenant_id);
-create index on invoices (tenant_id);
-```
+Ajouter les URL exactes `/login?confirmed=1` et `/reset-password` à la liste des redirections autorisées de Supabase Auth, pour chaque environnement. Aligner `APP_URL`, les deux variables de redirection et SMTP. Le lien historique `/login?reset=1` reste pris en charge par l’interface. Tester réception, lien expiré et lien déjà utilisé dans un environnement de test avec messagerie dédiée.
 
-### Mise à jour d’un schéma existant
+Contrôles indispensables : anonyme refusé ; compte A incapable de lire/écrire B ; écritures directes du navigateur refusées ; inscription attribuant un seul tenant ; profil non réassigné lors d’une erreur ; import et export PDF du logo privé ; facture émise inchangée après modification d’un client ou de l’entreprise.
 
-Si votre table `profiles` a été créée avant l’ajout des champs optionnels (logo, téléphone, site web…), exécutez :
-
-```sql
-alter table profiles add column if not exists tagline text;
-alter table profiles add column if not exists logo_url text;
-alter table profiles add column if not exists manager_name text;
-alter table profiles add column if not exists address text;
-alter table profiles add column if not exists city text;
-alter table profiles add column if not exists state text;
-alter table profiles add column if not exists national_id text;
-alter table profiles add column if not exists rccm text;
-alter table profiles add column if not exists nif text;
-alter table profiles add column if not exists phone text;
-alter table profiles add column if not exists website text;
-```
-
----
-
-## 5. Sécurité RLS (Row Level Security)
-
-Activez la sécurité par ligne sur chaque table :
-
-```sql
-alter table profiles enable row level security;
-alter table clients enable row level security;
-alter table catalog_items enable row level security;
-alter table invoices enable row level security;
-```
-
----
-
-## 4. Politiques multi-tenant
-
-Ces politiques garantissent qu’un utilisateur n’accède qu’aux données de **son propre tenant**.
-
-### Table `profiles`
-
-```sql
-create policy "Profil par utilisateur" on profiles
-  for select using (id = auth.uid());
-```
-
-### Table `clients`
-
-```sql
-create policy "Clients par tenant" on clients
-  for all using (
-    tenant_id = (
-      select tenant_id from profiles where profiles.id = auth.uid()
-    )
-  )
-  with check (
-    tenant_id = (
-      select tenant_id from profiles where profiles.id = auth.uid()
-    )
-  );
-```
-
-### Table `catalog_items`
-
-```sql
-create policy "Catalogue par tenant" on catalog_items
-  for all using (
-    tenant_id = (
-      select tenant_id from profiles where profiles.id = auth.uid()
-    )
-  )
-  with check (
-    tenant_id = (
-      select tenant_id from profiles where profiles.id = auth.uid()
-    )
-  );
-```
-
-### Table `invoices`
-
-```sql
-create policy "Factures par tenant" on invoices
-  for all using (
-    tenant_id = (
-      select tenant_id from profiles where profiles.id = auth.uid()
-    )
-  )
-  with check (
-    tenant_id = (
-      select tenant_id from profiles where profiles.id = auth.uid()
-    )
-  );
-```
-
----
-
-## 5. Variables d’environnement
-
-Ajoutez ces variables dans vos fichiers `.env.local` :
-
-**Backend :**
-
-```
-SUPABASE_URL=...
-SUPABASE_KEY=...        # clé service role
-```
-
-**Frontend :**
-
-```
-VITE_SUPABASE_URL=...
-VITE_SUPABASE_ANON_KEY=...
-```
-
----
-
-## 6. Bonnes pratiques
-
-- Toujours utiliser la **clé service role** côté serveur (jamais exposée au frontend)
-- Tester les **policies RLS** avant le déploiement (avec différents comptes)
-- Créer un **tenant par entreprise** lors de l’inscription d’un utilisateur
-- Vérifier que chaque table a bien la colonne `tenant_id`
-
----
-
-**Auteur :** Eric Kay (@EricayStudio)  
-**Dernière mise à jour :** Octobre 2025
+Les tests PGlite exécutent les migrations et les politiques PostgreSQL réelles sur des données synthétiques. Ils ne prouvent pas la configuration des grants, Auth et Storage du service hébergé.

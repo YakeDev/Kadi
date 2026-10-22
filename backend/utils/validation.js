@@ -1,4 +1,5 @@
 import { randomBytes } from 'crypto'
+import { computeTotals, lineTotalCents } from './money.js'
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 
@@ -143,19 +144,19 @@ const normalizeDate = (value, field) => {
   }
 
   const parsed = new Date(`${normalized}T00:00:00Z`)
-  if (Number.isNaN(parsed.getTime())) {
+  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== normalized) {
     throw createValidationError(`Le champ ${field} doit être une date valide.`)
   }
 
   return normalized
 }
 
-const normalizeCurrency = (value, defaultValue = 'USD') => {
+export const normalizeCurrency = (value, defaultValue = 'USD') => {
   if (value == null || value === '') return defaultValue
 
   const normalized = String(value).trim().toUpperCase()
-  if (!/^[A-Z0-9$€£¥._-]{1,10}$/.test(normalized)) {
-    throw createValidationError('Le champ currency est invalide.')
+  if (!['USD', 'CDF'].includes(normalized)) {
+    throw createValidationError('Les devises prises en charge sont USD et CDF.')
   }
 
   return normalized
@@ -186,7 +187,7 @@ const sanitizeInvoiceItem = (value, index) => {
     allowNull: false
   })
   const quantity = normalizeNumber(payload.quantity ?? payload.qty ?? 0, `items[${index}].quantity`, {
-    min: 1,
+    min: 0.001,
     allowZero: false
   })
   const unitPrice = normalizeNumber(
@@ -195,6 +196,7 @@ const sanitizeInvoiceItem = (value, index) => {
     { min: 0, allowZero: true }
   )
   const currency = payload.currency == null ? undefined : normalizeCurrency(payload.currency)
+  lineTotalCents({ quantity, unitPrice })
   const catalogItemId = normalizeUuid(
     payload.catalogItemId ?? payload.catalog_item_id ?? null,
     `items[${index}].catalogItemId`,
@@ -319,12 +321,59 @@ export const sanitizeInvoicePayload = (body = {}, { partial = false } = {}) => {
   if (issueDate && dueDate && dueDate < issueDate) {
     throw createValidationError("La date d'échéance doit être postérieure ou égale à la date d'émission.")
   }
+  if (sanitized.items) computeTotals(sanitized.items)
+  if (sanitized.items && sanitized.currency) assertInvoiceCurrency(sanitized)
 
   if (partial && Object.keys(sanitized).length === 0) {
     throw createValidationError('Aucune donnée valide à mettre à jour.')
   }
 
   return sanitized
+}
+
+export const assertInvoiceCurrency = ({ items = [], currency }) => {
+  const selected = normalizeCurrency(currency)
+  if (items.some((item) => item.currency && normalizeCurrency(item.currency) !== selected)) {
+    throw createValidationError('Toutes les lignes doivent utiliser la devise de la facture. Aucune conversion automatique n’est effectuée.')
+  }
+}
+
+export const validateInvoiceState = (invoice) => {
+  assertInvoiceCurrency(invoice)
+  computeTotals(invoice.items)
+  const issueDate = normalizeDate(invoice.issue_date, 'issue_date')
+  const dueDate = normalizeDate(invoice.due_date, 'due_date')
+  if (issueDate && dueDate && dueDate < issueDate) {
+    throw createValidationError("La date d'échéance doit être postérieure ou égale à la date d'émission.")
+  }
+  if (invoice.status !== 'draft' && (!invoice.client_id || !issueDate || !invoice.items?.length)) {
+    throw createValidationError('Un client, une date d’émission et au moins une ligne sont requis pour émettre une facture.')
+  }
+}
+
+export const sanitizeProductPayload = (body = {}, { partial = false } = {}) => {
+  const payload = assertPlainObject(body)
+  rejectUnexpectedFields(payload, ['name', 'description', 'item_type', 'unit_price', 'currency', 'sku', 'is_active'], ['id', 'tenant_id', 'created_at', 'updated_at'])
+  const result = {}
+  if (!partial || hasOwn(payload, 'name')) result.name = normalizeString(payload.name, { field: 'name', required: true, maxLength: 160 })
+  for (const field of ['description', 'sku']) {
+    if (hasOwn(payload, field)) result[field] = normalizeString(payload[field], { field, maxLength: field === 'sku' ? 80 : 500 })
+  }
+  if (!partial || hasOwn(payload, 'item_type')) {
+    result.item_type = payload.item_type ?? 'product'
+    if (!['product', 'service'].includes(result.item_type)) throw createValidationError('Type d’article invalide.')
+  }
+  if (!partial || hasOwn(payload, 'unit_price')) {
+    result.unit_price = normalizeNumber(payload.unit_price ?? 0, 'unit_price')
+    lineTotalCents({ quantity: 1, unitPrice: result.unit_price })
+  }
+  if (!partial || hasOwn(payload, 'currency')) result.currency = normalizeCurrency(payload.currency)
+  if (hasOwn(payload, 'is_active')) {
+    if (typeof payload.is_active !== 'boolean') throw createValidationError('is_active doit être un booléen.')
+    result.is_active = payload.is_active
+  }
+  if (partial && !Object.keys(result).length) throw createValidationError('Aucune donnée à mettre à jour.')
+  return { ...result, updated_at: new Date().toISOString() }
 }
 
 export const generateInvoiceNumber = () => {

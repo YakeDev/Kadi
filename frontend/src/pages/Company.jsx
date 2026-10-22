@@ -85,7 +85,7 @@ const Company = () => {
   const handleLogoChange = (event) => {
     const file = event.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) {
+    if (!['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.type)) {
       setLogoError('Veuillez choisir un fichier image (PNG ou JPG).')
       return
     }
@@ -152,7 +152,7 @@ const Company = () => {
         } catch (error) {
           console.error('logo upload failed', error)
           setLogoError(error.message)
-          toast.error("Échec de l'upload du logo", { icon: '⚠️' })
+          throw error
         } finally {
           setIsUploadingLogo(false)
         }
@@ -225,7 +225,7 @@ const Company = () => {
         </div>
         <label className='btn-primary absolute -bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center justify-center px-4 text-xs font-semibold'>
           {logoPreview ? 'Modifier' : 'Importer un logo'}
-          <input type='file' accept='image/*' className='hidden' onChange={handleLogoChange} disabled={disabled} />
+          <input type='file' accept='image/png,image/jpeg,image/webp,image/svg+xml' className='hidden' onChange={handleLogoChange} disabled={disabled} />
         </label>
       </div>
       {logoPreview ? (

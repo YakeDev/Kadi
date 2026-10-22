@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals'
+import { vi as jest } from 'vitest'
 import request from 'supertest'
 
 describe('Backend security hardening', () => {
@@ -35,8 +35,9 @@ describe('Backend security hardening', () => {
       }))
     }
 
-    await jest.unstable_mockModule('../models/supabaseClient.js', () => ({
-      supabase: supabaseMock
+    await jest.doMock('../models/supabaseClient.js', () => ({
+      supabase: supabaseMock,
+      createAuthClient: () => supabaseMock
     }))
 
     const module = await import('../app.js')
@@ -55,8 +56,9 @@ describe('Backend security hardening', () => {
     process.env.NODE_ENV = 'production'
     process.env.ALLOWED_ORIGINS = ''
 
-    await jest.unstable_mockModule('../models/supabaseClient.js', () => ({
-      supabase: supabaseMock
+    await jest.doMock('../models/supabaseClient.js', () => ({
+      supabase: supabaseMock,
+      createAuthClient: () => supabaseMock
     }))
 
     const module = await import('../app.js')
@@ -90,4 +92,13 @@ describe('Backend security hardening', () => {
     expect(response.body.message).toContain('tentatives')
     expect(response.headers['retry-after']).toBeDefined()
   })
+  test('spoofed X-Forwarded-For headers cannot reset the login rate limit', async () => {
+    for (const suffix of [1, 2]) {
+      await request(app).post('/api/auth/login').set('X-Forwarded-For', `198.51.100.${suffix}`)
+        .send({ email: 'user@example.com', password: 'password123' }).expect(200)
+    }
+    await request(app).post('/api/auth/login').set('X-Forwarded-For', '198.51.100.3')
+      .send({ email: 'user@example.com', password: 'password123' }).expect(429)
+  })
+
 })

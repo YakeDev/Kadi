@@ -3,9 +3,7 @@ import toast from 'react-hot-toast'
 import {
   Users,
   Building2,
-  IdCard,
   Mail,
-  Phone,
   MapPin,
   Trash2,
   Loader2,

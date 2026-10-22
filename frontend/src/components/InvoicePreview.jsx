@@ -27,11 +27,11 @@ const formatDate = (value) =>
 const InvoicePreview = ({ className, company, client, invoice }) => {
   const items = invoice.items ?? []
   const subtotal = items.reduce(
-    (acc, item) => acc + Number(item.quantity || 0) * Number(item.unitPrice || 0),
+    (acc, item) => acc + Math.round((Number(item.quantity || 0) * Number(item.unitPrice || 0) + Number.EPSILON) * 100) / 100,
     0
   )
 
-  const currency = items[0]?.currency || invoice.currency || 'USD'
+  const currency = invoice.currency || 'USD'
 
   const companyLocation = [company?.city, company?.state].filter(Boolean).join(', ')
 
@@ -107,7 +107,7 @@ const InvoicePreview = ({ className, company, client, invoice }) => {
                     Total ligne :{' '}
                     <strong>
                       {formatCurrency(
-                        Number(item.quantity || 0) * Number(item.unitPrice || 0),
+                        Math.round((Number(item.quantity || 0) * Number(item.unitPrice || 0) + Number.EPSILON) * 100) / 100,
                         currency
                       )}
                     </strong>

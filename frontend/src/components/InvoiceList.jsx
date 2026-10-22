@@ -378,13 +378,15 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                       <div className='flex items-center justify-end gap-2'>
                         <select
                           value={invoice.status}
+                          aria-label={`Statut de la facture ${invoice.invoice_number}`}
+                          disabled={invoice.status === 'paid'}
                           onChange={(event) => handleStatusChange(invoice.id, event.target.value)}
                           className='input-compact h-9 w-36 border-[var(--border)] bg-[var(--bg-panel)] text-xs'
                         >
-                          <option value='draft'>Brouillon</option>
-                          <option value='sent'>Envoyée</option>
+                          {invoice.status === 'draft' ? <option value='draft'>Brouillon</option> : null}
+                          {invoice.status !== 'paid' ? <option value='sent'>Envoyée</option> : null}
                           <option value='paid'>Payée</option>
-                          <option value='overdue'>En retard</option>
+                          {invoice.status !== 'paid' ? <option value='overdue'>En retard</option> : null}
                         </select>
                     <button
                       type='button'

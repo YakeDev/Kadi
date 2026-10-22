@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals'
+import { vi as jest } from 'vitest'
 import request from 'supertest'
 
 describe('AI invoice generation', () => {
@@ -16,7 +16,7 @@ describe('AI invoice generation', () => {
 
     mockCreate = jest.fn()
 
-    await jest.unstable_mockModule('openai', () => ({
+    await jest.doMock('openai', () => ({
       default: class OpenAI {
         constructor() {
           this.chat = {
@@ -73,8 +73,9 @@ describe('AI invoice generation', () => {
       })
     }
 
-    await jest.unstable_mockModule('../models/supabaseClient.js', () => ({
-      supabase: supabaseMock
+    await jest.doMock('../models/supabaseClient.js', () => ({
+      supabase: supabaseMock,
+      createAuthClient: () => supabaseMock
     }))
 
     const module = await import('../app.js')
@@ -103,7 +104,7 @@ describe('AI invoice generation', () => {
               clientId: 'client-1',
               status: 'draft',
               notes: 'Merci',
-              currency: 'usd',
+              currency: 'USD',
               items: [{ name: 'Audit', qty: 2, unit_price: 50 }]
             })
           }
@@ -120,7 +121,7 @@ describe('AI invoice generation', () => {
 
     expect(response.status).toBe(200)
     expect(response.body).toEqual({
-      client_id: 'client-1',
+      client_id: null,
       issue_date: null,
       due_date: null,
       status: 'draft',
@@ -130,10 +131,10 @@ describe('AI invoice generation', () => {
           description: 'Audit',
           quantity: 2,
           unitPrice: 50,
-          currency: 'usd'
+          currency: 'USD'
         }
       ],
-      currency: 'usd'
+      currency: 'USD'
     })
   })
 })

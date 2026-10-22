@@ -25,10 +25,8 @@ coverage/
 .env.*.local
 backend/.env
 backend/.env.local
-backend/.env.example
 frontend/.env
 frontend/.env.local
-frontend/.env.example
 
 # Editor / OS files
 .DS_Store

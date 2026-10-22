@@ -47,6 +47,10 @@ const mapDatabaseError = (error) => {
     }
   }
 
+  if (['42703', 'PGRST204'].includes(error.code)) return { status: 503, message: 'Mise à jour de la base de données requise. Contactez l’administrateur.' }
+
+  if (error.code === '23514') return { status: 409, message: 'Cette opération ne respecte pas les règles de la facture ou du catalogue.' }
+
   if (error.code === '23503') {
     return {
       status: 409,
@@ -87,7 +91,10 @@ const buildErrorResponse = (error) => {
 const app = express()
 
 if (trustProxy) {
-  app.set('trust proxy', trustProxy === 'true' ? 1 : trustProxy)
+  const proxySetting = trustProxy === 'true' ? 1
+    : trustProxy === 'false' ? false
+      : /^\d+$/.test(trustProxy) ? Number(trustProxy) : trustProxy
+  app.set('trust proxy', proxySetting)
 }
 
 app.disable('x-powered-by')
@@ -142,6 +149,7 @@ app.use('/api/auth', authRouter)
 
 // eslint-disable-next-line no-unused-vars
 app.use((error, req, res, next) => {
+  if (res.headersSent) return next(error)
   const { status, message } = buildErrorResponse(error)
   const logPayload = {
     method: req.method,

@@ -1,10 +1,4 @@
-import PDFDocument from 'pdfkit'
 import dayjs from 'dayjs'
-import isSameOrAfter from 'dayjs/plugin/isSameOrAfter.js'
-import isSameOrBefore from 'dayjs/plugin/isSameOrBefore.js'
-import path from 'path'
-import fs from 'fs'
-import { fileURLToPath } from 'url'
 import { supabase } from '../models/supabaseClient.js'
 import {
 	getPaginationParams,
@@ -15,21 +9,49 @@ import {
 	sanitizeInvoicePayload,
 } from '../utils/validation.js'
 import { downloadStoredLogoBuffer } from '../utils/logoStorage.js'
+import { normalizeLogoImage } from '../utils/logoImage.js'
+import { computeTotals } from '../utils/money.js'
+import { validateInvoiceState, normalizeCurrency } from '../utils/validation.js'
+import { createInvoicePdf } from '../utils/invoicePdf.js'
 
-const __dirname = path.dirname(fileURLToPath(import.meta.url))
 
-dayjs.extend(isSameOrAfter)
-dayjs.extend(isSameOrBefore)
 
-const computeTotals = (items = []) =>
-	items.reduce(
-		(acc, item) => {
-			const lineTotal = Number(item.quantity || 0) * Number(item.unitPrice || 0)
-			acc.subtotal += lineTotal
-			return acc
-		},
-		{ subtotal: 0 }
-	)
+const conflict = (message) => Object.assign(new Error(message), { status: 409 })
+const presentInvoice = (invoice, tenantId) => ({
+  ...invoice,
+  client: invoice.client_snapshot || (invoice.client?.tenant_id === tenantId ? invoice.client : null)
+})
+const readInvoice = async (id, tenantId) => {
+  const { data, error } = await supabase.from('invoices').select('*, client:clients(*)')
+    .eq('id', id).eq('tenant_id', tenantId).maybeSingle()
+  if (error) throw error
+  return data
+}
+const getClient = async (clientId, tenantId) => {
+  if (!clientId) return null
+  const { data, error } = await supabase.from('clients').select('*')
+    .eq('id', clientId).eq('tenant_id', tenantId).maybeSingle()
+  if (error) throw error
+  if (!data) throw Object.assign(new Error('Client introuvable pour ce compte.'), { status: 400 })
+  return data
+}
+const logoForPdf = async (profile, userId) => {
+  if (!profile?.logo_url) return null
+  const bytes = await downloadStoredLogoBuffer(supabase, profile.logo_url, { userId })
+  if (!bytes) throw Object.assign(new Error('Le logo configuré est indisponible. Vérifiez le bucket et réimportez votre logo dans Entreprise.'), { status: 422 })
+  return normalizeLogoImage(bytes)
+}
+const issueSnapshot = async (invoice, req, client) => {
+  if (invoice.status === 'draft') return {}
+  const logo = await logoForPdf(req.profile, req.user.id)
+  const { logo_url, ...issuer } = req.profile || {}
+  return {
+    client_snapshot: client,
+    issuer_snapshot: { ...issuer, logo_base64: logo?.toString('base64') ?? null },
+    issued_at: new Date().toISOString(),
+    paid_at: invoice.status === 'paid' ? new Date().toISOString() : null
+  }
+}
 
 export const listInvoices = async (req, res, next) => {
 	try {
@@ -47,12 +69,10 @@ export const listInvoices = async (req, res, next) => {
 			query = query.eq('status', statusFilter)
 		}
 
-		if (searchTerm) {
-			const term = `%${searchTerm}%`
-			query = query.or(
-				`invoice_number.ilike.${term},status.ilike.${term},client.company_name.ilike.${term},client.contact_name.ilike.${term}`
-			)
-		}
+    if (searchTerm) {
+      if (searchTerm.length > 160) throw Object.assign(new Error('Recherche trop longue.'), { status: 400 })
+      query = query.ilike('invoice_search', `%${searchTerm}%`)
+    }
 
 		const { data, error, count } = await query
 			.order('issue_date', { ascending: false })
@@ -60,7 +80,7 @@ export const listInvoices = async (req, res, next) => {
 
 		if (error) throw error
 		res.json({
-			data: data ?? [],
+			data: (data ?? []).map((invoice) => presentInvoice(invoice, tenantId)),
 			pagination: buildPaginationMeta(count ?? 0, page, pageSize),
 		})
 	} catch (error) {
@@ -69,186 +89,92 @@ export const listInvoices = async (req, res, next) => {
 }
 
 export const getTodoItems = async (req, res, next) => {
-	try {
-		const tenantId = req.tenantId
-		const now = dayjs().startOf('day')
-		const upcomingLimit = now.add(7, 'day').endOf('day')
-
-		const { data, error } = await supabase
-			.from('invoices')
-			.select(
-				'id, invoice_number, status, due_date, issue_date, total_amount, client:clients(company_name)'
-			)
-			.eq('tenant_id', tenantId)
-			.in('status', ['draft', 'sent', 'overdue'])
-			.order('due_date', { ascending: true, nullsFirst: false })
-
-		if (error) throw error
-
-		const overdue = []
-		const dueSoon = []
-		const drafts = []
-
-		for (const invoice of data ?? []) {
-			const dueDate = invoice.due_date ? dayjs(invoice.due_date) : null
-
-			if (invoice.status === 'draft') {
-				if (drafts.length < 5) {
-					drafts.push(invoice)
-				}
-				continue
-			}
-
-			if (dueDate && dueDate.isBefore(now) && overdue.length < 5) {
-				overdue.push(invoice)
-				continue
-			}
-
-			if (
-				dueDate &&
-				dueDate.isSameOrAfter(now) &&
-				dueDate.isSameOrBefore(upcomingLimit) &&
-				dueSoon.length < 5
-			) {
-				dueSoon.push(invoice)
-			}
-		}
-
-		res.json({
-			overdue,
-			dueSoon,
-			drafts,
-		})
-	} catch (error) {
-		next(error)
-	}
+  try {
+    const now = dayjs().format('YYYY-MM-DD')
+    const upcoming = dayjs().add(7, 'day').format('YYYY-MM-DD')
+    const base = () => supabase.from('invoices')
+      .select('id, invoice_number, status, due_date, issue_date, total_amount, currency, client_snapshot, client:clients(company_name, tenant_id)')
+      .eq('tenant_id', req.tenantId)
+    const queries = [
+      base().in('status', ['sent', 'overdue']).lt('due_date', now).order('due_date', { ascending: true }).limit(5),
+      base().in('status', ['sent', 'overdue']).gte('due_date', now).lte('due_date', upcoming).order('due_date', { ascending: true }).limit(5),
+      base().eq('status', 'draft').order('created_at', { ascending: false }).limit(5)
+    ]
+    const responses = await Promise.all(queries)
+    for (const response of responses) if (response.error) throw response.error
+    res.json(Object.fromEntries(['overdue', 'dueSoon', 'drafts'].map((key, index) =>
+      [key, (responses[index].data ?? []).map((invoice) => presentInvoice(invoice, req.tenantId))])))
+  } catch (error) { next(error) }
 }
 
 export const getInvoice = async (req, res, next) => {
-	try {
-		const { id } = req.params
-		const tenantId = req.tenantId
-		const { data, error } = await supabase
-			.from('invoices')
-			.select('*, client:clients(*)')
-			.eq('id', id)
-			.eq('tenant_id', tenantId)
-			.maybeSingle()
-		if (error) throw error
-		if (!data) {
-			return res.status(404).json({ message: 'Facture introuvable.' })
-		}
-		res.json(data)
-	} catch (error) {
-		next(error)
-	}
+  try {
+    const data = await readInvoice(req.params.id, req.tenantId)
+    if (!data) return res.status(404).json({ message: 'Facture introuvable.' })
+    res.json(presentInvoice(data, req.tenantId))
+  } catch (error) { next(error) }
 }
 
 export const createInvoice = async (req, res, next) => {
-	try {
-		const tenantId = req.tenantId
-		const payload = sanitizeInvoicePayload(req.body)
-		const items = payload.items || []
-		const totals = computeTotals(items)
-		const invoiceNumber = generateInvoiceNumber()
-
-		if (payload.client_id) {
-			const { error: clientError } = await supabase
-				.from('clients')
-				.select('id')
-				.eq('id', payload.client_id)
-				.eq('tenant_id', tenantId)
-				.single()
-			if (clientError) {
-				clientError.status = 400
-				clientError.message = 'Client introuvable pour ce compte.'
-				throw clientError
-			}
-		}
-
-		const { data, error } = await supabase
-			.from('invoices')
-			.insert({
-				client_id: payload.client_id,
-				invoice_number: invoiceNumber,
-				issue_date: payload.issue_date,
-				due_date: payload.due_date,
-				status: payload.status || 'draft',
-				notes: payload.notes,
-				items,
-				subtotal_amount: totals.subtotal,
-				total_amount: totals.subtotal,
-				currency: payload.currency || 'USD',
-				tenant_id: tenantId,
-			})
-			.select('*, client:clients(*)')
-			.single()
-
-		if (error) throw error
-		res.status(201).json(data)
-	} catch (error) {
-		next(error)
-	}
+  try {
+    const payload = sanitizeInvoicePayload(req.body)
+    validateInvoiceState(payload)
+    const client = await getClient(payload.client_id, req.tenantId)
+    const totals = computeTotals(payload.items)
+    const snapshots = await issueSnapshot(payload, req, client)
+    const { data, error } = await supabase.from('invoices').insert({
+      ...payload, ...snapshots, tenant_id: req.tenantId,
+      invoice_number: generateInvoiceNumber(), subtotal_amount: totals.subtotal,
+      total_amount: totals.subtotal, version: 0
+    }).select('*, client:clients(*)').single()
+    if (error) throw error
+    res.status(201).json(presentInvoice(data, req.tenantId))
+  } catch (error) { next(error) }
 }
 
 export const updateInvoice = async (req, res, next) => {
-	try {
-		const { id } = req.params
-		const tenantId = req.tenantId
-		let updates = sanitizeInvoicePayload(req.body, { partial: true })
-
-		if (updates.client_id) {
-			const { error: clientError } = await supabase
-				.from('clients')
-				.select('id')
-				.eq('id', updates.client_id)
-				.eq('tenant_id', tenantId)
-				.single()
-			if (clientError) {
-				clientError.status = 400
-				clientError.message = 'Client introuvable pour ce compte.'
-				throw clientError
-			}
-		}
-
-		if (updates.items) {
-			const totals = computeTotals(updates.items)
-			updates = {
-				...updates,
-				subtotal_amount: totals.subtotal,
-				total_amount: totals.subtotal,
-			}
-		}
-
-		const { data, error } = await supabase
-			.from('invoices')
-			.update(updates)
-			.eq('id', id)
-			.eq('tenant_id', tenantId)
-			.select('*, client:clients(*)')
-			.single()
-
-		if (error) throw error
-		res.json(data)
-	} catch (error) {
-		next(error)
-	}
+  try {
+    let updates = sanitizeInvoicePayload(req.body, { partial: true })
+    const existing = await readInvoice(req.params.id, req.tenantId)
+    if (!existing) return res.status(404).json({ message: 'Facture introuvable.' })
+    if (!Number.isInteger(existing.version)) throw Object.assign(new Error('Mise à jour de la base de données requise.'), { status: 503 })
+    if (existing.status !== 'draft') {
+      if (Object.keys(updates).some((field) => field !== 'status')) {
+        throw conflict('Une facture émise ne peut plus être modifiée. Créez un document correctif séparé.')
+      }
+      const allowed = { sent: ['sent', 'overdue', 'paid'], overdue: ['overdue', 'sent', 'paid'], paid: ['paid'] }
+      if (!allowed[existing.status]?.includes(updates.status)) throw conflict('Transition de statut interdite pour une facture émise.')
+      if (updates.status === 'paid' && existing.status !== 'paid') updates.paid_at = new Date().toISOString()
+    } else {
+      // Validate the complete resulting state, including the date/currency left out of a PATCH.
+      const merged = { ...existing, ...updates }
+      validateInvoiceState(merged)
+      const client = await getClient(merged.client_id, req.tenantId)
+      const totals = computeTotals(merged.items)
+      updates = { ...updates, subtotal_amount: totals.subtotal, total_amount: totals.subtotal,
+        ...await issueSnapshot(merged, req, client) }
+    }
+    const { data, error } = await supabase.from('invoices').update(updates)
+      .eq('id', req.params.id).eq('tenant_id', req.tenantId).eq('version', existing.version)
+      .select('*, client:clients(*)').maybeSingle()
+    if (error) throw error
+    if (!data) throw conflict('Cette facture a été modifiée entre-temps. Rechargez la page.')
+    res.json(presentInvoice(data, req.tenantId))
+  } catch (error) { next(error) }
 }
 
 export const deleteInvoice = async (req, res, next) => {
-	try {
-		const { id } = req.params
-		const tenantId = req.tenantId
-		const { error } = await supabase
-			.from('invoices')
-			.delete()
-			.eq('id', id)
-			.eq('tenant_id', tenantId)
-		if (error) throw error
-		res.status(204).send()
-	} catch (error) {
-		next(error)
-	}
+  try {
+    const existing = await readInvoice(req.params.id, req.tenantId)
+    if (!existing) return res.status(404).json({ message: 'Facture introuvable.' })
+    if (existing.status !== 'draft') throw conflict('Seuls les brouillons peuvent être supprimés.')
+    if (!Number.isInteger(existing.version)) throw Object.assign(new Error('Mise à jour de la base de données requise.'), { status: 503 })
+    const { data, error } = await supabase.from('invoices').delete().eq('id', req.params.id)
+      .eq('tenant_id', req.tenantId).eq('status', 'draft').eq('version', existing.version).select('id').maybeSingle()
+    if (error) throw error
+    if (!data) throw conflict('Cette facture a été modifiée entre-temps. Rechargez la page.')
+    res.status(204).send()
+  } catch (error) { next(error) }
 }
 
 const PERIOD_UNITS = new Set(['day', 'month', 'year'])
@@ -359,18 +285,20 @@ export const getSummary = async (req, res, next) => {
 		const tenantId = req.tenantId
 		const { period, startDate, endDate } = parsePeriodRange(req.query || {})
 
-		const { data: invoices, error } = await supabase
-			.from('invoices')
-			.select(
-				'id, total_amount, status, issue_date, items, client_id, client:clients(company_name)'
-			)
-			.eq('tenant_id', tenantId)
-			.gte('issue_date', startDate.format('YYYY-MM-DD'))
-			.lte('issue_date', endDate.format('YYYY-MM-DD'))
-
-		if (error) throw error
-
-		const records = invoices ?? []
+    const currency = normalizeCurrency(req.query?.currency || 'USD')
+    const records = []
+    let offset = 0
+    while (true) {
+      const { data, error } = await supabase.from('invoices')
+        .select('id, total_amount, status, issue_date, paid_at, currency, items, client_id, client_snapshot, client:clients(company_name, tenant_id)')
+        .eq('tenant_id', tenantId).eq('currency', currency)
+        .gte('issue_date', startDate.format('YYYY-MM-DD')).lte('issue_date', endDate.format('YYYY-MM-DD'))
+        .order('id', { ascending: true }).range(offset, offset + 499)
+      if (error) throw error
+      records.push(...(data ?? []).map((invoice) => presentInvoice(invoice, tenantId)))
+      if (!data || data.length < 500) break
+      offset += 500
+    }
 
 		const totals = records.reduce(
 			(acc, invoice) => {
@@ -393,10 +321,10 @@ export const getSummary = async (req, res, next) => {
 						break
 				}
 
-				if (invoice.status === 'paid') {
+				if (invoice.status === 'paid' && invoice.paid_at) {
 					const issue = dayjs(invoice.issue_date)
 					if (issue.isValid()) {
-						const days = dayjs().diff(issue, 'day')
+						const days = dayjs(invoice.paid_at).diff(issue, 'day')
 						acc.paymentDelays.push(Math.max(days, 0))
 					}
 				}
@@ -416,7 +344,7 @@ export const getSummary = async (req, res, next) => {
 		const averageDelay = totals.paymentDelays.length
 			? totals.paymentDelays.reduce((sum, value) => sum + value, 0) /
 				totals.paymentDelays.length
-			: 0
+			: null
 
 		const summary = {
 			totals: {
@@ -425,14 +353,15 @@ export const getSummary = async (req, res, next) => {
 				totalAmount: totals.totalAmount,
 				invoiceCount: totals.totalInvoices,
 				draftCount: totals.drafts,
-				averagePaymentDelay: Number(averageDelay.toFixed(1)),
+				averagePaymentDelay: averageDelay == null ? null : Number(averageDelay.toFixed(1)),
 			},
 			charts: {
-				revenue: groupInvoicesByUnit(records, period),
+				revenue: groupInvoicesByUnit(records.filter((invoice) => invoice.status === 'paid'), period),
 				topClients: rankClients(records),
 				topProducts: rankProducts(records),
 			},
 			meta: {
+        currency,
 				period,
 				startDate: startDate.toISOString(),
 				endDate: endDate.toISOString(),
@@ -446,391 +375,23 @@ export const getSummary = async (req, res, next) => {
 }
 
 export const streamInvoicePdf = async (req, res, next) => {
-	try {
-		const { id } = req.params
-		const tenantId = req.tenantId
-		const { data: invoice, error } = await supabase
-			.from('invoices')
-			.select(`*, client:clients(*)`)
-			.eq('id', id)
-			.eq('tenant_id', tenantId)
-			.maybeSingle()
-
-		if (error) throw error
-		if (!invoice)
-			return res.status(404).json({ message: 'Facture introuvable.' })
-
-		const logoBuffer = await downloadStoredLogoBuffer(supabase, req.profile?.logo_url, {
-			userId: req.user?.id,
-			logPrefix: '[Invoice PDF]',
-		})
-
-		const doc = new PDFDocument({ margin: 48 })
-
-		res.setHeader('Content-Type', 'application/pdf')
-		res.setHeader(
-			'Content-Disposition',
-			`attachment; filename=facture-${invoice.invoice_number}.pdf`
-		)
-
-		doc.pipe(res)
-
-		// === Fonts ===
-		const fontsDir = path.resolve(__dirname, '../assets/fonts')
-		let regularFont = 'Helvetica'
-		let semiBoldFont = 'Helvetica-Bold'
-		try {
-			const interRegularPath = path.join(fontsDir, 'Inter-Regular.ttf')
-			const interSemiBoldPath = path.join(fontsDir, 'Inter-SemiBold.ttf')
-			if (fs.existsSync(interRegularPath) && fs.existsSync(interSemiBoldPath)) {
-				doc.registerFont('Inter', interRegularPath)
-				doc.registerFont('Inter-SemiBold', interSemiBoldPath)
-				regularFont = 'Inter'
-				semiBoldFont = 'Inter-SemiBold'
-			}
-		} catch {
-			console.warn('Police Inter introuvable, Helvetica utilisée par défaut.')
-		}
-
-		// === Couleurs ===
-		const baseColor = '#0f172a'
-		const accentColor = '#f97316'
-		const greyMedium = '#475569'
-		const greyLight = '#e2e8f0'
-		// const textMuted = '#64748b'
-		const bgSoft = '#f9fafb'
-		const bgTotals = '#f8fafc'
-
-		const pageWidth =
-			doc.page.width - doc.page.margins.left - doc.page.margins.right
-		const startX = doc.page.margins.left
-
-		const formatMoney = (v) =>
-			`${Number(v || 0).toFixed(2)} ${invoice.currency || 'USD'}`
-
-		// === HEADER ===
-		const companyName = req.profile?.company || 'Kadi'
-		const companyTagline = (req.profile?.tagline || '').trim()
-		const companyMetaLines = [
-			req.profile?.manager_name
-				? `Responsable : ${req.profile.manager_name}`
-				: null,
-			req.profile?.address || null,
-			[req.profile?.city, req.profile?.state].filter(Boolean).join(', ') ||
-				null,
-			req.profile?.national_id ? `ID. Nat. : ${req.profile.national_id}` : null,
-			req.profile?.rccm ? `RCCM : ${req.profile.rccm}` : null,
-			req.profile?.nif ? `NIF : ${req.profile.nif}` : null,
-		].filter(Boolean)
-
-		const headerTop = 50
-		const logoSize = 96
-		const logoGap = 18
-		let textStartX = startX
-		let logoBottom = headerTop
-
-		if (logoBuffer) {
-			try {
-				doc.image(logoBuffer, startX, headerTop, {
-					fit: [logoSize, logoSize],
-					width: logoSize,
-					height: logoSize,
-				})
-				textStartX = startX + logoSize + logoGap
-				logoBottom = headerTop + logoSize
-			} catch (error) {
-				console.warn(
-					'[Invoice PDF] Impossible d’intégrer le logo:',
-					error.message
-				)
-			}
-		}
-
-		let headerY = headerTop
-		const leftColumnWidth = Math.max(pageWidth / 2 - (textStartX - startX), 180)
-		if (!logoBuffer) {
-			doc
-				.font(semiBoldFont)
-				.fontSize(26)
-				.fillColor(baseColor)
-				.text(companyName, textStartX, headerY, { width: leftColumnWidth })
-			headerY = doc.y + 6
-		}
-
-		if (companyTagline) {
-			doc
-				.font(regularFont)
-				.fontSize(11)
-				.fillColor(greyMedium)
-				.text(companyTagline, textStartX, headerY, { width: leftColumnWidth })
-			headerY = doc.y + 6
-		}
-
-		companyMetaLines.forEach((line) => {
-			doc
-				.font(regularFont)
-				.fontSize(10)
-				.fillColor(greyMedium)
-				.text(line, textStartX, headerY, { width: leftColumnWidth })
-			headerY = doc.y + 4
-		})
-
-		const headerRightX = startX + pageWidth / 2
-		doc
-			.font(regularFont)
-			.fontSize(11)
-			.fillColor(greyMedium)
-			.text(
-				`Émise le ${dayjs(invoice.issue_date).format('DD MMM YYYY')}`,
-				headerRightX,
-				50,
-				{ align: 'right', width: pageWidth / 2 }
-			)
-			.font(semiBoldFont)
-			.fillColor(accentColor)
-			.text(`Facture ${invoice.invoice_number}`, headerRightX, 66, {
-				align: 'right',
-				width: pageWidth / 2,
-			})
-
-		const headerSeparatorY = Math.max(headerY + 12, logoBottom + 12, 100)
-		doc
-			.moveTo(startX, headerSeparatorY)
-			.lineTo(startX + pageWidth, headerSeparatorY)
-			.stroke(greyLight)
-
-		// === CLIENT BLOCK ===
-		const clientBlockY = headerSeparatorY + 20
-		const paddingY = 20
-		const lineSpacing = 16
-
-		const client = invoice.client || {}
-
-		// Simule les lignes de texte pour mesurer la hauteur
-		const clientLines = [
-			'Facturé à :',
-			client.company_name,
-			client.contact_name,
-			client.email,
-			client.phone,
-			client.address,
-		].filter(Boolean)
-
-		// Calcule la hauteur totale du contenu
-		const contentHeight = paddingY * 2 + clientLines.length * lineSpacing
-		const clientBlockHeight = Math.max(80, contentHeight) // 80 = hauteur min visuelle
-
-		// === DESSIN DU CADRE ===
-		doc.save()
-		doc
-			.roundedRect(startX, clientBlockY, pageWidth, clientBlockHeight, 10)
-			.fill(bgSoft)
-		doc.restore()
-
-		// === TEXTE ===
-		let textY = clientBlockY + paddingY
-		doc
-			.font(semiBoldFont)
-			.fontSize(12)
-			.fillColor(greyMedium)
-			.text('Facturé à :', startX + 20, textY)
-
-		textY += lineSpacing
-
-		doc
-			.font(semiBoldFont)
-			.fontSize(12)
-			.fillColor(baseColor)
-			.text(client.company_name || '-', startX + 20, textY)
-
-		textY += lineSpacing
-
-		doc.font(regularFont).fontSize(11).fillColor(baseColor)
-		;[client.contact_name, client.email, client.phone, client.address]
-			.filter(Boolean)
-			.forEach((line) => {
-				textY += 14
-				doc.text(line, startX + 20, textY, { width: pageWidth - 40 })
-			})
-
-		// Après le bloc, tu peux récupérer la position suivante proprement :
-		// const nextY = clientBlockY + clientBlockHeight + 20
-
-		// === TABLE ===
-		doc.moveDown(3)
-		const yTable = clientBlockY + clientBlockHeight + 36
-
-		// Répartition fluide
-		const cols = {
-			desc: startX,
-			qty: startX + 250,
-			unit: startX + 300,
-			total: startX + 410,
-		}
-
-		doc.font(semiBoldFont).fontSize(11).fillColor(greyMedium)
-		doc.text('Description', cols.desc, yTable)
-		doc.text('Quantité', cols.qty, yTable, { width: 60, align: 'center' })
-		doc.text('Prix unitaire', cols.unit, yTable, { width: 110, align: 'right' })
-		doc.text('Total', cols.total, yTable, { width: 110, align: 'right' })
-
-		doc
-			.moveTo(startX, yTable + 18)
-			.lineTo(startX + pageWidth, yTable + 18)
-			.stroke(greyLight)
-
-		let y = yTable + 32
-		doc.font(regularFont).fontSize(11).fillColor(baseColor)
-		const topPadding = 4
-		const bottomPadding = 6
-		const lineGap = 4
-		;(invoice.items || []).forEach((item, index, array) => {
-			const qty = Number(item.quantity || 0)
-			const unitPrice = Number(item.unitPrice || 0)
-			const lineTotal = qty * unitPrice
-
-			// Calcule la hauteur nécessaire pour la description
-			const descWidth = cols.qty - cols.desc - 16
-			const desc = item.description || '-'
-			const descHeight = doc.heightOfString(desc, {
-				width: descWidth,
-				lineGap,
-			})
-			const minRowHeight = 32
-			const contentHeight = descHeight + topPadding + bottomPadding
-			const rowHeight = Math.max(contentHeight, minRowHeight)
-			const baseY = y + topPadding
-			const centreY = y + rowHeight / 2 - doc.currentLineHeight() / 2
-
-			// --- Colonne Description ---
-			doc.text(desc, cols.desc, baseY, {
-				width: descWidth,
-				lineGap,
-				lineBreak: true,
-			})
-
-			// --- Colonne Quantité ---
-			doc.text(String(qty || '-'), cols.qty, centreY, {
-				width: 60,
-				align: 'center',
-				lineBreak: false,
-			})
-
-			// --- Colonne Prix unitaire ---
-			const unitText = `${unitPrice.toFixed(2)}\u00A0${invoice.currency}`
-			doc.text(unitText, cols.unit, centreY, {
-				width: 110,
-				align: 'right',
-				lineBreak: false,
-			})
-
-			// --- Colonne Total ---
-			const totalText = `${lineTotal.toFixed(2)}\u00A0${invoice.currency}`
-			doc.text(totalText, cols.total, centreY, {
-				width: 110,
-				align: 'right',
-				lineBreak: false,
-			})
-
-			// --- Ligne de séparation ---
-			y += rowHeight + 2
-			if (index !== array.length - 1) {
-				doc
-					.moveTo(startX, y)
-					.lineTo(startX + pageWidth, y)
-					.stroke('#f1f5f9')
-			}
-		})
-
-		// === TOTALS ===
-		y += 20
-		const totalsWidth = 220
-		const totalsX = startX + pageWidth - totalsWidth
-		const totalsY = y
-
-		doc.save().roundedRect(totalsX, totalsY, totalsWidth, 70, 10).fill(bgTotals)
-		doc.restore()
-
-		// Libellé
-		doc
-			.font(regularFont)
-			.fontSize(11)
-			.fillColor(greyMedium)
-			.text('Sous-total', totalsX + 18, totalsY + 14, {
-				align: 'right',
-				width: totalsWidth - 36, // marge interne gauche + droite
-			})
-
-		// Montant
-		doc
-			.font(semiBoldFont)
-			.fontSize(14)
-			.fillColor(baseColor)
-			.text(formatMoney(invoice.total_amount), totalsX + 18, totalsY + 30, {
-				align: 'right',
-				width: totalsWidth - 36,
-			})
-
-		// doc
-		// 	.font(regularFont)
-		// 	.fontSize(10)
-		// 	.fillColor(accentColor)
-		// 	.text('Merci pour votre confiance.', totalsX + 18, totalsY + 52)
-
-		// === PAYMENT TERMS ===
-		// doc.moveDown(3)
-		// doc
-		// 	.font(semiBoldFont)
-		// 	.fontSize(12)
-		// 	.fillColor(greyMedium)
-		// 	.text('Conditions de paiement')
-		// doc
-		// 	.font(regularFont)
-		// 	.fontSize(10.5)
-		// 	.fillColor(textMuted)
-		// 	.text(
-		// 		'Un acompte de 30 % du montant total est exigé avant le début du projet. Le solde de 70 % sera réglé à la livraison finale, après validation des livrables convenus.',
-		// 		{
-		// 			width: pageWidth * 0.85,
-		// 			lineGap: 3,
-		// 		}
-		// 	)
-
-		if (invoice.notes) {
-			doc.moveDown(2)
-			doc
-				.font(semiBoldFont)
-				.fontSize(12)
-				.fillColor(greyMedium)
-				.text('Notes', startX, doc.y, { align: 'left' })
-
-			doc
-				.font(regularFont)
-				.fontSize(10.5)
-				.fillColor(baseColor)
-				.text(invoice.notes, startX, doc.y + 6, {
-					width: pageWidth * 0.9,
-					align: 'left', // force l'alignement à gauche
-				})
-		}
-
-		// === FOOTER ===
-		const footerY = doc.page.height - doc.page.margins.bottom - 22
-		doc
-			.moveTo(startX, footerY)
-			.lineTo(startX + pageWidth, footerY)
-			.stroke(greyLight)
-		doc
-			.font(regularFont)
-			.fontSize(9.5)
-			.fillColor('#94a3b8')
-			.text(`Généré automatiquement par ${companyName}`, startX, footerY + 10, {
-				width: pageWidth,
-				align: 'center',
-			})
-
-		doc.end()
-	} catch (error) {
-		next(error)
-	}
+  try {
+    const invoice = await readInvoice(req.params.id, req.tenantId)
+    if (!invoice) return res.status(404).json({ message: 'Facture introuvable.' })
+    if (invoice.status !== 'draft' && (!invoice.issuer_snapshot || !invoice.client_snapshot)) {
+      throw Object.assign(new Error('Cette ancienne facture ne possède pas d’archive à l’émission. Faites vérifier son original avant de la réexporter.'), { status: 422 })
+    }
+    const issuer = invoice.issuer_snapshot || req.profile
+    const logoBuffer = invoice.issuer_snapshot
+      ? (issuer.logo_base64 ? Buffer.from(issuer.logo_base64, 'base64') : null)
+      : await logoForPdf(issuer, req.user.id)
+    const doc = createInvoicePdf(presentInvoice(invoice, req.tenantId), issuer, logoBuffer)
+    res.setHeader('Content-Type', 'application/pdf')
+    const safeName = invoice.invoice_number.replace(/[^a-z0-9_-]/gi, '-')
+    res.setHeader('Content-Disposition', `attachment; filename="facture-${safeName}.pdf"`)
+    res.setHeader('Cache-Control', 'private, no-store')
+    doc.on('error', next)
+    doc.pipe(res)
+    doc.end()
+  } catch (error) { next(error) }
 }

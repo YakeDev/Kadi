@@ -10,8 +10,20 @@ if (!supabaseUrl || !supabaseKey) {
   console.warn('⚠️ Supabase n’est pas correctement configuré côté backend.')
 }
 
-export const supabase = createClient(supabaseUrl, supabaseKey, {
+const options = {
   auth: {
-    persistSession: false
+    persistSession: false,
+    autoRefreshToken: false,
+    detectSessionInUrl: false
   }
-})
+}
+
+// Data/admin queries must always keep the server identity. Never sign in on this client.
+export const supabase = createClient(supabaseUrl, supabaseKey, options)
+
+// A fresh client per password check prevents one user's session affecting another request.
+export const createAuthClient = () => createClient(
+  supabaseUrl,
+  process.env.SUPABASE_ANON_KEY || supabaseKey,
+  options
+)

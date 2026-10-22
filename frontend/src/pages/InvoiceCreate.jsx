@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, UserPlus, FileText, X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -35,7 +35,7 @@ const InvoiceCreate = () => {
 		}
 	}
 
-	const fetchInvoice = async () => {
+	const fetchInvoice = useCallback(async () => {
 		if (!invoiceId) {
 			setInvoice(null)
 			return
@@ -46,7 +46,7 @@ const InvoiceCreate = () => {
 		} catch (error) {
 			showErrorToast(toast.error, error)
 		}
-	}
+	}, [invoiceId])
 
 	useEffect(() => {
 		const load = async () => {
@@ -54,7 +54,7 @@ const InvoiceCreate = () => {
 			setIsLoading(false)
 		}
 		load()
-	}, [invoiceId])
+	}, [fetchInvoice])
 
 	const hasClients = useMemo(() => clients.length > 0, [clients])
 
@@ -104,6 +104,8 @@ const InvoiceCreate = () => {
 			</div>
 		)
 	}
+
+  if (invoice && invoice.status !== 'draft') return <div className='card space-y-3 p-6'><p>Cette facture est émise et ne peut plus être modifiée.</p><Link to='/factures' className='underline'>Retour aux factures</Link></div>
 
 	return (
 		<div className='space-y-8'>

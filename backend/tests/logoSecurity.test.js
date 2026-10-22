@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals'
+import { vi as jest } from 'vitest'
 import request from 'supertest'
 
 import { downloadStoredLogoBuffer, normalizeLogoStoragePath } from '../utils/logoStorage.js'
@@ -73,8 +73,9 @@ describe('Sécurité des logos', () => {
       }
     }
 
-    await jest.unstable_mockModule('../models/supabaseClient.js', () => ({
-      supabase: supabaseMock
+    await jest.doMock('../models/supabaseClient.js', () => ({
+      supabase: supabaseMock,
+      createAuthClient: () => supabaseMock
     }))
 
     const module = await import('../app.js')
@@ -152,4 +153,12 @@ describe('Sécurité des logos', () => {
     expect(Buffer.isBuffer(buffer)).toBe(true)
     expect(Array.from(buffer)).toEqual([1, 2, 3, 4])
   })
+  test('migrates only trusted own-bucket legacy URLs to storage paths', () => {
+    const origin = process.env.SUPABASE_URL
+    const bucket = process.env.SUPABASE_LOGO_BUCKET || 'company-logos'
+    expect(normalizeLogoStoragePath(`${origin}/storage/v1/object/public/${bucket}/user-1/logo.png`, 'user-1')).toBe('user-1/logo.png')
+    expect(() => normalizeLogoStoragePath(`${origin}/storage/v1/object/public/${bucket}/user-2/logo.png`, 'user-1')).toThrow()
+    expect(() => normalizeLogoStoragePath(`${origin}.evil.example/storage/v1/object/public/${bucket}/user-1/logo.png`, 'user-1')).toThrow()
+  })
+
 })

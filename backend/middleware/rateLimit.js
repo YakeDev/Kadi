@@ -1,7 +1,6 @@
 const DEFAULT_CLEANUP_INTERVAL = 100
 
 const getClientIdentifier = (req) =>
-  req.headers['x-forwarded-for']?.toString().split(',')[0]?.trim() ||
   req.ip ||
   req.socket?.remoteAddress ||
   'anonymous'

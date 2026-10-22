@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals'
+import { vi as jest } from 'vitest'
 import request from 'supertest'
 
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-key'
@@ -66,8 +66,9 @@ describe('Validation des payloads métier', () => {
       })
     }
 
-    await jest.unstable_mockModule('../models/supabaseClient.js', () => ({
-      supabase: supabaseMock
+    await jest.doMock('../models/supabaseClient.js', () => ({
+      supabase: supabaseMock,
+      createAuthClient: () => supabaseMock
     }))
 
     const module = await import('../app.js')

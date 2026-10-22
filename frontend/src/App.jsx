@@ -1,6 +1,7 @@
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { Toaster } from 'react-hot-toast'
 import Login from './pages/Login.jsx'
+import ResetPassword from './pages/ResetPassword.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Facture from './pages/Facture.jsx'
 import InvoiceCreate from './pages/InvoiceCreate.jsx'
@@ -11,7 +12,7 @@ import { useAuth } from './hooks/useAuth.jsx'
 import ShellLayout from './components/ShellLayout.jsx'
 
 const ProtectedLayout = ({ children }) => {
-  const { session, isLoading } = useAuth()
+  const { session, isLoading, isPasswordRecovery } = useAuth()
 
   if (isLoading) {
     return (
@@ -20,6 +21,8 @@ const ProtectedLayout = ({ children }) => {
       </div>
     )
   }
+
+  if (isPasswordRecovery) return <Navigate to='/reset-password' replace />
 
   if (!session) {
     return <Navigate to='/login' replace />
@@ -33,6 +36,7 @@ const App = () => {
     <>
       <Routes>
         <Route path='/login' element={<Login />} />
+        <Route path='/reset-password' element={<ResetPassword />} />
         <Route
           path='/'
           element={

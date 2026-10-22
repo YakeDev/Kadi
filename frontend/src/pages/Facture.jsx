@@ -11,7 +11,7 @@ import FloatingActionButton from '../components/FloatingActionButton.jsx'
 const Facture = () => {
   const [clients, setClients] = useState([])
   const navigate = useNavigate()
-  const [refreshKey, setRefreshKey] = useState(0)
+  const [refreshKey] = useState(0)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false)
   const [isCreatingClient, setIsCreatingClient] = useState(false)
   const [newClient, setNewClient] = useState({ company_name: '', contact_name: '', email: '' })
@@ -85,7 +85,7 @@ const Facture = () => {
       setIsClientModalOpen(false)
       await fetchClients()
       if (!hadClients) {
-        setIsDrawerOpen(true)
+        navigate('/factures/nouvelle')
       }
     } catch (error) {
       showErrorToast(toast.error, error)
