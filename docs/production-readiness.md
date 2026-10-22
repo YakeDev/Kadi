@@ -33,7 +33,8 @@ Exécution sur Node 22.23.4 avec données synthétiques :
 - Frontend : 12 tests de composants/parcours ; lint sans avertissement ; build réussi.
 - `npm ci` réussi indépendamment dans les deux répertoires.
 - `npm audit` complet : aucune vulnérabilité connue signalée dans les deux lockfiles au moment du contrôle. Ce résultat ne constitue pas une preuve d’absence de faille dans l’application.
-- Le navigateur distant ne peut pas joindre le serveur local. Une inspection visuelle sur l’aperçu Vercel reste nécessaire ; aucun parcours authentifié hébergé n’a été validé.
+- GitHub Actions : jobs backend et frontend réussis sur la pull request #14. Aperçu Vercel construit et READY.
+- Inspection du navigateur sur cet aperçu : page de connexion lisible et route `/reset-password` avec message de lien invalide et retour à la connexion. L’accès temporaire Vercel créé pour cette inspection a été révoqué. Aucun parcours avec un véritable compte Supabase hébergé n’a été validé.
 
 ## Ordre de mise en service
 
@@ -51,3 +52,4 @@ Exécution sur Node 22.23.4 avec données synthétiques :
 - La sortie IA reste un brouillon à contrôler. Les plafonds de tokens/requêtes et les logs d’usage ne remplacent pas un budget fournisseur et une mesure du coût réel.
 - Tailwind 4 cible des navigateurs modernes : vérifier les appareils mobiles visés. Le build conserve un avertissement de taille du bundle JavaScript (~643 Ko avant compression) ; le découpage des pages peut être traité ensuite.
 - La sécurité RLS, Auth, Storage, SMTP, les secrets et les sauvegardes de production restent à vérifier sur les services réels.
+
