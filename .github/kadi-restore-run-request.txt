@@ -1,1 +1,1 @@
-Verify original encrypted archive from run 40078440409 inside a disposable PostgreSQL 17 container. No production writes.
+Verify backup archive 12554630442 in disposable PostgreSQL 17 (second isolated drill).
