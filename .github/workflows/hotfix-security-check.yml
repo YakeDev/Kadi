@@ -1,0 +1,28 @@
+name: KADI hotfix security check
+on:
+  push:
+    branches: [hotfix/reject-compressed-json]
+    paths:
+      - backend/**
+      - .github/workflows/hotfix-security-check.yml
+  pull_request:
+    branches: [main]
+    paths:
+      - backend/**
+      - .github/workflows/hotfix-security-check.yml
+permissions:
+  contents: read
+jobs:
+  backend:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+        working-directory: backend
+      - run: npm test -- --runInBand
+        working-directory: backend
