@@ -353,6 +353,14 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                   <tr key={invoice.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
                     <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
                       #{invoice.invoice_number}
+                      {invoice.pdf_available === false ? (
+                        <span
+                          className='mt-1 block text-xs font-medium text-amber-700'
+                          title='Les données de cette ancienne facture sont conservées, mais son PDF original ne peut pas être reconstitué de manière fiable.'
+                        >
+                          Archive PDF non vérifiée
+                        </span>
+                      ) : null}
                     </td>
                     <td className='px-4 py-3 text-[var(--text-muted)]'>
                       {invoice.client?.company_name || '—'}
@@ -391,7 +399,14 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                     <button
                       type='button'
                       onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}
-                      className='btn-ghost text-xs font-semibold'
+                      disabled={invoice.pdf_available === false}
+                      title={invoice.pdf_available === false
+                        ? 'Original indisponible : cette facture historique ne possède pas de copie figée à son émission.'
+                        : 'Télécharger la facture PDF'}
+                      aria-label={invoice.pdf_available === false
+                        ? `PDF indisponible pour la facture ${invoice.invoice_number} : archive manquante`
+                        : `Télécharger la facture ${invoice.invoice_number} en PDF`}
+                      className='btn-ghost text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50'
                     >
                       <Download className='h-4 w-4' />
                       PDF
