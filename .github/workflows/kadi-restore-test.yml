@@ -100,7 +100,7 @@ jobs:
           done
           docker exec kadi-restore-sandbox psql -X -v ON_ERROR_STOP=1 \
             -U postgres -d kadi_restore_sandbox -c \
-            'DROP SCHEMA public CASCADE; CREATE SCHEMA auth; CREATE SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;'
+            'DROP SCHEMA public CASCADE; CREATE SCHEMA public; CREATE SCHEMA auth; CREATE SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;'
           # Load only the app's public tables: managed Supabase auth/storage schemas
           # require a fully provisioned Supabase instance for a complete restore.
           docker cp "$KADI_RESTORE_DIR/plain/database.pgdump" \
