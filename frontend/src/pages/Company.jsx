@@ -239,7 +239,7 @@ const Company = () => {
         </button>
       ) : null}
       {logoError ? <p className='text-xs text-red-500'>{logoError}</p> : null}
-      <p className='text-[11px] text-[var(--text-muted)]'>PNG ou JPG · 1&nbsp;Mo max.</p>
+      <p className='text-[11px] text-[var(--text-muted)]'>PNG, JPEG ou WebP · 1&nbsp;Mo max.</p>
     </div>
   )
 
