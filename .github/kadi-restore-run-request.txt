@@ -1,0 +1,1 @@
+Re-run 2026-10-24: real production invoice snapshot migration test on isolated PostgreSQL without Supabase-managed post-data.
