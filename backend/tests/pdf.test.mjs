@@ -26,9 +26,9 @@ test('taxed PDF shows the recorded subtotal, tax and total without rewriting his
   try {
     const content = await (await pdf.getPage(1)).getTextContent()
     const text = content.items.map((item) => item.str).join(' ')
-    assert.ok(text.includes('Sous-total : 100.00 USD'))
-    assert.ok(text.includes('Taxe (16 %) : 15.00 USD'))
-    assert.ok(text.includes('Total : 115.00 USD'))
+    assert.match(text, /Sous-total\s+100,00 USD/u)
+    assert.match(text, /Taxe \(16 %\)\s+15,00 USD/u)
+    assert.match(text, /Total\s+115,00 USD/u)
   } finally { await pdf.loadingTask.destroy() }
 })
 for (const count of [1, 15, 30, 100]) {
@@ -48,7 +48,9 @@ for (const count of [1, 15, 30, 100]) {
       for (let index = 1; index <= count; index += 1) {
         assert.equal(allText.split(`LIGNE-${String(index).padStart(3, '0')}`).length - 1, 1)
       }
-      assert.ok(allText.includes(`Total : ${(count * 10).toFixed(2)} USD`))
+      const amount = new Intl.NumberFormat('fr-FR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+        .format(count * 10).replace(/\s/gu, ' ')
+      assert.ok(allText.replace(/\s+/gu, ' ').includes(`Total ${amount} USD`))
     } finally { await pdf.loadingTask.destroy() }
   })
 }
@@ -62,11 +64,52 @@ test('large descriptions, company fields and unbroken notes respect the footer s
       const page = await pdf.getPage(i)
       const content = await page.getTextContent()
       for (const item of content.items) {
-        if (!item.str.trim() || item.str.includes('Kadi — Page')) continue
+        if (!item.str.trim() || item.str.includes('Document généré avec Kadi') || /^Page \d+\/\d+$/u.test(item.str)) continue
         assert.ok(item.transform[5] >= 80, `content runs into footer on page ${i}: ${item.str.slice(0, 40)}`)
       }
     }
   } finally { await pdf.loadingTask.destroy() }
+})
+test('one description can span multiple pages without losing text or repeating amounts', async () => {
+  const pdf = await render(invoice(1, 'SEGMENT '.repeat(600)))
+  try {
+    assert.ok(pdf.numPages > 1)
+    let allText = ''
+    for (let index = 1; index <= pdf.numPages; index += 1) {
+      const content = await (await pdf.getPage(index)).getTextContent()
+      allText += content.items.map((item) => item.str).join(' ') + ' '
+      for (const item of content.items) {
+        if (!item.str.trim() || item.str.includes('Document généré avec Kadi') || /^Page \d+\/\d+$/u.test(item.str)) continue
+        assert.ok(item.transform[5] >= 80, `text overlaps footer on page ${index}`)
+      }
+    }
+    assert.equal((allText.match(/SEGMENT/gu) || []).length, 600)
+    assert.equal((allText.match(/LIGNE-001/gu) || []).length, 1)
+    // Unit price, line total and invoice total, including on split rows.
+    assert.equal((allText.match(/10,00 USD/gu) || []).length, 3)
+  } finally { await pdf.loadingTask.destroy() }
+})
+test('large CDF amounts and fractional quantities fit their columns', async () => {
+  const pdf = await render({ ...invoice(1), currency: 'CDF', total_amount: 1_000_000_000_000,
+    items: [{ description: 'Montant maximal', quantity: 1000, unitPrice: 1_000_000_000 }] })
+  try {
+    const content = await (await pdf.getPage(1)).getTextContent()
+    const amounts = content.items.filter((item) => item.str.includes('CDF'))
+    assert.equal(amounts.length, 3)
+    for (const item of amounts) {
+      assert.ok(item.transform[4] >= 320, 'amount leaves its numeric column')
+      assert.ok(item.transform[4] + item.width <= 548, 'amount leaves the page content area')
+    }
+    assert.ok(amounts.some((item) => item.str === '1 000 000 000 000,00 CDF'))
+  } finally { await pdf.loadingTask.destroy() }
+  const fractional = await render({ ...invoice(1), total_amount: 0.01,
+    items: [{ description: 'Arrondi', quantity: 0.001, unitPrice: 5 }] })
+  try {
+    const content = await (await fractional.getPage(1)).getTextContent()
+    const text = content.items.map((item) => item.str).join(' ')
+    assert.ok(text.includes('0,001'))
+    assert.match(text, /Total\s+0,01 USD/u)
+  } finally { await fractional.loadingTask.destroy() }
 })
 for (const format of ['png', 'jpeg', 'webp', 'svg']) {
   test(`a ${format} logo is embedded in the PDF`, async () => {
