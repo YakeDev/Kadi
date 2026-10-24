@@ -26,7 +26,7 @@
   },
   "devDependencies": {
     "@electric-sql/pglite": "0.5.3",
-    "pdfjs-dist": "^6.2.108",
+    "pdfjs-dist": "^6.4.299",
     "supertest": "^7.2.2",
     "vitest": "5.0.5"
   },
