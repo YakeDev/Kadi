@@ -1,8 +1,12 @@
 name: KADI - Encrypted Supabase Backup
 
-# Manual only. This must live on the default branch to be dispatched.
+# Manual on main; isolated one-time test on the non-production operations branch.
 on:
   workflow_dispatch:
+  push:
+    branches: [ops/secure-supabase-backup]
+    paths:
+      - .github/kadi-backup-run-request.txt
 
 permissions:
   contents: read
@@ -13,7 +17,11 @@ concurrency:
 
 jobs:
   encrypted-backup:
-    if: github.ref == 'refs/heads/main' && github.repository == 'YakeDev/Kadi'
+    if: >-
+      github.repository == 'YakeDev/Kadi' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/ops/secure-supabase-backup' &&
+      github.event.head_commit.message == 'ops(backup): trigger encrypted snapshot'))
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
