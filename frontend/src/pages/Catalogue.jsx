@@ -15,7 +15,6 @@ import { createCatalogItem, fetchCatalogItems, updateCatalogItem } from '../serv
 import { showErrorToast } from '../utils/errorToast.js'
 import FormSection from '../components/FormSection.jsx'
 import PageHeader from '../components/PageHeader.jsx'
-import FloatingActionButton from '../components/FloatingActionButton.jsx'
 import Pagination from '../components/Pagination.jsx'
 
 const emptyForm = {
@@ -431,15 +430,16 @@ const Catalogue = () => {
         </div>
 
         <div className='overflow-x-auto'>
-          <table className='min-w-full divide-y divide-[var(--border)] text-sm'>
+          <table className='responsive-records min-w-full divide-y divide-[var(--border)] text-sm'>
+            <caption className='sr-only'>Catalogue des produits et services</caption>
             <thead className='text-[var(--text-muted)]'>
               <tr>
-                <th className='px-4 py-3 text-left font-semibold'>Article</th>
-                <th className='px-4 py-3 text-left font-semibold'>Type</th>
-                <th className='px-4 py-3 text-left font-semibold'>Tarif</th>
-                <th className='px-4 py-3 text-left font-semibold'>SKU</th>
-                <th className='px-4 py-3 text-left font-semibold'>Statut</th>
-                <th className='px-4 py-3 text-right font-semibold'>Actions</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Article</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Type</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Tarif</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>SKU</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Statut</th>
+                <th scope='col' className='px-4 py-3 text-right font-semibold'>Actions</th>
               </tr>
             </thead>
             <tbody className='divide-y divide-[var(--border)]'>
@@ -479,24 +479,24 @@ const Catalogue = () => {
               {!isLoading && !isEmpty
                 ? items.map((item) => (
                     <tr key={item.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
-                      <td className='px-4 py-3'>
+                      <td data-label='Article' className='px-4 py-3'>
                         <p className='font-semibold text-[var(--text-dark)]'>{item.name}</p>
                         {item.description ? (
                           <p className='text-xs text-[var(--text-muted)]'>{item.description}</p>
                         ) : null}
                       </td>
-                      <td className='px-4 py-3'>
+                      <td data-label='Type' className='px-4 py-3'>
                         <span className='badge bg-[var(--primary-soft)] text-[var(--primary)]'>
                           {ITEM_TYPE_LABELS[item.item_type] || 'Produit'}
                         </span>
                       </td>
-                      <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
+                      <td data-label='Tarif' className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
                         {formatAmount(item.unit_price, item.currency)}
                       </td>
-                      <td className='px-4 py-3 text-[var(--text-muted)]'>{item.sku || '—'}</td>
-                      <td className='px-4 py-3'>
+                      <td data-label='SKU' className='px-4 py-3 text-[var(--text-muted)]'>{item.sku || '—'}</td>
+                      <td data-label='Statut' className='px-4 py-3'>
                         {item.is_active ? (
-                          <span className='inline-flex items-center gap-2 text-xs font-semibold text-[#30d058]'>
+                          <span className='inline-flex items-center gap-2 text-xs font-semibold text-[#176b37]'>
                             <BadgeCheck className='h-4 w-4' />
                             Actif
                           </span>
@@ -507,7 +507,7 @@ const Catalogue = () => {
                           </span>
                         )}
                       </td>
-                      <td className='px-4 py-3 text-right'>
+                      <td data-label='Actions' className='px-4 py-3 text-right'>
                         <button
                           type='button'
                           onClick={() => handleToggleActive(item)}
@@ -607,14 +607,6 @@ const Catalogue = () => {
         </div>
       ) : null}
 
-      {!isDrawerOpen ? (
-        <FloatingActionButton
-          icon={PackagePlus}
-          label='Nouvel article'
-          onClick={openDrawer}
-          className='lg:hidden'
-        />
-      ) : null}
     </div>
   )
 }

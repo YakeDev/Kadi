@@ -6,7 +6,6 @@ import InvoiceList from '../components/InvoiceList.jsx'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import PageHeader from '../components/PageHeader.jsx'
-import FloatingActionButton from '../components/FloatingActionButton.jsx'
 
 const Facture = () => {
   const [clients, setClients] = useState([])
@@ -130,16 +129,8 @@ const Facture = () => {
         </div>
       ) : null}
 
-      <InvoiceList refreshKey={refreshKey} onCreate={openCreatePage} onEdit={handleEditInvoice} canCreate={hasClients} />
+      <InvoiceList refreshKey={refreshKey} onEdit={handleEditInvoice} canCreate={hasClients} />
 
-      {hasClients ? (
-        <FloatingActionButton
-          icon={FileText}
-          label='Nouvelle facture'
-          onClick={openCreatePage}
-          className='lg:hidden'
-        />
-      ) : null}
 
       {isClientModalOpen ? (
         <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
@@ -160,8 +151,8 @@ const Facture = () => {
               </div>
               <form onSubmit={handleCreateClient} className='flex flex-col gap-4 px-6 py-6'>
                 <div className='flex flex-col gap-2'>
-                  <label className='label'>Entreprise *</label>
-                  <input
+                  <label className='label' htmlFor='facture-company_name'>Entreprise *</label>
+                  <input id='facture-company_name'
                     name='company_name'
                     value={newClient.company_name}
                     onChange={handleNewClientChange}
@@ -172,8 +163,8 @@ const Facture = () => {
                 </div>
                 <div className='grid gap-4 sm:grid-cols-2'>
                   <div className='flex flex-col gap-2'>
-                    <label className='label'>Contact</label>
-                    <input
+                    <label className='label' htmlFor='facture-contact_name'>Contact</label>
+                    <input id='facture-contact_name'
                       name='contact_name'
                       value={newClient.contact_name}
                       onChange={handleNewClientChange}
@@ -182,8 +173,8 @@ const Facture = () => {
                     />
                   </div>
                   <div className='flex flex-col gap-2'>
-                    <label className='label'>Email</label>
-                    <input
+                    <label className='label' htmlFor='facture-email'>Email</label>
+                    <input id='facture-email'
                       type='email'
                       name='email'
                       value={newClient.email}

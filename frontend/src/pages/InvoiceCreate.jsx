@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, UserPlus, FileText, X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
@@ -6,6 +6,7 @@ import InvoiceForm from '../components/InvoiceForm.jsx'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import PageHeader from '../components/PageHeader.jsx'
+import { useModalFocus } from '../hooks/useModalFocus.js'
 
 const InvoiceCreate = () => {
 	const navigate = useNavigate()
@@ -21,42 +22,29 @@ const InvoiceCreate = () => {
 		email: '',
 	})
 	const [isCreatingClient, setIsCreatingClient] = useState(false)
+  const [newClientId, setNewClientId] = useState(null)
+  const clientPanelRef = useModalFocus(isClientModalOpen, () => { if (!isCreatingClient) setIsClientModalOpen(false) })
 
-	const fetchClients = async () => {
-		try {
-			const { data } = await api.get('/clients', {
-				params: {
-					pageSize: 100,
-				},
-			})
-			setClients(data?.data ?? [])
-		} catch (error) {
-			showErrorToast(toast.error, error)
-		}
-	}
-
-	const fetchInvoice = useCallback(async () => {
-		if (!invoiceId) {
-			setInvoice(null)
-			return
-		}
-		try {
-			const { data } = await api.get(`/invoices/${invoiceId}`)
-			setInvoice(data)
-		} catch (error) {
-			showErrorToast(toast.error, error)
-		}
-	}, [invoiceId])
-
-	useEffect(() => {
-		const load = async () => {
-			await Promise.all([fetchClients(), fetchInvoice()])
-			setIsLoading(false)
-		}
-		load()
-	}, [fetchInvoice])
-
-	const hasClients = useMemo(() => clients.length > 0, [clients])
+  const [loadError, setLoadError] = useState(false)
+  const [loadAttempt, setLoadAttempt] = useState(0)
+  useEffect(() => {
+    let active = true
+    setIsLoading(true)
+    setLoadError(false)
+    Promise.all([
+      api.get('/clients', { params: { pageSize: 100 } }),
+      invoiceId ? api.get(`/invoices/${invoiceId}`) : Promise.resolve({ data: null })
+    ]).then(([clientResponse, invoiceResponse]) => {
+      if (!active) return
+      if (invoiceId && !invoiceResponse.data?.id) throw new Error('Invoice unavailable')
+      setClients(clientResponse.data?.data ?? [])
+      setInvoice(invoiceResponse.data)
+      setNewClientId(null)
+    }).catch(() => { if (active) setLoadError(true) })
+      .finally(() => { if (active) setIsLoading(false) })
+    return () => { active = false }
+  }, [invoiceId, loadAttempt])
+  const hasClients = clients.length > 0
 
 	const handleInvoiceCreated = () => {
 		navigate('/factures', { replace: true })
@@ -81,7 +69,7 @@ const InvoiceCreate = () => {
 		}
 		setIsCreatingClient(true)
 		try {
-			await api.post('/clients', {
+			const { data: createdClient } = await api.post('/clients', {
 				company_name: newClient.company_name.trim(),
 				contact_name: newClient.contact_name.trim() || null,
 				email: newClient.email.trim() || null,
@@ -89,7 +77,8 @@ const InvoiceCreate = () => {
 			toast.success('Client ajouté', { icon: '✅' })
 			setNewClient({ company_name: '', contact_name: '', email: '' })
 			setIsClientModalOpen(false)
-			await fetchClients()
+      setClients((prev) => [createdClient, ...prev.filter((client) => client.id !== createdClient.id)])
+      setNewClientId(createdClient.id)
 		} catch (error) {
 			showErrorToast(toast.error, error)
 		} finally {
@@ -105,10 +94,12 @@ const InvoiceCreate = () => {
 		)
 	}
 
+  if (loadError) return <section role='alert' className='card space-y-3 p-6'><h1 className='text-lg'>Impossible de charger l’éditeur</h1><p className='text-sm text-[var(--text-muted)]'>Votre saisie conservée dans cet onglet reste disponible. Réessayez le chargement.</p><button type='button' className='btn-primary' onClick={() => setLoadAttempt((prev) => prev + 1)}>Réessayer</button></section>
+
   if (invoice && invoice.status !== 'draft') return <div className='card space-y-3 p-6'><p>Cette facture est émise et ne peut plus être modifiée.</p><Link to='/factures' className='underline'>Retour aux factures</Link></div>
 
 	return (
-		<div className='space-y-8'>
+		<div className='space-y-6 pb-20 lg:pb-0'>
 			<PageHeader
 				icon={FileText}
 				title={invoiceId ? 'Modifier une facture' : 'Nouvelle facture'}
@@ -133,6 +124,8 @@ const InvoiceCreate = () => {
 			) : null}
 
 			<InvoiceForm
+        key={`${invoice?.id || 'new'}:${invoice?.version ?? invoice?.updated_at ?? '0'}`}
+        newClientId={newClientId}
 				clients={clients}
 				defaultClientId={invoice?.client_id ?? clients[0]?.id}
 				invoice={invoice}
@@ -143,15 +136,17 @@ const InvoiceCreate = () => {
 
 			{isClientModalOpen ? (
 				<div className='fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.35)] backdrop-blur-sm px-4'>
-					<div className='w-full max-w-lg rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white max-h-[calc(100vh-3rem)] overflow-y-auto'>
+					<div ref={clientPanelRef} role='dialog' aria-modal='true' aria-labelledby='new-client-title' tabIndex={-1} className='w-full max-w-lg rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white max-h-[calc(100vh-3rem)] overflow-y-auto'>
 						<div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
 							<div className='space-y-1'>
-								<h2 className='text-lg font-semibold text-[var(--text-dark)]'>Nouveau client</h2>
+								<h2 id='new-client-title' className='text-lg font-semibold text-[var(--text-dark)]'>Nouveau client</h2>
 								<p className='text-xs text-[var(--text-muted)]'>Créez un client sans quitter l’éditeur.</p>
 							</div>
 							<button
 								type='button'
-								onClick={() => setIsClientModalOpen(false)}
+								aria-label='Fermer le formulaire client'
+                  disabled={isCreatingClient}
+                  onClick={() => setIsClientModalOpen(false)}
 								className='rounded-full border border-[var(--border)] bg-white p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
 							>
 								<X className='h-4 w-4' />
@@ -159,8 +154,8 @@ const InvoiceCreate = () => {
 						</div>
 						<form onSubmit={handleCreateClient} className='flex flex-col gap-4 px-6 py-6'>
 							<div className='flex flex-col gap-2'>
-								<label className='label'>Entreprise *</label>
-								<input
+								<label className='label' htmlFor='invoicecreate-company_name'>Entreprise *</label>
+								<input id='invoicecreate-company_name'
 									name='company_name'
 									value={newClient.company_name}
 									onChange={handleNewClientChange}
@@ -171,8 +166,8 @@ const InvoiceCreate = () => {
 							</div>
 							<div className='grid gap-4 sm:grid-cols-2'>
 								<div className='flex flex-col gap-2'>
-									<label className='label'>Contact</label>
-									<input
+									<label className='label' htmlFor='invoicecreate-contact_name'>Contact</label>
+									<input id='invoicecreate-contact_name'
 										name='contact_name'
 										value={newClient.contact_name}
 										onChange={handleNewClientChange}
@@ -181,8 +176,8 @@ const InvoiceCreate = () => {
 									/>
 								</div>
 								<div className='flex flex-col gap-2'>
-									<label className='label'>Email</label>
-									<input
+									<label className='label' htmlFor='invoicecreate-email'>Email</label>
+									<input id='invoicecreate-email'
 										type='email'
 										name='email'
 										value={newClient.email}

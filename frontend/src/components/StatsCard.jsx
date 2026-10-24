@@ -2,7 +2,7 @@ import clsx from 'clsx'
 
 const base = 'rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-5'
 
-const metric = 'text-3xl font-semibold text-[var(--text-dark)]'
+const metric = 'break-words text-xl sm:text-2xl xl:text-3xl font-semibold text-[var(--text-dark)]'
 const helper = 'text-xs text-[var(--text-muted)]'
 
 const TrendBadge = ({ trend }) => {
@@ -27,7 +27,7 @@ const TrendBadge = ({ trend }) => {
 const StatsCard = ({ icon: Icon, title, value, helperText, trend, className, actions }) => (
   <div className={clsx(base, className)}>
     <div className='flex items-start justify-between gap-3'>
-      <div className='space-y-2'>
+      <div className='min-w-0 space-y-2'>
         {title ? <p className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]'>{title}</p> : null}
         <p className={metric}>{value}</p>
         {helperText ? <p className={helper}>{helperText}</p> : null}

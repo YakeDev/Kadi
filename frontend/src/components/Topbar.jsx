@@ -10,7 +10,7 @@ import {
   Building2,
   LogOut
 } from 'lucide-react'
-import { Link, NavLink } from 'react-router-dom'
+import { Link, NavLink, useLocation } from 'react-router-dom'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
 import { useEffect, useRef, useState } from 'react'
@@ -25,6 +25,7 @@ const mobileIcons = {
 
 const Topbar = () => {
   const { user, profile, logout } = useAuth()
+  const { pathname } = useLocation()
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const profileMenuRef = useRef(null)
@@ -71,8 +72,10 @@ const Topbar = () => {
           onClick={() => setIsMobileNavOpen((prev) => !prev)}
           className='inline-flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-transparent px-3 py-2 text-sm font-medium text-[var(--text-muted)] transition hover:bg-[rgba(255,255,255,0.7)] lg:hidden'
           type='button'
+          aria-expanded={isMobileNavOpen}
+          aria-controls='mobile-navigation'
         >
-          <Menu className='h-4 w-4' />
+          <Menu aria-hidden='true' className='h-4 w-4' />
           Menu
         </button>
 
@@ -84,6 +87,8 @@ const Topbar = () => {
         </div>
 
         <nav
+          id='mobile-navigation'
+          aria-label='Navigation principale'
           className={`${
             isMobileNavOpen ? 'flex' : 'hidden'
           } absolute left-4 right-4 top-16 flex-col gap-2 rounded-[var(--radius-lg)] border border-[var(--border)] bg-[var(--bg-panel)] p-3 lg:hidden`}
@@ -117,10 +122,10 @@ const Topbar = () => {
         </div>
 
         <div className='flex items-center gap-3'>
-          <Link to='/factures' className='btn-primary hidden md:inline-flex'>
+          {!['/', '/factures', '/factures/nouvelle'].includes(pathname) ? <Link to='/factures/nouvelle' className='btn-primary hidden md:inline-flex'>
             <Plus className='h-4 w-4' />
             Nouvelle facture
-          </Link>
+          </Link> : null}
           <div className='relative' ref={profileMenuRef}>
             <button
               type='button'
@@ -136,7 +141,7 @@ const Topbar = () => {
                 <img
                   src={profile.logo_url}
                   alt={accountLabel}
-                  className='h-10 w-10 rounded-full object-cover'
+                  className='h-10 w-10 rounded-full object-contain p-1'
                 />
               ) : (
                 <CircleUser className='h-5 w-5' />
@@ -163,7 +168,7 @@ const Topbar = () => {
                   <button
                     type='button'
                     onClick={handleLogout}
-                    className='flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm font-semibold text-[#ff453a] transition hover:bg-[rgba(255,69,58,0.12)]'
+                    className='flex w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm font-semibold text-[#b42318] transition hover:bg-[rgba(255,69,58,0.12)]'
                   >
                     <LogOut className='h-4 w-4' />
                     Déconnexion
