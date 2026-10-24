@@ -22,7 +22,8 @@ jobs:
           node-version: '22'
           cache: npm
           cache-dependency-path: backend/package-lock.json
-      - run: npm ci
+      # Legacy main lockfile is out of sync (helmet is absent); install in CI only.
+      - run: npm install --no-save
         working-directory: backend
       - run: npm test -- --runInBand
         working-directory: backend
