@@ -113,3 +113,38 @@ test('issued invoices without historical snapshots cannot be re-created from tod
   const { next } = await invoke('streamInvoicePdf')
   expect(next).toHaveBeenCalledWith(expect.objectContaining({ status: 422 }))
 })
+
+
+test('legacy issued invoices remain readable but explicitly flag unverifiable PDF archives', async () => {
+  existing.status = 'sent'
+  existing.issuer_snapshot = null
+  existing.client_snapshot = null
+  const { res, next } = await invoke('getInvoice')
+  expect(next).not.toHaveBeenCalled()
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({
+    status: 'sent',
+    pdf_available: false,
+    pdf_unavailable_reason: 'historical_snapshot_missing'
+  }))
+  expect(writes).toEqual([])
+})
+
+test('PDF-capable issued invoices never send their embedded base64 logo to the browser', async () => {
+  existing.status = 'sent'
+  existing.issuer_snapshot = { company: 'Original issuer', logo_base64: 'server-only-content' }
+  existing.client_snapshot = { company_name: 'Client archived' }
+  const { res, next } = await invoke('getInvoice')
+  expect(next).not.toHaveBeenCalled()
+  const payload = res.json.mock.calls[0][0]
+  expect(payload.pdf_available).toBe(true)
+  expect(payload.pdf_unavailable_reason).toBeNull()
+  expect(payload.issuer_snapshot).toEqual({ company: 'Original issuer' })
+  expect(payload.client.company_name).toBe('Client archived')
+  expect(JSON.stringify(payload)).not.toContain('server-only-content')
+})
+
+test('draft PDF export remains available without archived snapshots', async () => {
+  const { res, next } = await invoke('getInvoice')
+  expect(next).not.toHaveBeenCalled()
+  expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ pdf_available: true }))
+})
