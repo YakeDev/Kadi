@@ -40,8 +40,16 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          if [[ -z "${KADI_BACKUP_DATABASE_URL:-}" || -z "${KADI_BACKUP_SERVICE_ROLE_KEY:-}" || ${#KADI_BACKUP_PASSPHRASE} -lt 32 ]]; then
-            echo "::error::Missing database URL/service-role key or backup passphrase shorter than 32 characters"
+          if [[ -z "${KADI_BACKUP_DATABASE_URL:-}" ]]; then
+            echo "::error::KADI_BACKUP_DATABASE_URL is missing"
+            exit 1
+          fi
+          if [[ -z "${KADI_BACKUP_SERVICE_ROLE_KEY:-}" ]]; then
+            echo "::error::KADI_BACKUP_SERVICE_ROLE_KEY is missing"
+            exit 1
+          fi
+          if [[ ${#KADI_BACKUP_PASSPHRASE} -lt 32 ]]; then
+            echo "::error::KADI_BACKUP_PASSPHRASE must have at least 32 characters"
             exit 1
           fi
           node --input-type=module <<'NODE'
