@@ -1,1 +1,1 @@
-Verify backup archive 12554630442 in disposable PostgreSQL 17 (second isolated drill).
+Test PR14 SQL migration against the original encrypted KADI production snapshot in a disposable PostgreSQL 17 container (no production writes).
