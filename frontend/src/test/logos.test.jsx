@@ -21,3 +21,14 @@ test('rejects external references and refuses to delete another user’s logo', 
   await deleteCompanyLogo('user-2/logo.png', 'user-1')
   expect(mocks.remove).not.toHaveBeenCalled()
 })
+
+test('rejects SVG uploads because the private bucket only permits PNG, JPEG and WebP', async () => {
+  const malicious = new File(['<svg xmlns="http://www.w3.org/2000/svg"></svg>'], 'logo.svg', { type: 'image/svg+xml' })
+  await expect(uploadCompanyLogo(malicious, 'user-1')).rejects.toThrow(/PNG, JPEG ou WebP/)
+  expect(mocks.upload).not.toHaveBeenCalled()
+})
+test('rejects logos larger than the 1 MiB application cap before any network upload', async () => {
+  const huge = new File([new Uint8Array(1024 * 1024 + 1)], 'huge.png', { type: 'image/png' })
+  await expect(uploadCompanyLogo(huge, 'user-1')).rejects.toThrow(/1 Mo/)
+  expect(mocks.upload).not.toHaveBeenCalled()
+})
