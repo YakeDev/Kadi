@@ -157,8 +157,12 @@ const serializeProfile = async (record = {}, fallbackCompany = '', userId) => ({
 })
 
 const dispatchVerificationEmail = async ({ email, companyName }) => {
+  if (!isMailConfigured()) return { sent: false, reason: 'transporter_not_configured' }
+
   const { data, error } = await supabase.auth.admin.generateLink({
-    type: 'signup',
+    // The user already exists: 'signup' links create users and can fail with 422.
+    // A one-time magic link verifies email ownership and starts a session.
+    type: 'magiclink',
     email,
     options: {
       redirectTo: EMAIL_REDIRECT_URL
@@ -175,10 +179,6 @@ const dispatchVerificationEmail = async ({ email, companyName }) => {
   const verificationUrl = data?.properties?.action_link
   if (!verificationUrl) {
     return { sent: false, reason: 'missing_action_link' }
-  }
-
-  if (!isMailConfigured()) {
-    return { sent: false, reason: 'transporter_not_configured' }
   }
 
   const template = emailVerificationTemplate({ verificationUrl, companyName })
