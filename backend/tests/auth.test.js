@@ -14,6 +14,8 @@ describe('Auth login', () => {
     process.env.SMTP_HOST = 'smtp.test'
     process.env.SMTP_USER = 'user@test'
     process.env.SMTP_PASS = 'secret'
+    delete process.env.RESEND_API_KEY
+    delete process.env.MAIL_FROM
 
     supabaseMock = {
       auth: {
@@ -52,7 +54,10 @@ describe('Auth login', () => {
     }))
 
     await jest.doMock('../utils/mailer.js', () => ({
-      sendMail: sendMailMock
+      sendMail: sendMailMock,
+      isMailConfigured: () => process.env.RESEND_API_KEY
+        ? Boolean(process.env.MAIL_FROM)
+        : Boolean(process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS)
     }))
 
     await jest.doMock('../utils/templates.js', () => ({
@@ -184,11 +189,37 @@ describe('Auth login', () => {
         to: 'user@example.com'
       })
     )
+    expect(supabaseMock.auth.admin.generateLink).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'magiclink', email: 'user@example.com' })
+    )
     expect(response.body).toEqual(
       expect.objectContaining({
         emailVerificationSent: true
       })
     )
+    expect(response.body.verificationUrl).toBeUndefined()
+  })
+
+  test('resend confirmation accepts Resend HTTPS credentials without SMTP', async () => {
+    profilesQuery.maybeSingle.mockResolvedValue({
+      data: { email: 'user@example.com', company: 'Acme' },
+      error: null
+    })
+    supabaseMock.auth.admin.generateLink.mockResolvedValue({
+      data: { properties: { action_link: 'https://example.com/confirm' } },
+      error: null
+    })
+    process.env.SMTP_HOST = ''
+    process.env.SMTP_USER = ''
+    process.env.SMTP_PASS = ''
+    process.env.RESEND_API_KEY = 're_test_key'
+    process.env.MAIL_FROM = 'noreply@example.com'
+
+    const response = await request(app).post('/api/auth/resend-verification')
+      .send({ email: 'user@example.com' })
+    expect(response.status).toBe(200)
+    expect(response.body.emailVerificationSent).toBe(true)
+    expect(sendMailMock).toHaveBeenCalledOnce()
     expect(response.body.verificationUrl).toBeUndefined()
   })
 
@@ -281,6 +312,9 @@ describe('Auth login', () => {
 
     expect(response.status).toBe(201)
     expect(response.body.emailVerificationSent).toBe(true)
+    expect(supabaseMock.auth.admin.generateLink).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'magiclink', email: 'user@example.com' })
+    )
     expect(response.body.verificationUrl).toBeUndefined()
   })
 })

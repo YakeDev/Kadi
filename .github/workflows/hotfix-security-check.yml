@@ -25,5 +25,5 @@ jobs:
       # Legacy main lockfile is out of sync (helmet is absent); install in CI only.
       - run: npm install --no-save
         working-directory: backend
-      - run: npm test -- tests/security.test.js
+      - run: npm run test:unit -- tests/security.test.js
         working-directory: backend
