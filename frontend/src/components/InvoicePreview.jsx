@@ -7,7 +7,7 @@ const formatCurrency = (value, currency = 'USD') =>
     currencyDisplay: 'code',
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
-  }).format(Number(value || 0))
+  }).format(Number(value || 0)).replace(/\u00a0/gu, ' ')
 
 const formatDate = (value) =>
   value
