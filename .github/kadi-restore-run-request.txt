@@ -1,1 +1,1 @@
-Test PR14 SQL migration against the original encrypted KADI production snapshot in a disposable PostgreSQL 17 container (no production writes).
+Compatibility recheck: run isolated restore + pinned PR14 hardening SQL against encrypted production backup, verify historical invoice integrity. 2026-10-24.
