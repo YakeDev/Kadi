@@ -1,7 +1,7 @@
 import { randomBytes } from 'crypto'
 import { normalizeLogoImage } from '../utils/logoImage.js'
 import { supabase, createAuthClient } from '../models/supabaseClient.js'
-import { sendMail } from '../utils/mailer.js'
+import { isMailConfigured, sendMail } from '../utils/mailer.js'
 import { emailVerificationTemplate, passwordResetTemplate } from '../utils/templates.js'
 import {
   LOGO_BUCKET,
@@ -177,12 +177,7 @@ const dispatchVerificationEmail = async ({ email, companyName }) => {
     return { sent: false, reason: 'missing_action_link' }
   }
 
-  const smtpHost = process.env.SMTP_HOST?.trim()
-  const smtpUser = process.env.SMTP_USER?.trim()
-  const smtpPass = process.env.SMTP_PASS?.trim()
-  const hasSmtp = Boolean(smtpHost && smtpUser && smtpPass)
-
-  if (!hasSmtp) {
+  if (!isMailConfigured()) {
     return { sent: false, reason: 'transporter_not_configured' }
   }
 
@@ -194,7 +189,7 @@ const dispatchVerificationEmail = async ({ email, companyName }) => {
     text: template.text
   })
 
-  return { sent: Boolean(result?.sent), mailer: result }
+  return { sent: Boolean(result?.sent), reason: result?.reason, mailer: result }
 }
 
 const dispatchPasswordResetEmail = async ({ email, companyName }) => {
@@ -293,7 +288,7 @@ export const signup = async (req, res, next) => {
       ? 'Compte créé. Un email de confirmation vous a été envoyé.'
       : verificationStatus?.reason === 'transporter_not_configured'
         ? "Compte créé. La confirmation par email est temporairement indisponible. Réessayez plus tard."
-        : 'Compte créé. Vérifiez votre adresse email avant de vous connecter.'
+        : "Compte créé, mais le mail de confirmation n'a pas pu être envoyé. Utilisez « Renvoyer le lien » après configuration de l'envoi."
 
     res.status(201).json({
       user: {
