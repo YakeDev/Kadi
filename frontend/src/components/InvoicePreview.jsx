@@ -110,7 +110,7 @@ const InvoicePreview = ({ className, company, client, invoice }) => {
           </p>
         ) : (
           <div className='overflow-x-auto'>
-            <table className='w-full min-w-[360px] table-fixed border-collapse text-[10px] text-slate-600'>
+            <table className='w-full min-w-[280px] table-fixed border-collapse text-[10px] text-slate-600'>
               <caption className='sr-only'>Lignes de facturation</caption>
               <thead className='bg-slate-50 text-slate-800'>
                 <tr>
