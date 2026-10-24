@@ -1,1 +1,1 @@
-Compatibility recheck: run isolated restore + pinned PR14 hardening SQL against encrypted production backup, verify historical invoice integrity. 2026-10-24.
+Re-run 2026-10-24: real production invoice snapshot migration test on isolated PostgreSQL without Supabase-managed post-data.
