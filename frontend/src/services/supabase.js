@@ -60,8 +60,10 @@ export const uploadCompanyLogo = async (file, userId) => {
     throw new Error("Fichier ou identifiant utilisateur manquant pour l'upload du logo.")
   }
 
-  if (file.size > 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.type)) {
-    throw new Error('Choisissez un logo PNG, JPEG, WebP ou SVG de 1 Mo maximum.')
+  // Private Storage bucket accepts PNG/JPEG/WebP; keep client validation aligned.
+  // Legacy SVG references can still be read/normalized by the backend for PDFs.
+  if (file.size > 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    throw new Error('Choisissez un logo PNG, JPEG ou WebP de 1 Mo maximum.')
   }
 
   const extension = (file.name.split('.').pop() || 'png').toLowerCase()
