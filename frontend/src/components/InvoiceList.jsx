@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
   FileText,
@@ -21,9 +22,9 @@ import Pagination from './Pagination.jsx'
 
 const statusStyles = {
   draft: 'bg-[var(--primary-soft)] text-[var(--primary)]',
-  sent: 'bg-[rgba(52,199,89,0.16)] text-[#34c759]',
-  paid: 'bg-[rgba(48,209,88,0.18)] text-[#30d058]',
-  overdue: 'bg-[rgba(255,69,58,0.16)] text-[#ff453a]'
+  sent: 'bg-[rgba(52,199,89,0.16)] text-[#176b37]',
+  paid: 'bg-[rgba(48,209,88,0.18)] text-[#176b37]',
+  overdue: 'bg-[rgba(255,69,58,0.16)] text-[#b42318]'
 }
 
 const statusLabels = {
@@ -42,39 +43,40 @@ const statusFilters = [
 ]
 
 const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedStatus = searchParams.get('status')
+  const status = statusFilters.some((filter) => filter.value === requestedStatus) ? requestedStatus : 'all'
   const [invoices, setInvoices] = useState([])
   const [isLoading, setIsLoading] = useState(false)
   const [filters, setFilters] = useState({
     search: '',
-    draftSearch: '',
-    status: 'all'
+    draftSearch: ''
   })
   const [pagination, setPagination] = useState({ page: 1, pageSize: 10, total: 0, totalPages: 1 })
+  const requestVersion = useRef(0)
+  const currentQuery = useRef(null)
+  currentQuery.current = { page: pagination.page, pageSize: pagination.pageSize, search: filters.search, status }
 
   const resetPageToFirst = useCallback(() => {
     setPagination((prev) => (prev.page === 1 ? prev : { ...prev, page: 1 }))
   }, [])
 
   useEffect(() => {
+    if (filters.draftSearch === filters.search) return
     const value = filters.draftSearch
     const handler = setTimeout(() => {
-      let changed = false
-      setFilters((prev) => {
-        if (prev.search === value) {
-          return prev
-        }
-        changed = true
-        return { ...prev, search: value }
-      })
-      if (changed) {
-        resetPageToFirst()
-      }
+      setFilters((prev) => ({ ...prev, search: value }))
+      resetPageToFirst()
     }, 250)
     return () => clearTimeout(handler)
-  }, [filters.draftSearch, resetPageToFirst])
+  }, [filters.draftSearch, filters.search, resetPageToFirst])
+
+  useEffect(() => resetPageToFirst(), [status, resetPageToFirst])
+  useEffect(() => () => { requestVersion.current += 1 }, [])
 
   const fetchInvoices = useCallback(
     async ({ page, pageSize, search, status }) => {
+      const version = ++requestVersion.current
       try {
         setIsLoading(true)
         const params = { page, pageSize }
@@ -86,6 +88,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
         }
 
         const { data } = await api.get('/invoices', { params })
+        if (version !== requestVersion.current) return
         setInvoices(data?.data ?? [])
         const meta = data?.pagination ?? {}
         setPagination((prev) => {
@@ -106,9 +109,9 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
           return next
         })
       } catch (error) {
-        showErrorToast(toast.error, error)
+        if (version === requestVersion.current) showErrorToast(toast.error, error)
       } finally {
-        setIsLoading(false)
+        if (version === requestVersion.current) setIsLoading(false)
       }
     },
     []
@@ -119,9 +122,9 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
       page: pagination.page,
       pageSize: pagination.pageSize,
       search: filters.search,
-      status: filters.status
+      status: status
     })
-  }, [fetchInvoices, filters.search, filters.status, pagination.page, pagination.pageSize, refreshKey])
+  }, [fetchInvoices, filters.search, status, pagination.page, pagination.pageSize, refreshKey])
 
   const isEmpty = !isLoading && invoices.length === 0 && pagination.total === 0
 
@@ -129,12 +132,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
     try {
       await api.patch(`/invoices/${id}`, { status })
       toast.success('Statut mis à jour', { icon: '✅' })
-      await fetchInvoices({
-        page: pagination.page,
-        pageSize: pagination.pageSize,
-        search: filters.search,
-        status: filters.status
-      })
+      await fetchInvoices(currentQuery.current)
     } catch (error) {
       showErrorToast(toast.error, error)
     }
@@ -158,18 +156,14 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
     }
   }
 
-  const handleStatusFilterChange = (status) => {
-    let changed = false
-    setFilters((prev) => {
-      if (prev.status === status) {
-        return prev
-      }
-      changed = true
-      return { ...prev, status }
+  const handleStatusFilterChange = (nextStatus) => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev)
+      if (nextStatus === 'all') next.delete('status')
+      else next.set('status', nextStatus)
+      return next
     })
-    if (changed) {
-      resetPageToFirst()
-    }
+    resetPageToFirst()
   }
 
   const handlePageChange = (nextPage) => {
@@ -211,7 +205,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                   page: pagination.page,
                   pageSize: pagination.pageSize,
                   search: filters.search,
-                  status: filters.status
+                  status: status
                 })
               }
               className='btn-ghost h-9 px-3 text-xs font-semibold'
@@ -264,9 +258,10 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
               <button
                 key={filter.value}
                 type='button'
+                aria-pressed={status === filter.value}
                 onClick={() => handleStatusFilterChange(filter.value)}
                 className={`btn-ghost h-9 px-3 text-xs font-semibold ${
-                  filters.status === filter.value ? 'border-[var(--primary)] text-[var(--primary)]' : ''
+                  status === filter.value ? 'border-[var(--primary)] text-[var(--primary)]' : ''
                 }`}
               >
                 {filter.value === 'all' ? <Filter className='mr-2 h-4 w-4' /> : null}
@@ -278,35 +273,36 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
       </div>
 
       <div className='overflow-x-auto'>
-        <table className='min-w-full divide-y divide-[var(--border)] text-sm'>
+        <table className='responsive-records min-w-full divide-y divide-[var(--border)] text-sm'>
+            <caption className='sr-only'>Liste des factures</caption>
           <thead className='text-[var(--text-muted)]'>
             <tr>
-              <th className='px-4 py-3 text-left font-semibold'>
+              <th scope='col' className='px-4 py-3 text-left font-semibold'>
                 <div className='flex items-center gap-2'>
                   <FileText className='h-4 w-4' /> Numéro
                 </div>
               </th>
-              <th className='px-4 py-3 text-left font-semibold'>
+              <th scope='col' className='px-4 py-3 text-left font-semibold'>
                 <div className='flex items-center gap-2'>
                   <User className='h-4 w-4' /> Client
                 </div>
               </th>
-              <th className='px-4 py-3 text-left font-semibold'>
+              <th scope='col' className='px-4 py-3 text-left font-semibold'>
                 <div className='flex items-center gap-2'>
                   <Wallet className='h-4 w-4' /> Montant
                 </div>
               </th>
-              <th className='px-4 py-3 text-left font-semibold'>
+              <th scope='col' className='px-4 py-3 text-left font-semibold'>
                 <div className='flex items-center gap-2'>
                   <Send className='h-4 w-4' /> Statut
                 </div>
               </th>
-              <th className='px-4 py-3 text-left font-semibold'>
+              <th scope='col' className='px-4 py-3 text-left font-semibold'>
                 <div className='flex items-center gap-2'>
                   <Calendar className='h-4 w-4' /> Émise
                 </div>
               </th>
-              <th className='px-4 py-3 text-right font-semibold'>Actions</th>
+              <th scope='col' className='px-4 py-3 text-right font-semibold'>Actions</th>
             </tr>
           </thead>
           <tbody className='divide-y divide-[var(--border)]'>
@@ -351,7 +347,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
             {!isLoading && !isEmpty
               ? invoices.map((invoice) => (
                   <tr key={invoice.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
-                    <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
+                    <td data-label='Numéro' className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
                       #{invoice.invoice_number}
                       {invoice.pdf_available === false ? (
                         <span
@@ -362,27 +358,27 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                         </span>
                       ) : null}
                     </td>
-                    <td className='px-4 py-3 text-[var(--text-muted)]'>
+                    <td data-label='Client' className='px-4 py-3 text-[var(--text-muted)]'>
                       {invoice.client?.company_name || '—'}
                     </td>
-                    <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
+                    <td data-label='Montant' className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
                       {Number(invoice.total_amount || 0).toLocaleString('fr-FR', {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2
                       })}{' '}
                       {invoice.currency === '$' ? 'USD' : invoice.currency || 'USD'}
                     </td>
-                    <td className='px-4 py-3'>
+                    <td data-label='Statut' className='px-4 py-3'>
                       <span className={`badge ${statusStyles[invoice.status] || statusStyles.draft}`}>
                         {statusLabels[invoice.status] ?? invoice.status}
                       </span>
                     </td>
-                    <td className='px-4 py-3 text-[var(--text-muted)]'>
+                    <td data-label='Émise' className='px-4 py-3 text-[var(--text-muted)]'>
                       {invoice.issue_date
                         ? new Date(invoice.issue_date).toLocaleDateString('fr-FR')
                         : '—'}
                     </td>
-                    <td className='px-4 py-3 text-right'>
+                    <td data-label='Actions' className='px-4 py-3 text-right'>
                       <div className='flex items-center justify-end gap-2'>
                         <select
                           value={invoice.status}

@@ -18,8 +18,8 @@ import { api } from '../services/api.js'
 import FormSection from '../components/FormSection.jsx'
 import { showErrorToast } from '../utils/errorToast.js'
 import PageHeader from '../components/PageHeader.jsx'
-import FloatingActionButton from '../components/FloatingActionButton.jsx'
 import Pagination from '../components/Pagination.jsx'
+import { useModalFocus } from '../hooks/useModalFocus.js'
 
 const initialState = {
   company_name: '',
@@ -35,6 +35,7 @@ const Clients = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(true)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const drawerRef = useModalFocus(isDrawerOpen, () => closeDrawer())
   const [editingClient, setEditingClient] = useState(null)
   const [isUpdatingClient, setIsUpdatingClient] = useState(false)
   const [filters, setFilters] = useState({ search: '', draftSearch: '' })
@@ -208,8 +209,8 @@ const Clients = () => {
         icon={Building2}
       >
         <div className='flex flex-col gap-2'>
-          <label className='label'>Entreprise</label>
-          <input
+          <label className='label' htmlFor={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-company_name`}>Entreprise</label>
+          <input id={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-company_name`}
             name='company_name'
             value={values.company_name}
             onChange={onChangeHandler}
@@ -219,8 +220,8 @@ const Clients = () => {
           />
         </div>
         <div className='flex flex-col gap-2'>
-          <label className='label'>Contact principal</label>
-          <input
+          <label className='label' htmlFor={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-contact_name`}>Contact principal</label>
+          <input id={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-contact_name`}
             name='contact_name'
             value={values.contact_name}
             onChange={onChangeHandler}
@@ -237,8 +238,8 @@ const Clients = () => {
       >
         <div className='grid gap-4 sm:grid-cols-2'>
           <div className='flex flex-col gap-2'>
-            <label className='label'>Email</label>
-            <input
+            <label className='label' htmlFor={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-email`}>Email</label>
+            <input id={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-email`}
               type='email'
               name='email'
               value={values.email}
@@ -248,8 +249,8 @@ const Clients = () => {
             />
           </div>
           <div className='flex flex-col gap-2'>
-            <label className='label'>Téléphone</label>
-            <input
+            <label className='label' htmlFor={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-phone`}>Téléphone</label>
+            <input id={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-phone`}
               name='phone'
               value={values.phone}
               onChange={onChangeHandler}
@@ -335,15 +336,16 @@ const Clients = () => {
         </div>
 
         <div className='overflow-x-auto'>
-          <table className='min-w-full divide-y divide-[var(--border)] text-sm'>
+          <table className='responsive-records min-w-full divide-y divide-[var(--border)] text-sm'>
+            <caption className='sr-only'>Liste des clients</caption>
             <thead className='text-[var(--text-muted)]'>
               <tr>
-                <th className='px-4 py-3 text-left font-semibold'>Entreprise</th>
-                <th className='px-4 py-3 text-left font-semibold'>Contact</th>
-                <th className='px-4 py-3 text-left font-semibold'>Email</th>
-                <th className='px-4 py-3 text-left font-semibold'>Téléphone</th>
-                <th className='px-4 py-3 text-left font-semibold'>Adresse</th>
-                <th className='px-4 py-3 text-right font-semibold'>Actions</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Entreprise</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Contact</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Email</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Téléphone</th>
+                <th scope='col' className='px-4 py-3 text-left font-semibold'>Adresse</th>
+                <th scope='col' className='px-4 py-3 text-right font-semibold'>Actions</th>
               </tr>
             </thead>
             <tbody className='divide-y divide-[var(--border)]'>
@@ -378,12 +380,12 @@ const Clients = () => {
               ) : (
                 clients.map((client) => (
                   <tr key={client.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
-                    <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>{client.company_name}</td>
-                    <td className='px-4 py-3 text-[var(--text-muted)]'>{client.contact_name || '—'}</td>
-                    <td className='px-4 py-3 text-[var(--text-muted)]'>{client.email || '—'}</td>
-                    <td className='px-4 py-3 text-[var(--text-muted)]'>{client.phone || '—'}</td>
-                    <td className='px-4 py-3 text-[var(--text-muted)]'>{client.address || '—'}</td>
-                    <td className='px-4 py-3 text-right'>
+                    <td data-label='Entreprise' className='px-4 py-3 font-semibold text-[var(--text-dark)]'>{client.company_name}</td>
+                    <td data-label='Contact' className='px-4 py-3 text-[var(--text-muted)]'>{client.contact_name || '—'}</td>
+                    <td data-label='Email' className='px-4 py-3 text-[var(--text-muted)]'>{client.email || '—'}</td>
+                    <td data-label='Téléphone' className='px-4 py-3 text-[var(--text-muted)]'>{client.phone || '—'}</td>
+                    <td data-label='Adresse' className='px-4 py-3 text-[var(--text-muted)]'>{client.address || '—'}</td>
+                    <td data-label='Actions' className='px-4 py-3 text-right'>
                       <div className='flex items-center justify-end gap-2'>
                         <button
                           type='button'
@@ -396,7 +398,7 @@ const Clients = () => {
                         <button
                           type='button'
                           onClick={() => handleDelete(client.id)}
-                          className='btn-ghost h-9 px-3 text-xs font-semibold text-[#ff453a] hover:bg-[rgba(255,69,58,0.14)]'
+                          className='btn-ghost h-9 px-3 text-xs font-semibold text-[#b42318] hover:bg-[rgba(255,69,58,0.14)]'
                         >
                           <Trash2 className='mr-2 h-4 w-4' />
                           Supprimer
@@ -423,10 +425,10 @@ const Clients = () => {
       {isDrawerOpen ? (
         <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
           <div className='flex min-h-full items-stretch justify-end'>
-            <div className='relative flex h-full min-h-full w-full max-w-lg flex-col border border-[var(--border)] bg-white'>
+            <div ref={drawerRef} role='dialog' aria-modal='true' aria-labelledby='client-drawer-title' tabIndex={-1} className='relative flex h-full min-h-full w-full max-w-lg flex-col border border-[var(--border)] bg-white'>
               <div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
                 <div>
-                  <h2 className='text-lg font-semibold text-[var(--text-dark)]'>Nouveau client</h2>
+                  <h2 id='client-drawer-title' className='text-lg font-semibold text-[var(--text-dark)]'>Nouveau client</h2>
                   <p className='text-xs text-[var(--text-muted)]'>
                     Sauvegardez les informations de vos clients pour les réutiliser instantanément.
                   </p>
@@ -434,6 +436,7 @@ const Clients = () => {
                 <button
                   type='button'
                   onClick={closeDrawer}
+                  aria-label='Fermer le formulaire client'
                   className='rounded-full border border-[var(--border)] bg-white p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
                 >
                   <X className='h-4 w-4' />
@@ -510,14 +513,6 @@ const Clients = () => {
         </div>
       ) : null}
 
-      {!isDrawerOpen ? (
-        <FloatingActionButton
-          icon={PlusCircle}
-          label='Nouveau client'
-          onClick={openDrawer}
-          className='lg:hidden'
-        />
-      ) : null}
     </div>
   )
 }

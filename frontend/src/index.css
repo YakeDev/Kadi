@@ -3,8 +3,8 @@
 
 :root {
   color-scheme: light;
-  --primary: #0a84ff;
-  --primary-soft: rgba(10, 132, 255, 0.14);
+  --primary: #0866c6;
+  --primary-soft: #eaf2fc;
   --primary-contrast: #ffffff;
   --text-dark: #1d1d1f;
   --text-muted: #6e6e73;
@@ -12,10 +12,10 @@
   --bg-elevated: #ffffff;
   --bg-panel: #ffffff;
   --border: rgba(15, 23, 42, 0.08);
-  --radius-md: 14px;
-  --radius-lg: 20px;
-  --radius-xl: 28px;
-  --radius-2xl: 36px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 20px;
+  --radius-2xl: 24px;
   --radius-3xl: 48px;
   --shadow-soft: 0 0 0 0 rgba(0, 0, 0, 0);
   --shadow-card: 0 0 0 0 rgba(0, 0, 0, 0);
@@ -47,7 +47,7 @@
 
 
   .btn-primary {
-    @apply btn bg-[var(--primary)] text-[var(--primary-contrast)] hover:bg-[#0a7aea] focus:ring-4 focus:ring-[rgba(10,132,255,0.2)];
+    @apply btn bg-[var(--primary)] text-[var(--primary-contrast)] hover:bg-[#0758ab] focus:ring-4 focus:ring-[rgba(10,132,255,0.2)];
   }
 
   .btn-secondary {
@@ -103,3 +103,16 @@
 @utility textarea {
     @apply w-full rounded-[var(--radius-lg)] border border-[var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-dark)] leading-relaxed transition focus:border-[var(--primary)] focus:outline-none focus:ring-2 focus:ring-[rgba(10,132,255,0.25)];
   }
+
+
+/* Compact record cards retain the same table headers and actions on narrow screens. */
+@media (max-width: 1023px) {
+  .responsive-records, .responsive-records tbody { display: block; width: 100%; }
+  .responsive-records thead { position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  .responsive-records tbody > tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 12px; padding: 8px; border: 1px solid var(--border); border-radius: var(--radius-md); }
+  .responsive-records td { display: block; min-width: 0; padding: 8px; text-align: left; overflow-wrap: anywhere; }
+  .responsive-records td[data-label]::before { content: attr(data-label); display: block; margin-bottom: 4px; color: var(--text-muted); font-size: 12px; font-weight: 600; }
+  .responsive-records td:first-child, .responsive-records td:last-child, .responsive-records td[colspan] { grid-column: 1 / -1; }
+  .responsive-records td:last-child > div { flex-wrap: wrap; justify-content: flex-start; }
+  .responsive-records td select { max-width: 100%; }
+}

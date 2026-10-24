@@ -20,7 +20,7 @@ const CollapsibleSection = ({
       )}
     >
       <header
-        className='flex items-start justify-between gap-3 px-5 py-4'
+        className='flex flex-col items-stretch gap-3 px-4 py-4 sm:flex-row sm:items-start sm:justify-between sm:px-5'
       >
         <button
           type='button'
@@ -47,7 +47,7 @@ const CollapsibleSection = ({
             ) : null}
           </div>
         </button>
-        {action ? <div className='shrink-0'>{action}</div> : null}
+        {action ? <div className='flex flex-wrap items-center gap-2'>{action}</div> : null}
       </header>
       {isOpen ? <div className='border-t border-[var(--border)] px-5 py-5 space-y-4'>{children}</div> : null}
     </section>

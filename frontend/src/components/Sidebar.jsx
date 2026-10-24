@@ -59,7 +59,7 @@ const Sidebar = () => {
 							<img
 								src={companyLogo}
 								alt={`${companyName} logo`}
-								className='h-full w-full object-cover'
+								className='h-full w-full object-contain p-1'
 								width={44}
 								height={44}
 							/>

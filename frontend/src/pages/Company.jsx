@@ -261,12 +261,12 @@ const Company = () => {
             <div className='flex justify-center md:justify-start md:pt-1'>{renderLogoUploader()}</div>
             <div className='grid gap-4 md:grid-cols-2'>
               <div className='flex flex-col gap-2 md:col-span-2'>
-                <label className='label'>Nom de l’entreprise</label>
-                <input name='company' value={form.company} onChange={handleChange} className='input' required />
+                <label className='label' htmlFor='company-company'>Nom de l’entreprise</label>
+                <input id='company-company' name='company' value={form.company} onChange={handleChange} className='input' required />
               </div>
               <div className='flex flex-col gap-2 md:col-span-2'>
-                <label className='label'>Tagline (optionnel)</label>
-                <input
+                <label className='label' htmlFor='company-tagline'>Tagline (optionnel)</label>
+                <input id='company-tagline'
                   name='tagline'
                   value={form.tagline}
                   onChange={handleChange}
@@ -285,8 +285,8 @@ const Company = () => {
         >
           <div className='grid gap-4 md:grid-cols-2'>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Responsable</label>
-              <input
+              <label className='label' htmlFor='company-manager_name'>Responsable</label>
+              <input id='company-manager_name'
                 name='manager_name'
                 value={form.manager_name}
                 onChange={handleChange}
@@ -295,8 +295,8 @@ const Company = () => {
               />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Téléphone</label>
-              <input
+              <label className='label' htmlFor='company-phone'>Téléphone</label>
+              <input id='company-phone'
                 name='phone'
                 value={form.phone}
                 onChange={handleChange}
@@ -307,12 +307,12 @@ const Company = () => {
           </div>
           <div className='grid gap-4 md:grid-cols-2'>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Email de contact</label>
-              <input value={companyEmail} disabled className='input bg-[rgba(148,163,184,0.12)]' />
+              <label className='label' htmlFor='company-email-de-contact'>Email de contact</label>
+              <input id='company-email-de-contact' value={companyEmail} disabled className='input bg-[rgba(148,163,184,0.12)]' />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Site web</label>
-              <input
+              <label className='label' htmlFor='company-website'>Site web</label>
+              <input id='company-website'
                 name='website'
                 value={form.website}
                 onChange={handleChange}
@@ -330,8 +330,8 @@ const Company = () => {
         >
           <div className='grid gap-4 md:grid-cols-2'>
             <div className='flex flex-col gap-2 md:col-span-2'>
-              <label className='label'>Adresse</label>
-              <textarea
+              <label className='label' htmlFor='company-address'>Adresse</label>
+              <textarea id='company-address'
                 name='address'
                 value={form.address}
                 onChange={handleChange}
@@ -340,12 +340,12 @@ const Company = () => {
               />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Ville</label>
-              <input name='city' value={form.city} onChange={handleChange} className='input' />
+              <label className='label' htmlFor='company-city'>Ville</label>
+              <input id='company-city' name='city' value={form.city} onChange={handleChange} className='input' />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Province / État</label>
-              <input name='state' value={form.state} onChange={handleChange} className='input' />
+              <label className='label' htmlFor='company-state'>Province / État</label>
+              <input id='company-state' name='state' value={form.state} onChange={handleChange} className='input' />
             </div>
           </div>
         </FormSection>
@@ -357,16 +357,16 @@ const Company = () => {
         >
           <div className='grid gap-4 md:grid-cols-2'>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Registre du commerce (RCCM)</label>
-              <input name='rccm' value={form.rccm} onChange={handleChange} className='input' />
+              <label className='label' htmlFor='company-rccm'>Registre du commerce (RCCM)</label>
+              <input id='company-rccm' name='rccm' value={form.rccm} onChange={handleChange} className='input' />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Numéro fiscal (NIF)</label>
-              <input name='nif' value={form.nif} onChange={handleChange} className='input' />
+              <label className='label' htmlFor='company-nif'>Numéro fiscal (NIF)</label>
+              <input id='company-nif' name='nif' value={form.nif} onChange={handleChange} className='input' />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Identifiant national</label>
-              <input name='national_id' value={form.national_id} onChange={handleChange} className='input' />
+              <label className='label' htmlFor='company-national_id'>Identifiant national</label>
+              <input id='company-national_id' name='national_id' value={form.national_id} onChange={handleChange} className='input' />
             </div>
           </div>
         </FormSection>
@@ -389,8 +389,8 @@ const Company = () => {
         <form onSubmit={handleChangePassword} className='space-y-4'>
           <div className='grid gap-4 md:grid-cols-2'>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Mot de passe actuel</label>
-              <input
+              <label className='label' htmlFor='company-currentPassword'>Mot de passe actuel</label>
+              <input id='company-currentPassword'
                 type='password'
                 name='currentPassword'
                 value={passwordForm.currentPassword}
@@ -402,8 +402,8 @@ const Company = () => {
               />
             </div>
             <div className='flex flex-col gap-2'>
-              <label className='label'>Nouveau mot de passe</label>
-              <input
+              <label className='label' htmlFor='company-newPassword'>Nouveau mot de passe</label>
+              <input id='company-newPassword'
                 type='password'
                 name='newPassword'
                 value={passwordForm.newPassword}
@@ -415,8 +415,8 @@ const Company = () => {
               />
             </div>
             <div className='flex flex-col gap-2 md:col-span-2'>
-              <label className='label'>Confirmer le nouveau mot de passe</label>
-              <input
+              <label className='label' htmlFor='company-confirmPassword'>Confirmer le nouveau mot de passe</label>
+              <input id='company-confirmPassword'
                 type='password'
                 name='confirmPassword'
                 value={passwordForm.confirmPassword}

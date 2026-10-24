@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import toast from 'react-hot-toast'
 import {
@@ -22,6 +22,8 @@ import CollapsibleSection from './CollapsibleSection.jsx'
 import ClientPickerModal from './ClientPickerModal.jsx'
 import CatalogPickerModal from './CatalogPickerModal.jsx'
 import InvoicePreview from './InvoicePreview.jsx'
+import { getInvoiceTotals, formatInvoiceMoney } from '../utils/invoiceTotals.js'
+import { clearInvoiceDraft, invoiceDraftKey, readInvoiceDraft, writeInvoiceDraft } from '../utils/invoiceDraft.js'
 
 const createEmptyItem = (currency = 'USD') => ({
   catalogItemId: null,
@@ -74,17 +76,25 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
   }
 }
 
-const InvoiceForm = ({
+const InvoiceEditor = ({
   clients = [],
   onCreated,
   onUpdated,
   defaultClientId,
+  newClientId,
   variant = 'card',
   invoice = null
 }) => {
   const isDrawer = variant === 'drawer'
   const isFullPage = variant === 'page'
-  const [form, setForm] = useState(() => normalizeInvoiceForForm(invoice, defaultClientId))
+  const { profile: companyProfile, user } = useAuth()
+  const draftKey = variant === 'page' ? invoiceDraftKey(user?.id, invoice) : null
+  const skipDraftSave = useRef(false)
+  const [form, setForm] = useState(() => readInvoiceDraft(draftKey) || normalizeInvoiceForForm(invoice, defaultClientId))
+  const savedFormSignature = useRef(JSON.stringify(normalizeInvoiceForForm(invoice, defaultClientId)))
+  const isDirty = JSON.stringify(form) !== savedFormSignature.current
+  const [draftSaved, setDraftSaved] = useState(true)
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isGenerating, setIsGenerating] = useState(false)
   const [aiPrompt, setAiPrompt] = useState('')
@@ -93,18 +103,28 @@ const InvoiceForm = ({
   const [isClientPickerOpen, setIsClientPickerOpen] = useState(false)
   const [catalogPicker, setCatalogPicker] = useState({ open: false, index: null })
   const isEditing = Boolean(invoice?.id)
-  const { profile: companyProfile } = useAuth()
 
   useEffect(() => {
     if (!isEditing) {
-      setForm((prev) => ({ ...prev, client_id: defaultClientId || '' }))
+      setForm((prev) => prev.client_id ? prev : { ...prev, client_id: defaultClientId || '' })
     }
   }, [defaultClientId, isEditing])
 
   useEffect(() => {
-    setForm(normalizeInvoiceForForm(invoice, defaultClientId))
-    setAiPrompt('')
-  }, [invoice, defaultClientId])
+    if (newClientId) setForm((prev) => ({ ...prev, client_id: newClientId }))
+  }, [newClientId])
+
+  useEffect(() => {
+    if (skipDraftSave.current) { skipDraftSave.current = false; return }
+    if (draftKey) setDraftSaved(writeInvoiceDraft(draftKey, form))
+  }, [draftKey, form])
+
+  useEffect(() => {
+    if (!draftKey || !isDirty) return
+    const warnBeforeUnload = (event) => { event.preventDefault(); event.returnValue = '' }
+    window.addEventListener('beforeunload', warnBeforeUnload)
+    return () => window.removeEventListener('beforeunload', warnBeforeUnload)
+  }, [draftKey, isDirty])
 
   useEffect(() => {
     const loadCatalog = async () => {
@@ -200,7 +220,10 @@ const InvoiceForm = ({
   }
 
   const resetForm = () => {
-    setForm(normalizeInvoiceForForm(null, defaultClientId))
+    clearInvoiceDraft(draftKey)
+    const initial = normalizeInvoiceForForm(invoice, defaultClientId)
+    savedFormSignature.current = JSON.stringify(initial)
+    setForm(initial)
     setAiPrompt('')
   }
 
@@ -223,10 +246,15 @@ const InvoiceForm = ({
     try {
       if (isEditing) {
         await api.patch(`/invoices/${invoice.id}`, form)
+        savedFormSignature.current = JSON.stringify(form)
+        skipDraftSave.current = true
+        clearInvoiceDraft(draftKey)
         notifySuccess('Facture mise à jour')
         onUpdated?.()
       } else {
         await api.post('/invoices', form)
+        skipDraftSave.current = true
+        clearInvoiceDraft(draftKey)
         notifySuccess('Facture enregistrée avec succès')
         resetForm()
         onCreated?.()
@@ -272,6 +300,7 @@ const InvoiceForm = ({
     }
   }
 
+  const { total, currency } = getInvoiceTotals(form)
   const inputClass = isDrawer ? 'input-compact' : 'input'
   const textareaClass = isDrawer ? 'textarea textarea-compact' : 'textarea'
   const layoutClass = isDrawer
@@ -284,11 +313,12 @@ const InvoiceForm = ({
   return (
     <>
       <div className={layoutClass}>
-        <form onSubmit={handleSubmit} className='space-y-5'>
+        <form onSubmit={handleSubmit} className='min-w-0 space-y-5'>
+          {draftKey ? <p className='text-sm text-[var(--text-muted)]' role='status'>{draftSaved ? 'Saisie conservée dans cet onglet. Enregistrez la facture avant de le fermer.' : 'La sauvegarde dans cet onglet est indisponible. Enregistrez la facture avant de quitter cette page.'}</p> : null}
           {isDrawer ? (
             <div className='space-y-2'>
               <label className='label' htmlFor='ia-prompt'>
-                Prompt IA
+                Décrire la facture (facultatif)
               </label>
               <div className='flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-white px-3 py-2'>
                 <div className='rounded-full bg-[var(--primary-soft)] p-2 text-[var(--primary)]'>
@@ -310,7 +340,7 @@ const InvoiceForm = ({
             </div>
           ) : (
             <div className='flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between'>
-              <div>
+              {!isFullPage ? <div>
                 <p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>Factures</p>
                 <h2 className='mt-2 text-2xl font-semibold text-[var(--text-dark)]'>
                   {isEditing ? 'Modifier la facture' : 'Nouvelle facture'}
@@ -320,12 +350,12 @@ const InvoiceForm = ({
                     ? 'Mettez à jour les informations avant validation.'
                     : 'Renseignez les éléments ci-dessous ou laissez Kadi IA préparer la facture.'}
                 </p>
-              </div>
-              <div className='w-full max-w-md space-y-2'>
+              </div> : null}
+              <div className='w-full space-y-2'>
                 <label className='label' htmlFor='ia-prompt'>
-                  Prompt IA
+                  Décrire la facture (facultatif)
                 </label>
-                <div className='flex items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-white px-3 py-2'>
+                <div className='flex flex-wrap items-center gap-2 rounded-[var(--radius-md)] border border-[var(--border)] bg-white px-3 py-2'>
                   <div className='rounded-full bg-[var(--primary-soft)] p-2 text-[var(--primary)]'>
                     <Sparkles className='h-4 w-4' />
                   </div>
@@ -335,7 +365,7 @@ const InvoiceForm = ({
                     value={aiPrompt}
                     onChange={(event) => setAiPrompt(event.target.value)}
                     placeholder='Décrivez votre facture…'
-                    className='w-full bg-transparent text-sm text-[var(--text-dark)] focus:outline-none'
+                    className='min-w-0 flex-1 bg-transparent text-sm text-[var(--text-dark)] focus:outline-none'
                   />
                   <button type='button' className='btn-secondary whitespace-nowrap' onClick={handleAIGenerate} disabled={isGenerating}>
                     {isGenerating ? <Loader2 className='h-4 w-4 animate-spin' /> : <Sparkles className='h-4 w-4' />}
@@ -482,9 +512,9 @@ const InvoiceForm = ({
                 return (
                   <div
                     key={`invoice-item-${index}`}
-                    className='grid gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-panel)] p-4 backdrop-blur md:grid-cols-[1.5fr,1.5fr,0.8fr,0.8fr,auto]'
+                    className='grid min-w-0 grid-cols-2 gap-3 rounded-[var(--radius-md)] border border-[var(--border)] bg-[var(--bg-panel)] p-4 md:grid-cols-4'
                   >
-                    <div className='space-y-2'>
+                    <div className='col-span-2 min-w-0 space-y-2'>
                       <label className='label flex items-center gap-2'>
                         <PackageSearch className='h-4 w-4 text-[var(--text-muted)]' />
                         Article catalogue
@@ -503,12 +533,13 @@ const InvoiceForm = ({
                         <p className='text-xs text-[var(--text-muted)]'>{selectedCatalog.description}</p>
                       ) : null}
                     </div>
-                    <div className='space-y-2'>
-                      <label className='label flex items-center gap-2'>
+                    <div className='col-span-2 min-w-0 space-y-2'>
+                      <label htmlFor={`line-description-${index}`} className='label flex items-center gap-2'>
                         <FileText className='h-4 w-4 text-[var(--text-muted)]' />
                         Description
                       </label>
                       <input
+                        id={`line-description-${index}`}
                         type='text'
                         value={item.description}
                         onChange={(event) => updateItem(index, 'description', event.target.value)}
@@ -518,8 +549,9 @@ const InvoiceForm = ({
                       />
                     </div>
                     <div className='space-y-2'>
-                      <label className='label'>Quantité</label>
+                      <label htmlFor={`line-quantity-${index}`} className='label block min-h-8'>Quantité</label>
                       <input
+                        id={`line-quantity-${index}`}
                         type='number'
                         min='0.001' max='1000000' step='0.001'
                         value={item.quantity}
@@ -528,8 +560,9 @@ const InvoiceForm = ({
                       />
                     </div>
                     <div className='space-y-2'>
-                      <label className='label'>Prix unitaire</label>
+                      <label htmlFor={`line-price-${index}`} className='label block min-h-8'>Prix unitaire ({form.currency})</label>
                       <input
+                        id={`line-price-${index}`}
                         type='number'
                         min='0'
                         step='0.01'
@@ -541,15 +574,13 @@ const InvoiceForm = ({
                     {form.items.length > 1 ? (
                       <button
                         type='button'
-                        className='btn-ghost mt-7 justify-center px-3 py-2 text-xs font-medium text-[#ff453a] hover:bg-[rgba(255,69,58,0.14)]'
+                        className='btn-ghost mt-7 justify-center px-3 py-2 text-xs font-medium text-[#b42318] hover:bg-[rgba(255,69,58,0.14)] md:col-span-2'
                         onClick={() => removeItem(index)}
                       >
                         <Trash2 className='h-4 w-4' />
                         Retirer
                       </button>
-                    ) : (
-                      <span className='mt-7 text-[11px] text-[var(--text-muted)]'>—</span>
-                    )}
+                    ) : null}
                   </div>
                 )
               })}
@@ -562,6 +593,7 @@ const InvoiceForm = ({
           >
             <textarea
               id='notes'
+              aria-label='Notes et conditions de paiement'
               value={form.notes}
               onChange={(event) => updateField('notes', event.target.value)}
               placeholder='Conditions de paiement, message de remerciement…'
@@ -582,22 +614,27 @@ const InvoiceForm = ({
         </form>
 
         <InvoicePreview
-          className='hidden lg:flex lg:flex-col lg:sticky lg:top-24'
+          id='invoice-preview'
+          className={clsx('scroll-mt-24 lg:sticky lg:top-24', isFullPage && !isPreviewOpen && 'hidden lg:flex')}
           company={companyProfile}
           client={selectedClient}
           invoice={form}
         />
       </div>
 
-      {isDrawer ? (
-        <InvoicePreview
-          className='mt-6 flex lg:hidden'
-          company={companyProfile}
-          client={selectedClient}
-          invoice={form}
-        />
+      {isFullPage ? (
+        <div className='fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-[var(--border)] bg-white px-4 py-3 shadow-lg lg:hidden'>
+          <div><p className='text-xs text-[var(--text-muted)]'>Total de la facture</p><output aria-label='Total de la facture' aria-live='polite' className='text-lg font-semibold'>{formatInvoiceMoney(total, currency)}</output></div>
+          <button type='button' aria-expanded={isPreviewOpen} aria-controls='invoice-preview' className='btn-secondary' onClick={() => {
+            setIsPreviewOpen((prev) => !prev)
+            if (!isPreviewOpen) requestAnimationFrame(() => {
+              const preview = document.getElementById('invoice-preview')
+              preview?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+              preview?.focus({ preventScroll: true })
+            })
+          }}>{isPreviewOpen ? 'Masquer l’aperçu' : 'Voir l’aperçu'}</button>
+        </div>
       ) : null}
-
       <ClientPickerModal
         isOpen={isClientPickerOpen}
         onClose={() => setIsClientPickerOpen(false)}
@@ -613,6 +650,12 @@ const InvoiceForm = ({
       />
     </>
   )
+}
+
+const InvoiceForm = (props) => {
+  const { user } = useAuth()
+  const identity = `${user?.id || 'anonymous'}:${props.invoice?.id || 'new'}:${props.invoice?.version ?? props.invoice?.updated_at ?? '0'}`
+  return <InvoiceEditor key={identity} {...props} />
 }
 
 export default InvoiceForm

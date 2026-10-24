@@ -1,4 +1,5 @@
 import clsx from 'clsx'
+import { getInvoiceTotals } from '../utils/invoiceTotals.js'
 
 const formatCurrency = (value, currency = 'USD') =>
   new Intl.NumberFormat('fr-FR', {
@@ -18,24 +19,9 @@ const formatDate = (value) =>
       })
     : '—'
 
-const InvoicePreview = ({ className, company, client, invoice }) => {
+const InvoicePreview = ({ id, className, company, client, invoice }) => {
   const items = invoice.items ?? []
-  const calculatedSubtotal = items.reduce(
-    (acc, item) => acc + Math.round((Number(item.quantity || 0) * Number(item.unitPrice || 0) + Number.EPSILON) * 100) / 100,
-    0
-  )
-
-  const isIssued = invoice.status && invoice.status !== 'draft'
-  const subtotal = isIssued && invoice.subtotal_amount != null ? Number(invoice.subtotal_amount) : calculatedSubtotal
-  const taxRate = Number(invoice.tax_rate || 0)
-  const roundedRate = Number.isFinite(taxRate) && taxRate >= 0 && taxRate <= 100 ? Math.round(taxRate * 100) : 0
-  const subtotalCents = Math.round(subtotal * 100)
-  const calculatedTax = Number.isSafeInteger(subtotalCents) && subtotalCents >= 0
-    ? Number((BigInt(subtotalCents) * BigInt(roundedRate) + 5000n) / 10000n) / 100
-    : 0
-  const taxAmount = isIssued && invoice.tax_amount != null ? Number(invoice.tax_amount) : calculatedTax
-  const total = isIssued && invoice.total_amount != null ? Number(invoice.total_amount) : subtotal + taxAmount
-  const currency = invoice.currency === '$' ? 'USD' : invoice.currency || 'USD'
+  const { subtotal, taxRate, taxAmount, total, currency } = getInvoiceTotals(invoice)
 
   const companyLocation = [company?.city, company?.state].filter(Boolean).join(', ')
   const status = {
@@ -47,6 +33,8 @@ const InvoicePreview = ({ className, company, client, invoice }) => {
 
   return (
     <aside
+      id={id}
+      tabIndex={-1}
       className={clsx(
         'flex min-w-0 flex-col rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-5',
         className
@@ -145,7 +133,7 @@ const InvoicePreview = ({ className, company, client, invoice }) => {
             <div className='flex justify-between gap-3'><span>Taxe ({taxRate} %)</span><span>{formatCurrency(taxAmount, currency)}</span></div>
           </div>
         ) : null}
-        <p className='text-[10px] font-semibold text-slate-500'>Total</p>
+        <p className='text-[10px] font-semibold text-slate-600'>Total</p>
         <p className='mt-1 break-words text-right text-xl font-semibold'>{formatCurrency(total, currency)}</p>
       </div>
 
