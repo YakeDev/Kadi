@@ -127,7 +127,9 @@ app.use(
 )
 app.use(cors(corsOptions))
 app.options('*', cors(corsOptions))
-app.use(express.json({ limit: jsonBodyLimit, strict: true }))
+// Temporary mitigation for GHSA-27r3-jxmh-p828 (body-parser compressed-body DoS).
+// KADI's API accepts uncompressed JSON; rejecting Content-Encoding avoids the vulnerable inflater.
+app.use(express.json({ limit: jsonBodyLimit, strict: true, inflate: false }))
 app.use(morgan('tiny'))
 
 app.get('/api/health', (req, res) => {

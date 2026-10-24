@@ -1,5 +1,6 @@
 import { jest } from '@jest/globals'
 import request from 'supertest'
+import { gzipSync } from 'node:zlib'
 
 describe('Backend security hardening', () => {
   let app
@@ -41,6 +42,21 @@ describe('Backend security hardening', () => {
 
     const module = await import('../app.js')
     app = module.default
+  })
+
+  test('rejects compressed JSON before parsing (body-parser decompression mitigation)', async () => {
+    const body = gzipSync(Buffer.from(JSON.stringify({
+      email: 'test@example.com',
+      password: 'password123'
+    })))
+    const response = await request(app)
+      .post('/api/auth/login')
+      .set('Content-Type', 'application/json')
+      .set('Content-Encoding', 'gzip')
+      .send(body)
+
+    expect(response.status).toBe(415)
+    expect(supabaseMock.auth.signInWithPassword).not.toHaveBeenCalled()
   })
 
   test('adds helmet security headers on health endpoint', async () => {
