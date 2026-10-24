@@ -1,61 +1,9 @@
+import { sanitizeProductPayload } from '../utils/validation.js'
 import { supabase } from '../models/supabaseClient.js'
 import { getPaginationParams, buildPaginationMeta } from '../utils/pagination.js'
 
 const TABLE_NAME = 'catalog_items'
 const ITEM_TYPES = ['product', 'service']
-const ALLOWED_FIELDS = ['name', 'description', 'item_type', 'unit_price', 'currency', 'sku', 'is_active']
-
-const sanitizePayload = (body = {}, { ensureType = false } = {}) => {
-  const payload = {}
-
-  for (const field of ALLOWED_FIELDS) {
-    if (Object.prototype.hasOwnProperty.call(body, field)) {
-      payload[field] = body[field]
-    }
-  }
-
-  if (payload.name) {
-    payload.name = String(payload.name).trim()
-  }
-
-  if (payload.description != null) {
-    payload.description = String(payload.description).trim()
-  }
-
-  const providedType = payload.item_type != null ? String(payload.item_type).toLowerCase() : null
-  if (providedType) {
-    payload.item_type = ITEM_TYPES.includes(providedType) ? providedType : 'product'
-  } else if (ensureType) {
-    payload.item_type = 'product'
-  }
-
-  if (payload.unit_price != null) {
-    const rawPrice = Number(payload.unit_price)
-    payload.unit_price = Number.isFinite(rawPrice) ? rawPrice : 0
-  }
-
-  if (payload.currency) {
-    payload.currency = String(payload.currency).trim().toUpperCase()
-  }
-
-  if (payload.sku != null) {
-    payload.sku = String(payload.sku).trim()
-    if (payload.sku === '') {
-      payload.sku = null
-    }
-  }
-
-  if (payload.is_active != null) {
-    payload.is_active = Boolean(payload.is_active)
-  }
-
-  if (Object.keys(payload).length > 0) {
-    payload.updated_at = new Date().toISOString()
-  }
-
-  return payload
-}
-
 export const listProducts = async (req, res, next) => {
   try {
     const tenantId = req.tenantId
@@ -96,7 +44,7 @@ export const listProducts = async (req, res, next) => {
 export const createProduct = async (req, res, next) => {
   try {
     const tenantId = req.tenantId
-    const payload = sanitizePayload(req.body, { ensureType: true })
+    const payload = sanitizeProductPayload(req.body)
     payload.tenant_id = tenantId
 
     if (!payload.name) {
@@ -115,7 +63,7 @@ export const updateProduct = async (req, res, next) => {
   try {
     const { id } = req.params
     const tenantId = req.tenantId
-    const payload = sanitizePayload(req.body)
+    const payload = sanitizeProductPayload(req.body, { partial: true })
 
     if (Object.keys(payload).length === 0) {
       return res.status(400).json({ message: 'Aucune donnée à mettre à jour.' })

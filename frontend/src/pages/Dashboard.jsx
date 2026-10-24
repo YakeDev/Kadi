@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import {
 	LayoutDashboard,
@@ -29,10 +29,10 @@ const PERIOD_OPTIONS = [
 	{ label: 'Année', value: 'year' },
 ]
 
-const formatCurrency = (value) =>
+const formatCurrency = (value, currency = 'USD') =>
 	new Intl.NumberFormat('fr-FR', {
 		style: 'currency',
-		currency: 'USD',
+		currency: currency === '$' ? 'USD' : currency,
 		minimumFractionDigits: 0,
 	}).format(Number(value || 0))
 
@@ -48,6 +48,8 @@ const formatDate = (value) =>
 const Dashboard = () => {
 	const { user, profile } = useAuth()
 	const [period, setPeriod] = useState('month')
+  const [currency, setCurrency] = useState('USD')
+  const requestVersion = useRef(0)
 	const [summary, setSummary] = useState(null)
 	const [recentInvoices, setRecentInvoices] = useState([])
 	const [isLoading, setIsLoading] = useState(true)
@@ -60,6 +62,7 @@ const Dashboard = () => {
 
 	const fetchData = async (selectedPeriod, rangeOverride) => {
 		setIsRefreshing(true)
+    const version = ++requestVersion.current
 		try {
 			const hasOverride = rangeOverride !== undefined
 			const appliedRange = hasOverride
@@ -71,7 +74,7 @@ const Dashboard = () => {
 				? rangeOverride !== null
 				: isCustomRange
 
-			const params = { period: selectedPeriod }
+			const params = { period: selectedPeriod, currency }
 			if (appliedRange?.start) {
 				params.start = appliedRange.start
 			}
@@ -90,6 +93,7 @@ const Dashboard = () => {
 				}),
 				api.get('/invoices/todo'),
 			])
+			if (version !== requestVersion.current) return
 			setSummary(summaryData)
 			setRecentInvoices(invoicesResponse?.data ?? [])
 			setTodo({
@@ -108,18 +112,22 @@ const Dashboard = () => {
 		} catch (error) {
 			showErrorToast(toast.error, error)
 		} finally {
+      if (version === requestVersion.current) {
 			setIsLoading(false)
 			setIsRefreshing(false)
 			setIsTodoLoading(false)
+      }
 		}
 	}
 
 	useEffect(() => {
+		setIsLoading(true)
+    setSummary(null)
 		setRange(null)
 		setRangeDraft({ start: '', end: '' })
 		fetchData(period, null)
 		// eslint-disable-next-line react-hooks/exhaustive-deps
-	}, [period])
+	}, [period, currency])
 
 	const handleRangeDraftChange = (field, value) => {
 		setRangeDraft((prev) => ({ ...prev, [field]: value }))
@@ -199,8 +207,8 @@ const Dashboard = () => {
 			key: 'revenue',
 			title: 'Revenus encaissés',
 			icon: TrendingUp,
-			value: isLoading ? '—' : formatCurrency(totals.revenue || 0),
-			helperText: 'Montant des factures payées sur la période',
+			value: isLoading ? '—' : formatCurrency(totals.revenue || 0, currency),
+			helperText: 'Factures émises sur la période et marquées payées',
 			actions: [
 				<Link key='revenue-link' to='/factures?status=paid' className='btn-ghost h-8 px-3 text-[11px] font-semibold'>
 					Voir les factures payées
@@ -211,7 +219,7 @@ const Dashboard = () => {
 			key: 'outstanding',
 			title: 'Montant en attente',
 			icon: TrendingDown,
-			value: isLoading ? '—' : formatCurrency(totals.outstanding || 0),
+			value: isLoading ? '—' : formatCurrency(totals.outstanding || 0, currency),
 			helperText: 'Factures envoyées ou en retard',
 			actions: [
 				<Link key='outstanding-link' to='/factures?status=sent' className='btn-ghost h-8 px-3 text-[11px] font-semibold'>
@@ -233,7 +241,7 @@ const Dashboard = () => {
 		{
 			key: 'delay',
 			title: 'Délai moyen de paiement',
-			value: isLoading ? '—' : `${Number(totals.averagePaymentDelay || 0).toFixed(1)} j`,
+			value: isLoading || totals.averagePaymentDelay == null ? '—' : `${Number(totals.averagePaymentDelay).toFixed(1)} j`,
 			helperText: 'Entre émission et règlement',
 		},
 	]
@@ -339,13 +347,17 @@ const Dashboard = () => {
 									: '—'}
 							</p>
 							<p className='mt-1 text-[11px] text-[var(--text-muted)]'>
-								Choisissez un raccourci ou définissez votre propre plage de
+								Les statistiques suivent la date d’émission. Choisissez une plage de
 								dates pour affiner les statistiques.
 							</p>
 						</div>
 					</div>
 					<div className='flex w-full flex-col gap-3 xl:w-auto'>
 						<div className='flex flex-wrap items-center justify-end gap-2'>
+              <label className='text-xs font-semibold' htmlFor='summary-currency'>Devise</label>
+              <select id='summary-currency' value={currency} onChange={(event) => setCurrency(event.target.value)} className='input w-auto'>
+                <option value='USD'>USD</option><option value='CDF'>CDF</option>
+              </select>
 							<span className='text-[11px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]'>
 								Raccourcis
 							</span>
@@ -440,7 +452,7 @@ const Dashboard = () => {
 			<div className='grid gap-6 xl:grid-cols-[1.4fr,1fr]'>
 				<div>
 					<h2 className='mb-3 text-sm font-semibold text-[var(--text-dark)]'>
-						Tendance des revenus
+						Tendance des revenus ({currency})
 					</h2>
 					<DashboardChart
 						data={charts.revenue}
@@ -453,7 +465,7 @@ const Dashboard = () => {
 				<div className='space-y-6'>
 					<div>
 						<h2 className='mb-3 text-sm font-semibold text-[var(--text-dark)]'>
-							Top clients
+							Top clients ({currency})
 						</h2>
 						<DashboardChart
 							data={charts.topClients}
@@ -465,7 +477,7 @@ const Dashboard = () => {
 					</div>
 					<div>
 						<h2 className='mb-3 text-sm font-semibold text-[var(--text-dark)]'>
-							Top produits / services
+							Top produits / services ({currency})
 						</h2>
 						<DashboardChart
 							data={charts.topProducts}
@@ -515,7 +527,7 @@ const Dashboard = () => {
 									</div>
 									<div className='flex items-center gap-6'>
 										<span className='text-sm font-semibold text-[var(--text-dark)]'>
-											{formatCurrency(invoice.total_amount)}
+											{formatCurrency(invoice.total_amount, invoice.currency)}
 										</span>
 										<span className='text-xs text-[var(--text-muted)]'>
 											{invoice.issue_date}
@@ -573,7 +585,7 @@ const Dashboard = () => {
 												</div>
 												<div className='text-right text-[11px] text-[var(--text-muted)]'>
 													{item.due_date ? <p>Échéance {formatDate(item.due_date)}</p> : null}
-													<p className='font-semibold text-[var(--text-dark)]'>{formatCurrency(item.total_amount)}</p>
+													<p className='font-semibold text-[var(--text-dark)]'>{formatCurrency(item.total_amount, item.currency)}</p>
 													<Link to='/factures' className='mt-1 inline-flex items-center text-[var(--primary)] hover:underline'>
 														Consulter
 													</Link>

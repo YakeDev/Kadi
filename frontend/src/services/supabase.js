@@ -21,40 +21,49 @@ const sanitizePathSegment = (value) =>
     .toLowerCase()
     .replace(/[^a-z0-9-_]/g, '-')
 
-const normalizeStoragePathForDeletion = (value, userId) => {
-  const sanitizedUser = sanitizePathSegment(userId || '')
-  if (!value) return null
-  const sanitizedValue = value.replace(/^\/+/, '')
-  if (!sanitizedValue) return null
-  if (sanitizedValue.startsWith(`${sanitizedUser}/`)) {
-    return sanitizedValue
+const ownedPath = (value, userId) => {
+  if (!value || typeof value !== 'string') return null
+  let path = value.trim()
+  if (/^https?:/i.test(path)) {
+    try {
+      const url = new URL(path)
+      if (url.origin !== new URL(supabaseUrl).origin) return null
+      const markers = ['public', 'sign', 'authenticated'].map((access) => `/storage/v1/object/${access}/${logoBucket}/`)
+      const marker = markers.find((prefix) => url.pathname.startsWith(prefix))
+      if (!marker) return null
+      path = decodeURIComponent(url.pathname.slice(marker.length))
+    } catch { return null }
   }
-  return `${sanitizedUser}/${sanitizedValue}`
+  if (!path.startsWith(`${sanitizePathSegment(userId)}/`) || /[%\\?#]/.test(path) || path.includes('..')) return null
+  return path
 }
 
-const extractStoragePathFromUrl = (value) => {
-  try {
-    const url = new URL(value)
-    const publicMarker = `/object/public/${logoBucket}/`
-    const signedMarker = `/object/sign/${logoBucket}/`
-
-    let storagePath = null
-    if (url.pathname.includes(publicMarker)) {
-      storagePath = url.pathname.split(publicMarker)[1]
-    } else if (url.pathname.includes(signedMarker)) {
-      storagePath = url.pathname.split(signedMarker)[1]
-    }
-
-    if (!storagePath) return null
-    return storagePath.replace(/^\/+/, '')
-  } catch {
+export const resolveCompanyLogo = async (value) => {
+  if (!value) return null
+  if (/^https?:/i.test(value)) {
+    // Preserve the token on a signed URL supplied by the backend.
+    try {
+      const url = new URL(value)
+      if (url.origin === new URL(supabaseUrl).origin &&
+          ['sign', 'public', 'authenticated'].some((access) =>
+            url.pathname.startsWith(`/storage/v1/object/${access}/${logoBucket}/`))) return value
+    } catch { return null }
     return null
   }
+  const { data, error } = await supabase.storage.from(logoBucket).createSignedUrl(value, 3600)
+  if (error) throw new Error('Impossible de charger le logo. Vérifiez le stockage de votre entreprise.')
+  return data?.signedUrl ?? null
 }
 
 export const uploadCompanyLogo = async (file, userId) => {
   if (!file || !userId) {
     throw new Error("Fichier ou identifiant utilisateur manquant pour l'upload du logo.")
+  }
+
+  // Private Storage bucket accepts PNG/JPEG/WebP; keep client validation aligned.
+  // Legacy SVG references can still be read/normalized by the backend for PDFs.
+  if (file.size > 1024 * 1024 || !['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+    throw new Error('Choisissez un logo PNG, JPEG ou WebP de 1 Mo maximum.')
   }
 
   const extension = (file.name.split('.').pop() || 'png').toLowerCase()
@@ -74,21 +83,8 @@ export const uploadCompanyLogo = async (file, userId) => {
   }
 
   const storagePath = filePath
-  let previewUrl = null
-
-  const { data: publicData } = supabase.storage.from(logoBucket).getPublicUrl(filePath)
-  if (publicData?.publicUrl) {
-    previewUrl = publicData.publicUrl
-  } else {
-    const { data: signedData, error: signedError } = await supabase
-      .storage.from(logoBucket)
-      .createSignedUrl(filePath, 60 * 60)
-
-    if (signedError || !signedData?.signedUrl) {
-      throw new Error("Impossible de récupérer l'URL du logo uploadé.")
-    }
-    previewUrl = signedData.signedUrl
-  }
+  const previewUrl = await resolveCompanyLogo(filePath)
+  if (!previewUrl) throw new Error('Impossible de charger le logo importé.')
 
   return {
     storagePath,
@@ -99,10 +95,7 @@ export const uploadCompanyLogo = async (file, userId) => {
 export const deleteCompanyLogo = async (logoUrl, userId) => {
   if (!logoUrl || !userId) return
   try {
-    const isPath = !logoUrl.includes('://')
-    const storagePath = isPath
-      ? normalizeStoragePathForDeletion(logoUrl, userId)
-      : extractStoragePathFromUrl(logoUrl)
+    const storagePath = ownedPath(logoUrl, userId)
 
     if (storagePath) {
       await supabase.storage.from(logoBucket).remove([storagePath])

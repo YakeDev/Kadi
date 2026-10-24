@@ -1,4 +1,4 @@
-import { jest } from '@jest/globals'
+import { vi as jest } from 'vitest'
 import request from 'supertest'
 
 process.env.OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'test-key'
@@ -46,15 +46,16 @@ describe('Auth login', () => {
 
     sendMailMock = jest.fn().mockResolvedValue({ sent: true })
 
-    await jest.unstable_mockModule('../models/supabaseClient.js', () => ({
-      supabase: supabaseMock
+    await jest.doMock('../models/supabaseClient.js', () => ({
+      supabase: supabaseMock,
+      createAuthClient: () => supabaseMock
     }))
 
-    await jest.unstable_mockModule('../utils/mailer.js', () => ({
+    await jest.doMock('../utils/mailer.js', () => ({
       sendMail: sendMailMock
     }))
 
-    await jest.unstable_mockModule('../utils/templates.js', () => ({
+    await jest.doMock('../utils/templates.js', () => ({
       emailVerificationTemplate: ({ verificationUrl }) => ({
         subject: 'Verify',
         html: `<a href="${verificationUrl}">verify</a>`,
@@ -232,7 +233,7 @@ describe('Auth login', () => {
       select: jest.fn().mockReturnThis(),
       eq: jest.fn().mockReturnThis(),
       maybeSingle: jest.fn().mockResolvedValue({ data: null, error: null }),
-      upsert: jest.fn().mockReturnThis(),
+      update: jest.fn().mockReturnThis(),
       single: jest.fn().mockResolvedValue({
         data: { company: 'Acme', tagline: null, logo_url: null },
         error: null
@@ -260,6 +261,7 @@ describe('Auth login', () => {
       error: null
     })
 
+    supabaseMock.rpc = jest.fn().mockResolvedValue({ data: 'tenant-1', error: null })
     supabaseMock.from.mockImplementation((table) => {
       if (table === 'profiles') return profileQuery
       if (table === 'tenants') return tenantInsert

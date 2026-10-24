@@ -16,7 +16,7 @@ const router = Router()
 
 router.post('/signup', authRateLimit, signup)
 router.post('/login', authRateLimit, login)
-router.post('/logout', logout)
+router.post('/logout', requireAuth, logout)
 router.post('/profile', requireAuth, createProfile)
 router.get('/profile', requireAuth, getProfile)
 router.post('/resend-verification', authRateLimit, resendVerificationEmail)

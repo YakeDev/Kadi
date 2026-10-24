@@ -19,8 +19,7 @@ export const requireAuth = async (req, res, next) => {
     }
 
     const extendedColumns =
-      'tenant_id, company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, email'
-    let hasExtendedProfileColumns = true
+      'tenant_id, company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website, email'
     let profileResponse = await supabase
       .from('profiles')
       .select(extendedColumns)
@@ -36,7 +35,6 @@ export const requireAuth = async (req, res, next) => {
         profileError.code === '42703' ||
         /column.+does not exist/i.test(profileError.message))
     ) {
-      hasExtendedProfileColumns = false
       const fallbackResponse = await supabase
         .from('profiles')
         .select('tenant_id, company, email')
@@ -46,60 +44,14 @@ export const requireAuth = async (req, res, next) => {
       profileError = fallbackResponse.error
     }
 
-    if (profileError || !profile?.tenant_id) {
-      const companyName = user.user_metadata?.company || user.email?.split('@')[0] || 'Organisation'
-
-      const { data: tenant, error: tenantError } = await supabase
-        .from('tenants')
-        .insert({ name: companyName })
-        .select()
-        .single()
-
-      if (tenantError) {
-        return res.status(403).json({ message: 'Profil ou tenant introuvable.' })
-      }
-
-      const { data: newProfile, error: newProfileError } = await supabase
-        .from('profiles')
-        .upsert(
-          hasExtendedProfileColumns
-            ? {
-                id: user.id,
-                tenant_id: tenant.id,
-                email: user.email,
-                company: companyName,
-                tagline: profile?.tagline ?? null,
-                logo_url: profile?.logo_url ?? null,
-                manager_name: profile?.manager_name ?? null,
-                address: profile?.address ?? null,
-                city: profile?.city ?? null,
-                state: profile?.state ?? null,
-                national_id: profile?.national_id ?? null,
-                rccm: profile?.rccm ?? null,
-                nif: profile?.nif ?? null
-              }
-            : {
-                id: user.id,
-                tenant_id: tenant.id,
-                email: user.email,
-                company: companyName
-              },
-          { onConflict: 'id' }
-        )
-        .select(
-          hasExtendedProfileColumns
-            ? 'tenant_id, company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
-            : 'tenant_id, company'
-        )
-        .single()
-
-      if (newProfileError) {
-        return res.status(403).json({ message: 'Profil ou tenant introuvable.' })
-      }
-
-      profile = newProfile
+    if (profileError) {
+      throw Object.assign(new Error('Profil temporairement indisponible.'), { status: 503 })
+    }
+    if (!profile?.tenant_id) {
+      return res.status(403).json({ message: 'Profil entreprise introuvable. Contactez le support.' })
     }
 
+    req.accessToken = token
     req.user = user
     req.tenantId = profile.tenant_id
     const fallbackCompany = profile?.company || user.user_metadata?.company || user.email?.split('@')[0] || 'Organisation'
@@ -114,7 +66,9 @@ export const requireAuth = async (req, res, next) => {
       state: profile?.state ?? '',
       national_id: profile?.national_id ?? '',
       rccm: profile?.rccm ?? '',
-      nif: profile?.nif ?? ''
+      nif: profile?.nif ?? '',
+      phone: profile?.phone ?? '',
+      website: profile?.website ?? ''
     }
     next()
   } catch (error) {

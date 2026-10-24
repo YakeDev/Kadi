@@ -180,6 +180,7 @@ const Login = () => {
 		session,
 		resendVerificationEmail,
 		requestPasswordReset,
+    isPasswordRecovery,
 	} = useAuth()
 
 	const [view, setView] = useState(Steps.LOGIN)
@@ -221,6 +222,7 @@ const Login = () => {
 	}, [logoPreview])
 
 	const shouldRedirect = Boolean(session)
+  const passwordUpdated = new URLSearchParams(window.location.search).get('passwordUpdated') === '1'
 
 	const resetRegistrationState = () => {
 		setAccountForm(ACCOUNT_INITIAL)
@@ -362,7 +364,7 @@ const Login = () => {
 
 	const handleLogoSelection = (file) => {
 		if (!file) return
-		if (!file.type.startsWith('image/')) {
+		if (!['image/png', 'image/jpeg', 'image/webp', 'image/svg+xml'].includes(file.type)) {
 			setLogoError('Formats acceptés : PNG, JPG ou WEBP.')
 			return
 		}
@@ -508,6 +510,8 @@ const Login = () => {
 		}
 	}
 
+  if (isPasswordRecovery) return <Navigate to='/reset-password' replace />
+
 	if (shouldRedirect) {
 		return <Navigate to='/' replace />
 	}
@@ -631,6 +635,7 @@ const Login = () => {
 						{loginErrors.global}
 					</div>
 				) : null}
+        {passwordUpdated ? <p role='status' className='text-sm text-emerald-700'>Mot de passe enregistré. Connectez-vous avec votre nouveau mot de passe.</p> : null}
 				{loginErrors.global?.toLowerCase().includes('email') ? (
 					<button
 						type='button'
@@ -642,7 +647,7 @@ const Login = () => {
 						) : (
 							<MailCheck className='h-4 w-4' />
 						)}
-						Renvoyer l'email de confirmation
+						Renvoyer l’email de confirmation
 					</button>
 				) : null}
 				<div className='flex flex-col gap-2'>
@@ -834,7 +839,7 @@ const Login = () => {
 			<input
 				ref={fileInputRef}
 				type='file'
-				accept='image/*'
+				accept='image/png,image/jpeg,image/webp,image/svg+xml'
 				className='hidden'
 				onChange={handleLogoInputChange}
 			/>

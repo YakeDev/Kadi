@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
-import { supabase } from '../models/supabaseClient.js'
+import { normalizeLogoImage } from '../utils/logoImage.js'
+import { supabase, createAuthClient } from '../models/supabaseClient.js'
 import { sendMail } from '../utils/mailer.js'
 import { emailVerificationTemplate, passwordResetTemplate } from '../utils/templates.js'
 import {
@@ -36,7 +37,7 @@ const DEFAULT_APP_URL = process.env.APP_URL || 'http://localhost:5173'
 const EMAIL_REDIRECT_URL = sanitizeUrl(process.env.EMAIL_REDIRECT_URL, `${DEFAULT_APP_URL}/login?confirmed=1`)
 const PASSWORD_RESET_REDIRECT_URL = sanitizeUrl(
   process.env.PASSWORD_RESET_REDIRECT_URL,
-  `${DEFAULT_APP_URL}/login?reset=1`
+  `${DEFAULT_APP_URL}/reset-password`
 )
 
 const inferMimeFromExtension = (extension = '') => {
@@ -106,7 +107,10 @@ const uploadLogoForUser = async (userId, base64Content, originalFilename = '') =
   const filenameWithoutExt = hasExtension ? originalFilename.replace(/\.[^/.]+$/, '') : originalFilename
   const providedExtension = hasExtension ? originalFilename.split('.').pop() : ''
   const safeName = sanitizePathSegment(filenameWithoutExt) || 'logo'
-  const { buffer, mimeType, extension } = decodeBase64Logo(base64Content, providedExtension)
+  const decoded = decodeBase64Logo(base64Content, providedExtension)
+  const buffer = await normalizeLogoImage(decoded.buffer)
+  const mimeType = 'image/png'
+  const extension = 'png'
 
   const uniqueSuffix = `${Date.now()}-${randomBytes(4).toString('hex')}`
   const filePath = `${sanitizePathSegment(userId)}/${safeName}-${uniqueSuffix}.${extension}`
@@ -228,8 +232,9 @@ const dispatchPasswordResetEmail = async ({ email, companyName }) => {
 export const signup = async (req, res, next) => {
   try {
     const { email, password, company, logo_file: logoFile, logo_filename: logoFilename, ...rest } = req.body
-    if (!email || !password) {
-      return res.status(400).json({ message: 'Email et mot de passe requis.' })
+    if (typeof email !== 'string' || email.length > 254 || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) ||
+        typeof password !== 'string' || password.length < 8 || password.length > 128) {
+      return res.status(400).json({ message: 'Email valide et mot de passe de 8 à 128 caractères requis.' })
     }
 
     const { data, error } = await supabase.auth.admin.createUser({
@@ -326,68 +331,57 @@ const createProfileInternal = async ({ email, company, userId, ...rest }) => {
   }
 
   const companyName = company || user.user_metadata?.company || email.split('@')[0]
-
-  const { data: existingProfile } = await supabase
-    .from('profiles')
-    .select('tenant_id')
-    .eq('id', userId)
-    .maybeSingle()
-
-  let tenantId = existingProfile?.tenant_id
-
-  if (!tenantId) {
-    const { data: tenant, error: tenantError } = await supabase
-      .from('tenants')
-      .insert({ name: companyName })
-      .select()
-      .single()
-    if (tenantError) throw tenantError
-    tenantId = tenant.id
+  if (typeof companyName !== 'string' || companyName.length > 160) {
+    throw Object.assign(new Error('Nom d’entreprise invalide (160 caractères max).'), { status: 400 })
   }
 
   const profileRecord = {
     id: userId,
-    tenant_id: tenantId,
     email,
     company: companyName
   }
 
   for (const field of PROFILE_OPTIONAL_FIELDS) {
     if (field in rest) {
-      profileRecord[field] =
-        field === 'logo_url' ? normalizeLogoStoragePath(rest[field], userId) : rest[field]
+      const value = rest[field]
+      if (value != null && (typeof value !== 'string' || value.length > 500)) {
+        throw Object.assign(new Error(`Le champ ${field} est invalide (500 caractères max).`), { status: 400 })
+      }
+      profileRecord[field] = field === 'logo_url'
+        ? normalizeLogoStoragePath(value, userId) : value?.trim() || null
     }
   }
+
+
+  const { data: existingProfile, error: lookupError } = await supabase
+    .from('profiles').select('tenant_id').eq('id', userId).maybeSingle()
+  if (lookupError) throw lookupError
+
+  // Provisioning is explicit and atomic; authentication middleware never creates tenants.
+  // The RPC locks per user and preserves an existing tenant under concurrent calls.
+  let tenantId = existingProfile?.tenant_id
+  if (!tenantId) {
+    const { data, error } = await supabase.rpc('provision_kadi_profile', {
+      p_user_id: userId, p_company: companyName
+    })
+    if (error) throw error
+    tenantId = data
+  }
+
+  profileRecord.tenant_id = tenantId
 
   const profileColumns =
     'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
 
   const { data: profileData, error: profileError } = await supabase
     .from('profiles')
-    .upsert(profileRecord, { onConflict: 'id' })
+    .update(Object.fromEntries(Object.entries(profileRecord).filter(([key]) => !['id', 'tenant_id'].includes(key))))
+    .eq('id', userId)
+    .eq('tenant_id', tenantId)
     .select(profileColumns)
     .single()
 
-  if (profileError) {
-    const isMissingColumn =
-      profileError.code === '42703' ||
-      /column.+does not exist/i.test(profileError.message || '')
-
-    if (isMissingColumn) {
-      const fallbackColumns =
-        'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif'
-      const { data: fallbackProfile, error: fallbackError } = await supabase
-        .from('profiles')
-        .select(fallbackColumns)
-        .eq('id', userId)
-        .single()
-
-      if (fallbackError) throw fallbackError
-      return fallbackProfile
-    }
-
-    throw profileError
-  }
+  if (profileError) throw profileError
 
   return profileData
 }
@@ -395,11 +389,11 @@ const createProfileInternal = async ({ email, company, userId, ...rest }) => {
 export const login = async (req, res, next) => {
   try {
     const { email, password } = req.body
-    if (!email || !password) {
+    if (typeof email !== 'string' || email.length > 254 || typeof password !== 'string' || !password || password.length > 128) {
       return res.status(400).json({ message: 'Email et mot de passe requis.' })
     }
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await createAuthClient().auth.signInWithPassword({
       email,
       password
     })
@@ -413,7 +407,8 @@ export const login = async (req, res, next) => {
 
 export const logout = async (req, res, next) => {
   try {
-    await supabase.auth.signOut()
+    const { error } = await supabase.auth.admin.signOut(req.accessToken, 'local')
+    if (error) throw error
     res.status(204).send()
   } catch (error) {
     next(error)
@@ -463,7 +458,6 @@ export const getProfile = async (req, res, next) => {
 
     const profileColumns =
       'company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif, phone, website'
-    let hasExtendedColumns = true
     let response = await supabase
       .from('profiles')
       .select(profileColumns)
@@ -477,7 +471,6 @@ export const getProfile = async (req, res, next) => {
         error.code === '42703' ||
         /column.+does not exist/i.test(error.message))
     ) {
-      hasExtendedColumns = false
       const fallback = await supabase
         .from('profiles')
         .select('company, tagline, logo_url, manager_name, address, city, state, national_id, rccm, nif')
@@ -490,9 +483,7 @@ export const getProfile = async (req, res, next) => {
     if (error && error.code !== 'PGRST116') throw error
 
     const fallbackCompany = req.user?.user_metadata?.company || req.user?.email?.split('@')[0] || ''
-    const serialized = hasExtendedColumns
-      ? await serializeProfile(data, fallbackCompany, userId)
-      : await serializeProfile({ company: data?.company }, fallbackCompany, userId)
+    const serialized = await serializeProfile(data, fallbackCompany, userId)
 
     res.json(serialized)
   } catch (error) {
@@ -597,10 +588,10 @@ export const changePassword = async (req, res, next) => {
         .json({ message: 'Mot de passe actuel et nouveau mot de passe requis.' })
     }
 
-    if (newPassword.length < 8) {
+    if (typeof newPassword !== 'string' || newPassword.length < 8 || newPassword.length > 128 || typeof currentPassword !== 'string' || currentPassword.length > 128) {
       return res
         .status(400)
-        .json({ message: 'Le nouveau mot de passe doit contenir au moins 8 caractères.' })
+        .json({ message: 'Le nouveau mot de passe doit contenir de 8 à 128 caractères.' })
     }
 
     if (newPassword === currentPassword) {
@@ -611,7 +602,7 @@ export const changePassword = async (req, res, next) => {
 
     const {
       error: verificationError
-    } = await supabase.auth.signInWithPassword({
+    } = await createAuthClient().auth.signInWithPassword({
       email,
       password: currentPassword
     })

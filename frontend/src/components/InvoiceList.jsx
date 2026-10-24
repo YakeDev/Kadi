@@ -353,6 +353,14 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                   <tr key={invoice.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
                     <td className='px-4 py-3 font-semibold text-[var(--text-dark)]'>
                       #{invoice.invoice_number}
+                      {invoice.pdf_available === false ? (
+                        <span
+                          className='mt-1 block text-xs font-medium text-amber-700'
+                          title='Les données de cette ancienne facture sont conservées, mais son PDF original ne peut pas être reconstitué de manière fiable.'
+                        >
+                          Archive PDF non vérifiée
+                        </span>
+                      ) : null}
                     </td>
                     <td className='px-4 py-3 text-[var(--text-muted)]'>
                       {invoice.client?.company_name || '—'}
@@ -362,7 +370,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                         minimumFractionDigits: 2,
                         maximumFractionDigits: 2
                       })}{' '}
-                      {invoice.currency || 'USD'}
+                      {invoice.currency === '$' ? 'USD' : invoice.currency || 'USD'}
                     </td>
                     <td className='px-4 py-3'>
                       <span className={`badge ${statusStyles[invoice.status] || statusStyles.draft}`}>
@@ -378,18 +386,27 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                       <div className='flex items-center justify-end gap-2'>
                         <select
                           value={invoice.status}
+                          aria-label={`Statut de la facture ${invoice.invoice_number}`}
+                          disabled={invoice.status === 'paid'}
                           onChange={(event) => handleStatusChange(invoice.id, event.target.value)}
                           className='input-compact h-9 w-36 border-[var(--border)] bg-[var(--bg-panel)] text-xs'
                         >
-                          <option value='draft'>Brouillon</option>
-                          <option value='sent'>Envoyée</option>
+                          {invoice.status === 'draft' ? <option value='draft'>Brouillon</option> : null}
+                          {invoice.status !== 'paid' ? <option value='sent'>Envoyée</option> : null}
                           <option value='paid'>Payée</option>
-                          <option value='overdue'>En retard</option>
+                          {invoice.status !== 'paid' ? <option value='overdue'>En retard</option> : null}
                         </select>
                     <button
                       type='button'
                       onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}
-                      className='btn-ghost text-xs font-semibold'
+                      disabled={invoice.pdf_available === false}
+                      title={invoice.pdf_available === false
+                        ? 'Original indisponible : cette facture historique ne possède pas de copie figée à son émission.'
+                        : 'Télécharger la facture PDF'}
+                      aria-label={invoice.pdf_available === false
+                        ? `PDF indisponible pour la facture ${invoice.invoice_number} : archive manquante`
+                        : `Télécharger la facture ${invoice.invoice_number} en PDF`}
+                      className='btn-ghost text-xs font-semibold disabled:cursor-not-allowed disabled:opacity-50'
                     >
                       <Download className='h-4 w-4' />
                       PDF

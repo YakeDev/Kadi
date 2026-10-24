@@ -23,12 +23,12 @@ import ClientPickerModal from './ClientPickerModal.jsx'
 import CatalogPickerModal from './CatalogPickerModal.jsx'
 import InvoicePreview from './InvoicePreview.jsx'
 
-const createEmptyItem = () => ({
+const createEmptyItem = (currency = 'USD') => ({
   catalogItemId: null,
   description: '',
   quantity: 1,
   unitPrice: 0,
-  currency: 'USD'
+  currency
 })
 
 const statusOptions = [
@@ -47,6 +47,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
       status: 'draft',
       notes: '',
       currency: 'USD',
+      tax_rate: 0,
       items: [createEmptyItem()]
     }
   }
@@ -57,7 +58,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
         description: line.description ?? '',
         quantity: Number(line.quantity ?? 1),
         unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
-        currency: line.currency ?? invoice.currency ?? 'USD'
+        currency: (line.currency ?? invoice.currency) === '$' ? 'USD' : line.currency ?? invoice.currency ?? 'USD'
       }))
     : [createEmptyItem()]
 
@@ -67,7 +68,8 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
     due_date: invoice.due_date ?? '',
     status: invoice.status ?? 'draft',
     notes: invoice.notes ?? '',
-    currency: invoice.currency || 'USD',
+    currency: invoice.currency === '$' ? 'USD' : invoice.currency || 'USD',
+    tax_rate: Number(invoice.tax_rate || 0),
     items
   }
 }
@@ -138,6 +140,11 @@ const InvoiceForm = ({
   )
 
   const updateField = (field, value) => {
+    if (field === 'currency') {
+      setForm((prev) => ({ ...prev, currency: value, items: prev.items.map((item) => ({ ...item, currency: value, unitPrice: 0, catalogItemId: null })) }))
+      toast('Devise modifiée. Ressaisissez les prix dans cette devise ; aucune conversion automatique.')
+      return
+    }
     setForm((prev) => ({ ...prev, [field]: value }))
   }
 
@@ -149,12 +156,15 @@ const InvoiceForm = ({
   }
 
   const applyCatalogSelection = (index, selected) => {
+    if (selected && (selected.currency || 'USD') !== form.currency) {
+      toast.error('Cet article utilise une autre devise. Choisissez un article dans la devise de la facture.')
+      return
+    }
     setForm((prev) => {
       const nextItems = prev.items.map((item, idx) => {
         if (idx !== index) return item
         if (!selected) {
-          const { catalogItemId, ...rest } = item
-          return { ...rest, catalogItemId: null }
+          return { ...item, catalogItemId: null }
         }
 
         const autoDescription =
@@ -179,7 +189,7 @@ const InvoiceForm = ({
   }
 
   const addItem = () => {
-    setForm((prev) => ({ ...prev, items: [...prev.items, createEmptyItem()] }))
+    setForm((prev) => ({ ...prev, items: [...prev.items, createEmptyItem(prev.currency)] }))
   }
 
   const removeItem = (index) => {
@@ -238,7 +248,8 @@ const InvoiceForm = ({
       const { data } = await api.post('/ai/facture', { texte: aiPrompt })
       setForm((prev) => ({
         ...prev,
-        client_id: data.client_id || prev.client_id,
+        client_id: prev.client_id,
+        currency: data.currency || prev.currency,
         issue_date: data.issue_date || prev.issue_date,
         due_date: data.due_date || prev.due_date,
         status: data.status || prev.status,
@@ -249,11 +260,11 @@ const InvoiceForm = ({
               description: line.description ?? '',
               quantity: Number(line.quantity ?? 1),
               unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
-              currency: line.currency ?? prev.currency ?? 'USD'
+              currency: data.currency ?? prev.currency ?? 'USD'
             }))
           : prev.items
       }))
-      notifySuccess('Facture générée par IA')
+      notifySuccess('Brouillon préparé. Vérifiez chaque ligne avant de l’enregistrer.')
     } catch (error) {
       notifyError(error)
     } finally {
@@ -284,6 +295,7 @@ const InvoiceForm = ({
                   <Sparkles className='h-4 w-4' />
                 </div>
                 <input
+                  maxLength={4000}
                   id='ia-prompt'
                   value={aiPrompt}
                   onChange={(event) => setAiPrompt(event.target.value)}
@@ -318,7 +330,8 @@ const InvoiceForm = ({
                     <Sparkles className='h-4 w-4' />
                   </div>
                   <input
-                    id='ia-prompt'
+                    maxLength={4000}
+                  id='ia-prompt'
                     value={aiPrompt}
                     onChange={(event) => setAiPrompt(event.target.value)}
                     placeholder='Décrivez votre facture…'
@@ -349,6 +362,21 @@ const InvoiceForm = ({
             }
           >
             <div className='grid gap-4 md:grid-cols-2 xl:grid-cols-3'>
+              <div className='space-y-2'>
+                <label className='label' htmlFor='invoice-currency'>Devise de la facture</label>
+                <select id='invoice-currency' value={form.currency} onChange={(event) => updateField('currency', event.target.value)} className={inputClass}>
+                  <option value='USD'>USD — Dollar américain</option>
+                  <option value='CDF'>CDF — Franc congolais</option>
+                </select>
+                <p className='text-xs text-[var(--text-muted)]'>Changer de devise remet les prix à zéro.</p>
+              </div>
+              <div className='space-y-2'>
+                <label className='label' htmlFor='invoice-tax-rate'>Taxe optionnelle (%)</label>
+                <input id='invoice-tax-rate' type='number' min='0' max='100' step='0.01'
+                  value={form.tax_rate} onChange={(event) => updateField('tax_rate', event.target.value)}
+                  className={inputClass} aria-describedby='invoice-tax-help' />
+                <p id='invoice-tax-help' className='text-xs text-[var(--text-muted)]'>Laissez 0 si aucune taxe ne s’applique.</p>
+              </div>
               <div className='space-y-2'>
                 <p className='text-xs font-semibold text-[var(--text-muted)]'>Client</p>
                 <button
@@ -416,6 +444,8 @@ const InvoiceForm = ({
               </div>
             </div>
           </CollapsibleSection>
+
+          {form.status !== 'draft' ? <p className='text-sm text-[var(--text-muted)]'>Une facture émise est définitive : ses montants et coordonnées ne pourront plus être modifiés.</p> : null}
 
           <CollapsibleSection
             title='Lignes de facturation'
@@ -491,7 +521,7 @@ const InvoiceForm = ({
                       <label className='label'>Quantité</label>
                       <input
                         type='number'
-                        min='1'
+                        min='0.001' max='1000000' step='0.001'
                         value={item.quantity}
                         onChange={(event) => updateItem(index, 'quantity', Number(event.target.value) || 1)}
                         className={inputClass}

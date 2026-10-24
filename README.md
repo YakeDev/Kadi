@@ -1,150 +1,55 @@
-# KADI – MVP SaaS de facturation pour PME locales
+# KADI
 
-KADI est une application de **facturation intelligente** conçue pour les petites entreprises locales. Elle combine **simplicité**, **automatisation** et **modernité** afin d’aider les entrepreneurs à gérer leurs clients, produits et factures depuis une interface web fluide et sécurisée.
+Application de facturation multi-entreprise : React/Vite, API Express, Supabase Auth/Postgres/Storage, PDF et préparation optionnelle de brouillons par IA.
 
----
+## Développement
 
-## Fonctionnalités principales
-
-- Authentification sécurisée via **Supabase** (inscription, connexion, déconnexion)
-- Gestion complète des **clients, produits et factures** (CRUD)
-- Génération automatique d’une facture à partir d’un **texte libre grâce à OpenAI GPT‑5**
-- Export des factures au **format PDF**
-- Interface **responsive et minimaliste**, inspirée de Notion et Linear
-
----
-
-## Stack technique
-
-| Couche         | Technologie                   | Rôle                                                        |
-| -------------- | ----------------------------- | ----------------------------------------------------------- |
-| Frontend       | React 18 + Vite + TailwindCSS | Interface responsive et intuitive                           |
-| Backend        | Node.js 20 + Express          | API REST multi‑tenant, génération PDF, appels OpenAI        |
-| Auth & Données | Supabase                      | Authentification + stockage des entités                     |
-| IA             | OpenAI GPT‑5 (Codex)          | Analyse de texte et génération de structure JSON de facture |
-| PDF            | pdfkit                        | Création de PDF stylisés directement depuis le backend      |
-| Déploiement    | Vercel (front) / Render (API) | Plateformes cloud simples et rapides pour le MVP            |
-
----
-
-## Pré‑requis
-
-Avant de commencer, vous devez disposer de :
-
-- Node.js **v20+**
-- Un compte **Supabase** (avec clés `service role` et `public anon`)
-- Une **clé API OpenAI** (accès à GPT‑5 ou modèle équivalent Codex)
-- (Optionnel) Comptes **Vercel** et **Render** pour le déploiement
-
----
-
-## Installation rapide
-
-### 1. Cloner le projet
-
-```bash
-git clone https://github.com/YakeDev/Kadi.git
-cd Kadi
-```
-
-### 2. Configurer le backend
+Utiliser Node.js 22 LTS (`.nvmrc`, version minimale 22.13). Les clés service role, SMTP et OpenAI restent exclusivement sur le serveur.
 
 ```bash
 cd backend
-cp .env.example .env.local
-# Renseignez vos variables (Supabase, OpenAI, SMTP, URL de redirection)
-npm install
+cp .env.example .env
+npm ci
 npm run dev
 ```
 
-### 3. Configurer le frontend
+Dans un autre terminal :
 
 ```bash
-cd ../frontend
+cd frontend
 cp .env.example .env.local
-# Ajouter VITE_SUPABASE_URL, VITE_SUPABASE_ANON_KEY, VITE_BACKEND_URL
-npm install
+npm ci
 npm run dev
 ```
 
-Le frontend se lance sur `http://localhost:5173` et le backend sur `http://localhost:4000`.
+Renseigner les valeurs du **projet de test** avant démarrage. `dotenv` charge `backend/.env` ; Vite charge `frontend/.env.local`. Aligner les variables du bucket logo sur les deux services. La préparation IA est facultative et désactivable ; la facturation manuelle ne dépend pas d’une clé IA.
 
-Le frontend gère la session utilisateur directement via le client **Supabase JS**.  
-Le backend consomme ensuite le token Bearer Supabase pour protéger les routes API métier.
-
----
-
-## Architecture
-
-Le projet est structuré en deux grandes parties :
-
-```
-kadi/
-├── frontend/   → React + Tailwind + Vite
-└── backend/    → Node.js + Express + Supabase + OpenAI
-```
-
- Pour une description détaillée des dossiers, voir **ARCHITECTURE.md**
-
----
-
-## API REST
-
-L’API REST couvre l’authentification, les clients, les produits, les factures et la génération IA.  
-Une documentation complète avec les exemples est disponible dans **API.md**.
-
----
-
-## Base de données Supabase
-
-Toutes les instructions SQL (création de tables, RLS, policies multi‑tenant) sont regroupées dans **SUPABASE.md**.
-
----
-
-## Déploiement
-
-Le déploiement recommandé se fait sur :
-
-- **Frontend :** Vercel
-- **Backend :** Render
-- **Base de données :** Supabase
-
-Guide complet dans **DEPLOYMENT.md**.
-
----
-
-## Roadmap
-
-Les prochaines étapes d’évolution sont décrites dans **ROADMAP.md** :
-
-- Dashboard analytique (KPI, top clients)
-- Intégration d’envoi d’emails de factures
-- Paiements en ligne (pawaPay, Paystack)
-- PWA + mode hors ligne
-- Internationalisation (FR / EN / SW)
-
----
-
-## Tests
-
-### Backend
+## Vérifications
 
 ```bash
-cd backend
-npm install            # première fois pour installer jest/supertest
-npm test               # exécuter la suite Jest
+npm --prefix backend ci
+npm --prefix backend test
+npm --prefix frontend ci
+npm --prefix frontend run lint
+npm --prefix frontend test
+npm --prefix frontend run build
+npm --prefix backend audit --omit=dev --audit-level=moderate
+npm --prefix frontend audit --omit=dev --audit-level=moderate
 ```
 
-Les tests utilisent `supertest` pour vérifier les routes Express. Les variables de test sont dans `.env.test`.
-La couverture backend inclut désormais des scénarios de sécurité sur l’auth, la validation des payloads, les logos, le CORS, les rate limits et l’endpoint IA.
+Les tests backend combinent Vitest, des requêtes HTTP de test, le vrai SDK Supabase sur un transport simulé, PostgreSQL local via PGlite et l’analyse des PDF produits. Ils n’utilisent aucune donnée ni clé de production. Les tests frontend couvrent sessions, récupération du mot de passe, logos privés et devise. GitHub Actions exécute ces contrôles sans secrets de production.
 
-### Frontend
+## Règles métier
 
-> Tests unitaires non configurés pour l’instant. Voir `frontend/` si vous souhaitez ajouter Vitest/Testing Library.
+- Une facture utilise USD ou CDF, sans conversion automatique. Le tableau de bord filtre explicitement la devise. Un changement de devise dans l’éditeur remet les prix à zéro.
+- Prix à deux décimales et quantités à trois décimales maximum ; arrondi de chaque ligne au centime, puis somme. Prix unitaire ≤ 1 milliard, quantité ≤ 1 million, facture ≤ 1 000 milliards, 100 lignes maximum. Ce modèle ne gère ni taxes ni taux de change.
+- Un brouillon est modifiable et supprimable. Après émission, ses montants, lignes, coordonnées et logo sont archivés et verrouillés. Les statuts « envoyée/en retard → payée » restent possibles ; une facture payée ne revient pas en brouillon. La création d’avoirs et un journal comptable complet restent à développer.
+- Les comptes browser ne peuvent pas écrire directement dans les tables métier ; l’API applique les validations et l’isolation de l’entreprise. Les logos suivent des politiques Storage distinctes.
 
----
+## Mise en service
 
-## Auteur & Licence
+Lire [SUPABASE.md](SUPABASE.md) et [docs/production-readiness.md](docs/production-readiness.md) avant déploiement. La version du serveur de cette branche nécessite la migration SQL **avant** son démarrage. Les anciens documents émis sans archive fiable ne sont pas réinventés à partir des données actuelles.
 
-Projet imaginé et développé par **Eric Kay (@EricayStudio)**.  
-Libre d’utilisation pour le prototypage, merci de créditer la source.
+Frontend Vercel : répertoire racine `frontend`, commande `npm run build`, sortie `dist`, Node 22.x. API Render : répertoire `backend`, installation `npm ci --omit=dev`, démarrage `npm start`, Node 22. Configurer `ALLOWED_ORIGINS` et le proxy réel ; éviter de connecter les aperçus à une base de production pour les essais de création/modification.
+
+Tailwind 4 cible des navigateurs modernes ; vérifier les appareils mobiles réellement utilisés avant ouverture. Les routes SPA, notamment `/reset-password`, sont réécrites vers `index.html` dans la configuration Vercel du frontend.

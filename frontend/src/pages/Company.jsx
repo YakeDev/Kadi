@@ -85,8 +85,8 @@ const Company = () => {
   const handleLogoChange = (event) => {
     const file = event.target.files?.[0]
     if (!file) return
-    if (!file.type.startsWith('image/')) {
-      setLogoError('Veuillez choisir un fichier image (PNG ou JPG).')
+    if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) {
+      setLogoError('Choisissez un logo PNG, JPEG ou WebP.')
       return
     }
     if (file.size > 1024 * 1024) {
@@ -152,7 +152,7 @@ const Company = () => {
         } catch (error) {
           console.error('logo upload failed', error)
           setLogoError(error.message)
-          toast.error("Échec de l'upload du logo", { icon: '⚠️' })
+          throw error
         } finally {
           setIsUploadingLogo(false)
         }
@@ -225,7 +225,7 @@ const Company = () => {
         </div>
         <label className='btn-primary absolute -bottom-3 left-1/2 flex h-9 -translate-x-1/2 items-center justify-center px-4 text-xs font-semibold'>
           {logoPreview ? 'Modifier' : 'Importer un logo'}
-          <input type='file' accept='image/*' className='hidden' onChange={handleLogoChange} disabled={disabled} />
+          <input type='file' accept='image/png,image/jpeg,image/webp' className='hidden' onChange={handleLogoChange} disabled={disabled} />
         </label>
       </div>
       {logoPreview ? (
@@ -239,7 +239,7 @@ const Company = () => {
         </button>
       ) : null}
       {logoError ? <p className='text-xs text-red-500'>{logoError}</p> : null}
-      <p className='text-[11px] text-[var(--text-muted)]'>PNG ou JPG · 1&nbsp;Mo max.</p>
+      <p className='text-[11px] text-[var(--text-muted)]'>PNG, JPEG ou WebP · 1&nbsp;Mo max.</p>
     </div>
   )
 

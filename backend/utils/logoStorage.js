@@ -26,9 +26,25 @@ export const normalizeLogoStoragePath = (value, userId) => {
     throw createValidationError('Le logo doit être fourni sous forme de chemin de stockage valide.')
   }
 
-  const trimmed = value.trim()
+  let trimmed = value.trim()
   if (!trimmed) return null
 
+  if (ABSOLUTE_URL_REGEX.test(trimmed)) {
+    try {
+      const url = new URL(trimmed)
+      const expected = new URL(process.env.SUPABASE_URL)
+      const prefix = `/storage/v1/object/`
+      const objectPath = url.pathname.slice(prefix.length)
+      const [access, bucket, ...segments] = objectPath.split('/')
+      if (url.origin !== expected.origin || !url.pathname.startsWith(prefix) ||
+          !['public', 'sign', 'authenticated'].includes(access) || decodeURIComponent(bucket) !== LOGO_BUCKET) {
+        throw new Error('untrusted')
+      }
+      trimmed = decodeURIComponent(segments.join('/'))
+    } catch {
+      throw createValidationError("Le logo doit provenir du stockage sécurisé de l'application.")
+    }
+  }
   if (isExternalLogoReference(trimmed)) {
     throw createValidationError(
       "Le logo doit provenir du stockage sécurisé de l'application, pas d'une URL externe."
@@ -36,7 +52,7 @@ export const normalizeLogoStoragePath = (value, userId) => {
   }
 
   const storagePath = sanitizeStoragePath(trimmed)
-  if (!storagePath || storagePath.includes('..')) {
+  if (!storagePath || storagePath.includes('..') || /[%\\\u0000-\u001f?#]/.test(storagePath)) {
     throw createValidationError('Chemin de logo invalide.')
   }
 
@@ -81,20 +97,6 @@ export const resolveStoredLogoUrl = async (
     console.warn(`${logPrefix} createSignedUrl exception:`, error.message)
   }
 
-  try {
-    const { data: publicData, error: publicError } = supabase.storage
-      .from(LOGO_BUCKET)
-      .getPublicUrl(storagePath)
-
-    if (publicError) {
-      console.warn(`${logPrefix} getPublicUrl error:`, publicError.message)
-    } else if (publicData?.publicUrl) {
-      return publicData.publicUrl
-    }
-  } catch (error) {
-    console.warn(`${logPrefix} getPublicUrl exception:`, error.message)
-  }
-
   return null
 }
 
@@ -122,10 +124,10 @@ export const downloadStoredLogoBuffer = async (
       return null
     }
 
-    if (!data) return null
+    if (!data || data.size > 1024 * 1024) return null
 
     const arrayBuffer = await data.arrayBuffer()
-    if (!arrayBuffer?.byteLength) {
+    if (!arrayBuffer?.byteLength || arrayBuffer.byteLength > 1024 * 1024) {
       return null
     }
 
