@@ -17,10 +17,24 @@ import { createInvoicePdf } from '../utils/invoicePdf.js'
 
 
 const conflict = (message) => Object.assign(new Error(message), { status: 409 })
-const presentInvoice = (invoice, tenantId) => ({
-  ...invoice,
-  client: invoice.client_snapshot || (invoice.client?.tenant_id === tenantId ? invoice.client : null)
-})
+const hasIssuedArchive = (invoice) =>
+  Boolean(invoice.client_snapshot && invoice.issuer_snapshot)
+
+const presentInvoice = (invoice, tenantId) => {
+  // Immutable PDF snapshots may contain a full base64 logo. Keep those bytes on
+  // the server: they are not needed by the invoice listing or editor.
+  const issuer = invoice.issuer_snapshot
+  const { logo_base64: _embeddedLogo, ...publicIssuer } = issuer || {}
+  const pdfAvailable = invoice.status === 'draft' || hasIssuedArchive(invoice)
+  return {
+    ...invoice,
+    ...(issuer && { issuer_snapshot: publicIssuer }),
+    pdf_available: pdfAvailable,
+    pdf_unavailable_reason: pdfAvailable ? null : 'historical_snapshot_missing',
+    client: invoice.client_snapshot ||
+      (invoice.client?.tenant_id === tenantId ? invoice.client : null)
+  }
+}
 const readInvoice = async (id, tenantId) => {
   const { data, error } = await supabase.from('invoices').select('*, client:clients(*)')
     .eq('id', id).eq('tenant_id', tenantId).maybeSingle()
@@ -379,7 +393,7 @@ export const streamInvoicePdf = async (req, res, next) => {
   try {
     const invoice = await readInvoice(req.params.id, req.tenantId)
     if (!invoice) return res.status(404).json({ message: 'Facture introuvable.' })
-    if (invoice.status !== 'draft' && (!invoice.issuer_snapshot || !invoice.client_snapshot)) {
+    if (invoice.status !== 'draft' && !hasIssuedArchive(invoice)) {
       throw Object.assign(new Error('Cette ancienne facture ne possède pas d’archive à l’émission. Faites vérifier son original avant de la réexporter.'), { status: 422 })
     }
     const issuer = invoice.issuer_snapshot || req.profile
