@@ -144,6 +144,12 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Isolated KADI public data restoration verified."
 
+      - name: Check out isolated validation script
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+
+      - name: Check PR14 migration on restored production snapshot
+        shell: bash
+        run: bash .github/scripts/kadi-restore-compat.sh
       - name: Remove disposable database container and plaintext
         if: always()
         shell: bash
