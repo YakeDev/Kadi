@@ -144,6 +144,99 @@ jobs:
           } >> "$GITHUB_STEP_SUMMARY"
           echo "Isolated KADI public data restoration verified."
 
+      - name: Apply PR14 security migration to restored production snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          # This PostgreSQL 17 container is isolated. Nothing connects to Supabase production.
+          # Recreate only enough managed Auth structure for public-schema FK/policy checks.
+          cat > "$KADI_RESTORE_DIR/auth-stubs.sql" <<'SQL'
+          create role anon;
+          create role authenticated;
+          create role service_role bypassrls;
+          create table auth.users (id uuid primary key, email text);
+          insert into auth.users(id,email) select id,email from public.profiles;
+          create function auth.uid() returns uuid language sql stable as
+            'select nullif(current_setting(''request.jwt.claim.sub'', true), '''')::uuid';
+          create function auth.role() returns text language sql stable as
+            'select nullif(current_setting(''request.jwt.claim.role'', true), '''')::text';
+          SQL
+          docker exec -i kadi-restore-sandbox psql -X -v ON_ERROR_STOP=1 -q \
+            -U postgres -d kadi_restore_sandbox < "$KADI_RESTORE_DIR/auth-stubs.sql"
+          docker exec kadi-restore-sandbox pg_restore \
+            --no-owner --no-acl --exit-on-error --section=post-data \
+            --schema=public -U postgres -d kadi_restore_sandbox \
+            /tmp/database.pgdump
+          # Read-only baseline for matching legacy financial records after migration.
+          docker exec kadi-restore-sandbox psql -X -v ON_ERROR_STOP=1 -q \
+            -U postgres -d kadi_restore_sandbox -c \
+            "create schema kadi_audit; create table kadi_audit.before as
+              select id, status, issue_date, due_date, total_amount, subtotal_amount,
+              tax_rate, tax_amount, items, currency, notes
+              from public.invoices;"
+          # Pin PR14 migration to reviewed commit (not main; prevents production writes).
+          curl --fail --silent --show-error --location \
+            'https://raw.githubusercontent.com/YakeDev/Kadi/d74d56130819e0a60c3a7a758b8536791cbb4f8a/supabase/migrations/20261022064416_production_hardening.sql' \
+            -o "$KADI_RESTORE_DIR/production_hardening.sql"
+          docker exec -i kadi-restore-sandbox psql -X -v ON_ERROR_STOP=1 -q \
+            -U postgres -d kadi_restore_sandbox < "$KADI_RESTORE_DIR/production_hardening.sql"
+          cat > "$KADI_RESTORE_DIR/assertions.sql" <<'SQL'
+          do $
+          declare changed integer;
+          begin
+            if (select count(*) from public.invoices) <> 21
+              then raise exception 'Migration changed invoice count'; end if;
+            if exists (
+              select 1 from kadi_audit.before b full join public.invoices i on i.id=b.id
+              where b.id is null or i.id is null
+                or b.total_amount is distinct from i.total_amount
+                or b.subtotal_amount is distinct from i.subtotal_amount
+                or b.tax_rate is distinct from i.tax_rate
+                or b.tax_amount is distinct from i.tax_amount
+                or b.status is distinct from i.status
+                or b.issue_date is distinct from i.issue_date
+                or b.due_date is distinct from i.due_date
+                or b.notes is distinct from i.notes
+            ) then raise exception 'Legacy invoice amounts or metadata changed'; end if;
+            select count(*) into changed from kadi_audit.before
+              where currency = '
+        if: always()
+        shell: bash
+        run: |
+          docker rm --force kadi-restore-sandbox >/dev/null 2>&1 || true
+          if [[ -n "${KADI_RESTORE_DIR:-}" ]]; then
+            rm -rf -- "$KADI_RESTORE_DIR"
+          fi
+;
+            if changed <> 7 or exists (
+               select 1 from public.invoices where currency not in ('USD','CDF')
+            ) then raise exception 'USD label normalization did not complete'; end if;
+            if (select count(*) from public.invoices where status <> 'draft' and issuer_snapshot is null) <> 20
+              then raise exception 'Legacy invoice snapshots were unexpectedly generated'; end if;
+            if (select count(*) from pg_policies where schemaname='public'
+              and tablename in ('tenants','profiles','clients','catalog_items','invoices')) <> 5
+              then raise exception 'Expected five restrictive tenant policies'; end if;
+            if (select count(*) from pg_trigger
+              where tgname='guard_kadi_invoice' and not tgisinternal) <> 1
+              then raise exception 'Invoice immutable trigger missing'; end if;
+          end $;
+          SQL
+          docker exec -i kadi-restore-sandbox psql -X -v ON_ERROR_STOP=1 -q \
+            -U postgres -d kadi_restore_sandbox < "$KADI_RESTORE_DIR/assertions.sql"
+          {
+            echo ""
+            echo "### PR14 production compatibility check"
+            echo "- Production public tables + 21 archived invoices: restored inside a disposable PostgreSQL container."
+            echo "- Existing FK/indexes/policies: restored and replaced in the test."
+            echo "- Exact PR14 SQL migration: applied successfully to historical records."
+            echo "- Financial amounts, taxes and statuses: preserved."
+            echo "- Seven legacy dollar labels: normalized to USD without conversion."
+            echo "- Twenty historical invoice snapshots: remain missing and require reconciliation."
+            echo "- RLS and immutable-invoice trigger: present."
+            echo ""
+            echo "**This is NOT an end-to-end Supabase Auth/Storage or PDF validation.**"
+          } >> "$GITHUB_STEP_SUMMARY"
+
       - name: Remove disposable database container and plaintext
         if: always()
         shell: bash
