@@ -189,6 +189,9 @@ describe('Auth login', () => {
         to: 'user@example.com'
       })
     )
+    expect(supabaseMock.auth.admin.generateLink).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'magiclink', email: 'user@example.com' })
+    )
     expect(response.body).toEqual(
       expect.objectContaining({
         emailVerificationSent: true
@@ -309,6 +312,9 @@ describe('Auth login', () => {
 
     expect(response.status).toBe(201)
     expect(response.body.emailVerificationSent).toBe(true)
+    expect(supabaseMock.auth.admin.generateLink).toHaveBeenCalledWith(
+      expect.objectContaining({ type: 'magiclink', email: 'user@example.com' })
+    )
     expect(response.body.verificationUrl).toBeUndefined()
   })
 })
