@@ -1,0 +1,154 @@
+name: KADI - Isolated Restore Verification
+
+# Read-only verification of the already-created encrypted artifact.
+# Never touches KADI's production database.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ops/secure-supabase-backup]
+    paths:
+      - .github/kadi-restore-run-request.txt
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: kadi-isolated-restore
+  cancel-in-progress: false
+
+jobs:
+  restore-check:
+    if: >-
+      github.repository == 'YakeDev/Kadi' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/ops/secure-supabase-backup' &&
+      github.event.head_commit.message == 'ops(restore): trigger isolated drill'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      KADI_BACKUP_PASSPHRASE: ${{ secrets.KADI_BACKUP_PASSPHRASE }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Download and decrypt original encrypted archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ ${#KADI_BACKUP_PASSPHRASE} -lt 32 ]]; then
+            echo "::error::KADI_BACKUP_PASSPHRASE is missing/too short"
+            exit 1
+          fi
+          dest="$RUNNER_TEMP/kadi-restore-test"
+          mkdir -p "$dest/plain"
+          echo "KADI_RESTORE_DIR=$dest" >> "$GITHUB_ENV"
+          curl --fail --silent --show-error --location \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            "https://api.github.com/repos/YakeDev/Kadi/actions/artifacts/12554630442/zip" \
+            -o "$dest/original-artifact.zip"
+          unzip -q -j "$dest/original-artifact.zip" 'kadi-backup.tar.gpg' -d "$dest"
+          gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 \
+            --decrypt "$dest/kadi-backup.tar.gpg" \
+            3<<< "$KADI_BACKUP_PASSPHRASE" > "$dest/decrypted.tar"
+          tar -C "$dest/plain" -xf "$dest/decrypted.tar"
+          test -s "$dest/plain/database.pgdump"
+          test -s "$dest/plain/storage-manifest.json"
+          docker run --rm --user "$(id -u):$(id -g)" \
+            -v "$dest/plain:/backup:ro" postgres:17 \
+            pg_restore --list /backup/database.pgdump > "$dest/archive-list.txt"
+          echo "Original ciphertext decrypted; PostgreSQL archive index verified."
+
+      - name: Check private Storage files against SHA-256 manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          import path from 'node:path'
+          import { createHash } from 'node:crypto'
+          const root = process.env.KADI_RESTORE_DIR
+          const m = JSON.parse(fs.readFileSync(path.join(root, 'plain/storage-manifest.json')))
+          if (m.projectRef !== 'giksqprkorjbgikprksb' || m.bucket !== 'company-logos') throw Error('Mismatched project/bucket')
+          if (!Number.isSafeInteger(m.objectCount) || m.objectCount !== m.files.length) throw Error('Invalid Storage object count')
+          let bytes = 0
+          for (const item of m.files) {
+            const base = path.resolve(root, 'plain/storage')
+            const filename = path.resolve(base, item.objectPath)
+            if (!filename.startsWith(base + path.sep)) throw Error('Invalid Storage path')
+            const buf = fs.readFileSync(filename)
+            if (buf.length !== item.bytes || createHash('sha256').update(buf).digest('hex') !== item.sha256) throw Error('Storage checksum mismatch')
+            bytes += buf.length
+          }
+          if (bytes !== m.totalBytes) throw Error('Storage byte count mismatch')
+          console.log('Storage manifest and checksums verified: ' + m.objectCount + ' objects')
+          NODE
+
+      - name: Restore KADI public schema and data to isolated PostgreSQL 17
+        shell: bash
+        run: |
+          set -euo pipefail
+          # Container contains ONLY disposable test data. Do not pass production credentials.
+          docker run --detach --name kadi-restore-sandbox \
+            --env POSTGRES_PASSWORD=isolated-test-credentials \
+            --env POSTGRES_DB=kadi_restore_sandbox \
+            postgres:17
+          for i in $(seq 1 40); do
+            if docker exec kadi-restore-sandbox pg_isready -q -U postgres -d kadi_restore_sandbox; then break; fi
+            sleep 1
+          done
+          docker exec kadi-restore-sandbox psql -X -v ON_ERROR_STOP=1 \
+            -U postgres -d kadi_restore_sandbox -c \
+            'DROP SCHEMA public CASCADE; CREATE SCHEMA auth; CREATE SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS pgcrypto WITH SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;'
+          # Load only the app's public tables: managed Supabase auth/storage schemas
+          # require a fully provisioned Supabase instance for a complete restore.
+          docker cp "$KADI_RESTORE_DIR/plain/database.pgdump" \
+            kadi-restore-sandbox:/tmp/database.pgdump
+          docker exec kadi-restore-sandbox pg_restore \
+            --no-owner --no-acl --exit-on-error --section=pre-data \
+            --schema=public -U postgres -d kadi_restore_sandbox \
+            /tmp/database.pgdump
+          docker exec kadi-restore-sandbox pg_restore \
+            --no-owner --no-acl --exit-on-error --section=data \
+            --schema=public -U postgres -d kadi_restore_sandbox \
+            /tmp/database.pgdump
+
+      - name: Assert restored KADI record counts
+        shell: bash
+        run: |
+          set -euo pipefail
+          sql="SELECT concat_ws(':',
+            (SELECT count(*) FROM public.tenants),
+            (SELECT count(*) FROM public.profiles),
+            (SELECT count(*) FROM public.clients),
+            (SELECT count(*) FROM public.invoices),
+            (SELECT count(*) FROM public.catalog_items));"
+          actual="$(docker exec kadi-restore-sandbox psql -X -A -t \
+            -v ON_ERROR_STOP=1 -U postgres -d kadi_restore_sandbox -c "$sql")"
+          if [[ "$actual" != "8:6:12:21:2" ]]; then
+            echo "::error::Restored record counts do not match backup-time expectations."
+            exit 1
+          fi
+          {
+            echo "### KADI isolated restoration — app tables"
+            echo ""
+            echo "Verified original encrypted artifact 12554630442."
+            echo ""
+            echo "- Decryption and PostgreSQL archive index: PASS"
+            echo "- Private Storage manifest and checksums: PASS"
+            echo "- Fresh PostgreSQL 17 restoration of public schema/data: PASS"
+            echo "- Five business table counts (8/6/12/21/2): PASS"
+            echo ""
+            echo "**Not yet validated:** Supabase-managed auth/storage restoration, login/session behavior, live site behavior, and imported file serving on a separate Supabase project."
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "Isolated KADI public data restoration verified."
+
+      - name: Remove disposable database container and plaintext
+        if: always()
+        shell: bash
+        run: |
+          docker rm --force kadi-restore-sandbox >/dev/null 2>&1 || true
+          if [[ -n "${KADI_RESTORE_DIR:-}" ]]; then
+            rm -rf -- "$KADI_RESTORE_DIR"
+          fi
