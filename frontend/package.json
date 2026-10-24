@@ -33,7 +33,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^4.6.2",
     "eslint-plugin-react-refresh": "^0.4.24",
-    "jsdom": "^26.1.0",
+    "jsdom": "^30.1.3",
     "postcss": "^8.4.44",
     "prettier": "^3.6.2",
     "tailwindcss": "^4.3.3",
