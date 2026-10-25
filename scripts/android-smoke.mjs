@@ -24,8 +24,13 @@ try {
   const webview = await device.webView({ pkg: packageId })
   const page = await webview.page()
   const errors = []
+  const failedRequests = []
   page.on('pageerror', error => errors.push(error.message))
+  page.on('requestfailed', request => failedRequests.push({ url: request.url().split('?')[0], error: request.failure()?.errorText }))
   await page.locator('input[type="password"]').waitFor({ state: 'visible' })
+  // A newly booted emulator can render bundled assets before Android has
+  // finished configuring its network. Wait for validated connectivity.
+  await page.waitForFunction(async () => (await window.Capacitor.nativePromise('Network', 'getStatus', {})).connected, null, { polling: 1000, timeout: 60000 })
   const initial = await page.evaluate(() => ({
     origin: location.origin, path: location.pathname,
     native: window.Capacitor.isNativePlatform(), platform: window.Capacitor.getPlatform(),
@@ -40,10 +45,21 @@ try {
   // Real HTTPS requests from the packaged app origin; no identity or business writes.
   const network = await page.evaluate(async () => {
     const base = 'https://kadi-facture.onrender.com/api'
-    const health = await fetch(base + '/health', { signal: AbortSignal.timeout(90000) })
-    const privateRoute = await fetch(base + '/auth/profile', { signal: AbortSignal.timeout(90000) })
+    const get = async path => {
+      let failure
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try { return await fetch(base + path, { signal: AbortSignal.timeout(90000) }) } catch (error) {
+          failure = error
+          if (attempt < 2) await new Promise(resolve => setTimeout(resolve, 2000))
+        }
+      }
+      throw failure
+    }
+    const health = await get('/health')
+    const privateRoute = await get('/auth/profile')
     return { health: health.status, privateRoute: privateRoute.status }
   })
+  await writeFile(output + '/network.json', JSON.stringify({ network, failedRequests }, null, 2))
   assert.equal(network.health, 200); assert.equal(network.privateRoute, 401)
   console.log('HTTPS API and private route denial passed; checking native PDF sharing')
   const share = await page.evaluate(() => window.Capacitor.nativePromise('Share', 'canShare', {}))
