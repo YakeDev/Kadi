@@ -88,6 +88,20 @@ describe('Backend security hardening', () => {
     expect(response.body.message).toContain('CORS')
   })
 
+  test('Android HTTPS loopback allows transport but never bypasses authentication', async () => {
+    const preflight = await request(app).options('/api/auth/profile')
+      .set('Origin', 'https://localhost').set('Access-Control-Request-Method', 'GET')
+      .set('Access-Control-Request-Headers', 'Authorization')
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers['access-control-allow-origin']).toBe('https://localhost')
+    const anonymous = await request(app).get('/api/auth/profile').set('Origin', 'https://localhost')
+    expect(anonymous.status).toBe(401)
+    expect(supabaseMock.auth.getUser).not.toHaveBeenCalled()
+    for (const origin of ['http://localhost', 'https://localhost.evil.example', 'https://evil.example']) {
+      expect((await request(app).get('/api/health').set('Origin', origin)).status).toBe(403)
+    }
+  })
+
   test('rate limits repeated login attempts', async () => {
     await request(app).post('/api/auth/login').send({
       email: 'user@example.com',

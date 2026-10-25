@@ -18,6 +18,10 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map(normalizeOrigin)
   .filter(Boolean)
+// Bundled Capacitor Android assets use this exact HTTPS loopback origin.
+// This permits transport only; every business route still requires its JWT
+// and tenant authorization. Never allow a wildcard or arbitrary app origin.
+const androidOrigin = 'https://localhost'
 const isProduction = process.env.NODE_ENV === 'production'
 const jsonBodyLimit = process.env.JSON_BODY_LIMIT || '2mb'
 const trustProxy = process.env.TRUST_PROXY
@@ -117,7 +121,7 @@ const corsOptions = {
       return callback(null, true)
     }
 
-    if (allowedOrigins.includes(normalizedOrigin)) {
+    if (normalizedOrigin === androidOrigin || allowedOrigins.includes(normalizedOrigin)) {
       return callback(null, true)
     }
 
