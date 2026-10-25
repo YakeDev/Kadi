@@ -13,6 +13,7 @@ import { normalizeLogoImage } from '../utils/logoImage.js'
 import { computeTotals } from '../utils/money.js'
 import { validateInvoiceState, normalizeCurrency } from '../utils/validation.js'
 import { createInvoicePdf } from '../utils/invoicePdf.js'
+import { invoicePaymentSummary, paymentBusinessDate } from '../utils/payments.js'
 
 
 
@@ -28,6 +29,7 @@ const presentInvoice = (invoice, tenantId) => {
   const pdfAvailable = invoice.status === 'draft' || hasIssuedArchive(invoice)
   return {
     ...invoice,
+    ...invoicePaymentSummary(invoice),
     ...(issuer && { issuer_snapshot: publicIssuer }),
     pdf_available: pdfAvailable,
     pdf_unavailable_reason: pdfAvailable ? null : 'historical_snapshot_missing',
@@ -79,7 +81,9 @@ export const listInvoices = async (req, res, next) => {
 			.select('*, client:clients(*)', { count: 'exact' })
 			.eq('tenant_id', tenantId)
 
-		if (statusFilter && statusFilter !== 'all') {
+    if (statusFilter === 'overdue') {
+      query = query.or(`status.eq.overdue,and(status.in.(sent,partially_paid),due_date.lt.${paymentBusinessDate()})`)
+    } else if (statusFilter && statusFilter !== 'all') {
 			query = query.eq('status', statusFilter)
 		}
 
@@ -104,14 +108,14 @@ export const listInvoices = async (req, res, next) => {
 
 export const getTodoItems = async (req, res, next) => {
   try {
-    const now = dayjs().format('YYYY-MM-DD')
-    const upcoming = dayjs().add(7, 'day').format('YYYY-MM-DD')
+    const now = paymentBusinessDate()
+    const upcoming = dayjs(now).add(7, 'day').format('YYYY-MM-DD')
     const base = () => supabase.from('invoices')
-      .select('id, invoice_number, status, due_date, issue_date, total_amount, currency, client_snapshot, client:clients(company_name, tenant_id)')
+      .select('id, invoice_number, status, due_date, issue_date, total_amount, paid_amount, currency, client_snapshot, client:clients(company_name, tenant_id)')
       .eq('tenant_id', req.tenantId)
     const queries = [
-      base().in('status', ['sent', 'overdue']).lt('due_date', now).order('due_date', { ascending: true }).limit(5),
-      base().in('status', ['sent', 'overdue']).gte('due_date', now).lte('due_date', upcoming).order('due_date', { ascending: true }).limit(5),
+      base().in('status', ['sent', 'overdue', 'partially_paid']).lt('due_date', now).order('due_date', { ascending: true }).limit(5),
+      base().in('status', ['sent', 'overdue', 'partially_paid']).gte('due_date', now).lte('due_date', upcoming).order('due_date', { ascending: true }).limit(5),
       base().eq('status', 'draft').order('created_at', { ascending: false }).limit(5)
     ]
     const responses = await Promise.all(queries)
@@ -142,7 +146,8 @@ export const createInvoice = async (req, res, next) => {
       tax_rate: totals.taxRate, tax_amount: totals.taxAmount, total_amount: totals.total, version: 0
     }).select('*, client:clients(*)').single()
     if (error) throw error
-    res.status(201).json(presentInvoice(data, req.tenantId))
+    const saved = data.status === 'paid' ? await readInvoice(data.id, req.tenantId) : data
+    res.status(201).json(presentInvoice(saved, req.tenantId))
   } catch (error) { next(error) }
 }
 
@@ -156,7 +161,7 @@ export const updateInvoice = async (req, res, next) => {
       if (Object.keys(updates).some((field) => field !== 'status')) {
         throw conflict('Une facture émise ne peut plus être modifiée. Créez un document correctif séparé.')
       }
-      const allowed = { sent: ['sent', 'overdue', 'paid'], overdue: ['overdue', 'sent', 'paid'], paid: ['paid'] }
+      const allowed = { sent: ['sent', 'overdue', 'paid'], overdue: ['overdue', 'sent', 'paid'], partially_paid: ['partially_paid', 'paid'], paid: ['paid'] }
       if (!allowed[existing.status]?.includes(updates.status)) throw conflict('Transition de statut interdite pour une facture émise.')
       if (updates.status === 'paid' && existing.status !== 'paid') updates.paid_at = new Date().toISOString()
     } else {
@@ -174,7 +179,8 @@ export const updateInvoice = async (req, res, next) => {
       .select('*, client:clients(*)').maybeSingle()
     if (error) throw error
     if (!data) throw conflict('Cette facture a été modifiée entre-temps. Rechargez la page.')
-    res.json(presentInvoice(data, req.tenantId))
+    const saved = data.status === 'paid' ? await readInvoice(data.id, req.tenantId) : data
+    res.json(presentInvoice(saved, req.tenantId))
   } catch (error) { next(error) }
 }
 
@@ -219,11 +225,11 @@ const parsePeriodRange = ({ period = 'month', start, end }) => {
 	}
 }
 
-const groupInvoicesByUnit = (invoices, unit) => {
+const groupPaymentsByUnit = (payments, unit) => {
 	const buckets = new Map()
 
-	invoices.forEach((invoice) => {
-		const date = dayjs(invoice.issue_date)
+	payments.forEach((payment) => {
+		const date = dayjs(payment.paid_on)
 		if (!date.isValid()) return
 
 		const label =
@@ -233,13 +239,12 @@ const groupInvoicesByUnit = (invoices, unit) => {
 					? date.format('YYYY-MM')
 					: date.format('YYYY-MM-DD')
 
-		const prev = buckets.get(label) || { label, total: 0 }
-		const amount = Number(invoice.total_amount || 0)
-		prev.total += amount
+		const prev = buckets.get(label) || { label, cents: 0n }
+		prev.cents += BigInt(Math.round(Number(payment.amount || 0) * 100))
 		buckets.set(label, prev)
 	})
 
-	return Array.from(buckets.values()).sort((a, b) =>
+	return Array.from(buckets.values(), ({ label, cents }) => ({ label, total: Number(cents) / 100 })).sort((a, b) =>
 		a.label.localeCompare(b.label)
 	)
 }
@@ -305,7 +310,7 @@ export const getSummary = async (req, res, next) => {
     let offset = 0
     while (true) {
       const { data, error } = await supabase.from('invoices')
-        .select('id, total_amount, status, issue_date, paid_at, currency, items, client_id, client_snapshot, client:clients(company_name, tenant_id)')
+		.select('id, total_amount, paid_amount, status, issue_date, paid_at, currency, items, client_id, client_snapshot, client:clients(company_name, tenant_id)')
         .eq('tenant_id', tenantId).eq('currency', currency)
         .gte('issue_date', startDate.format('YYYY-MM-DD')).lte('issue_date', endDate.format('YYYY-MM-DD'))
         .order('id', { ascending: true }).range(offset, offset + 499)
@@ -315,19 +320,35 @@ export const getSummary = async (req, res, next) => {
       offset += 500
     }
 
+    // Cash received is selected by receipt date, including invoices issued in a previous period.
+    const payments = []
+    offset = 0
+    while (true) {
+      const { data, error } = await supabase.from('invoice_payments')
+        .select('id, amount, paid_on, is_legacy').eq('tenant_id', tenantId).eq('currency', currency)
+        .is('voided_at', null).gte('paid_on', startDate.format('YYYY-MM-DD')).lte('paid_on', endDate.format('YYYY-MM-DD'))
+        .order('id', { ascending: true }).range(offset, offset + 499)
+      if (error) throw error
+      payments.push(...(data ?? []))
+      if (!data || data.length < 500) break
+      offset += 500
+    }
+
 		const totals = records.reduce(
 			(acc, invoice) => {
 				const amount = Number(invoice.total_amount || 0)
-				acc.totalInvoices += 1
-				acc.totalAmount += amount
+				if (invoice.status !== 'draft') {
+          acc.totalInvoices += 1
+          acc.totalAmount += amount
+        }
 
 				switch (invoice.status) {
 					case 'paid':
-						acc.revenue += amount
 						break
 					case 'sent':
 					case 'overdue':
-						acc.outstanding += amount
+					case 'partially_paid':
+						acc.outstandingCents += BigInt(Math.round(invoice.balance_due * 100))
 						break
 					case 'draft':
 						acc.drafts += 1
@@ -347,8 +368,7 @@ export const getSummary = async (req, res, next) => {
 				return acc
 			},
 			{
-				revenue: 0,
-				outstanding: 0,
+				outstandingCents: 0n,
 				totalAmount: 0,
 				totalInvoices: 0,
 				drafts: 0,
@@ -363,20 +383,22 @@ export const getSummary = async (req, res, next) => {
 
 		const summary = {
 			totals: {
-				revenue: totals.revenue,
-				outstanding: totals.outstanding,
+				revenue: Number(payments.reduce((sum, payment) => sum + BigInt(Math.round(Number(payment.amount) * 100)), 0n)) / 100,
+				outstanding: Number(totals.outstandingCents) / 100,
 				totalAmount: totals.totalAmount,
 				invoiceCount: totals.totalInvoices,
 				draftCount: totals.drafts,
 				averagePaymentDelay: averageDelay == null ? null : Number(averageDelay.toFixed(1)),
 			},
 			charts: {
-				revenue: groupInvoicesByUnit(records.filter((invoice) => invoice.status === 'paid'), period),
-				topClients: rankClients(records),
-				topProducts: rankProducts(records),
+				revenue: groupPaymentsByUnit(payments, period),
+				topClients: rankClients(records.filter((invoice) => invoice.status !== 'draft')),
+				topProducts: rankProducts(records.filter((invoice) => invoice.status !== 'draft')),
 			},
 			meta: {
         currency,
+        legacyPaymentCount: payments.filter((payment) => payment.is_legacy).length,
+        revenueDateBasis: 'paid_on',
 				period,
 				startDate: startDate.toISOString(),
 				endDate: endDate.toISOString(),

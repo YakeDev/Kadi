@@ -11,6 +11,7 @@ import {
 } from '../controllers/invoiceController.js'
 import { requireAuth } from '../middleware/requireAuth.js'
 import { pdfRateLimit } from '../middleware/security.js'
+import { listPayments, recordPayment, voidPayment } from '../controllers/paymentController.js'
 
 const router = Router()
 
@@ -20,6 +21,9 @@ router.get('/', listInvoices)
 router.get('/summary', getSummary)
 router.get('/todo', getTodoItems)
 router.get('/pdf/:id', pdfRateLimit, streamInvoicePdf)
+router.get('/:id/payments', listPayments)
+router.post('/:id/payments', recordPayment)
+router.post('/:id/payments/:paymentId/void', voidPayment)
 router.get('/:id', getInvoice)
 router.post('/', createInvoice)
 router.patch('/:id', updateInvoice)

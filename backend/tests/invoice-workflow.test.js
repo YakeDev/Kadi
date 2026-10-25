@@ -6,6 +6,7 @@ let updatePayload
 let writes
 let reads
 let rows
+let paymentRows
 let stale
 const clientId = 'cccccccc-cccc-4ccc-8ccc-cccccccccccc'
 const draft = () => ({ id: 'invoice-1', tenant_id: 'tenant-1', client_id: clientId, version: 0,
@@ -14,17 +15,20 @@ const draft = () => ({ id: 'invoice-1', tenant_id: 'tenant-1', client_id: client
   client: { id: clientId, tenant_id: 'tenant-1', company_name: 'Original client' } })
 beforeEach(async () => {
   jest.resetModules()
-  existing = draft(); updatePayload = null; writes = []; reads = []; rows = []; stale = false
+  existing = draft(); updatePayload = null; writes = []; reads = []; rows = []; paymentRows = []; stale = false
   database = { from: jest.fn((table) => {
     let operation = 'read'
     const filters = []
+    const ranges = []
     const query = {
       select: jest.fn().mockReturnThis(), eq: jest.fn((key, value) => { filters.push([key, value]); return query }),
-      gte: jest.fn().mockReturnThis(), lte: jest.fn().mockReturnThis(), order: jest.fn().mockReturnThis(),
+      gte: jest.fn((key, value) => { ranges.push([key, value, 'gte']); return query }),
+      lte: jest.fn((key, value) => { ranges.push([key, value, 'lte']); return query }), order: jest.fn().mockReturnThis(),
+      is: jest.fn((key, value) => { filters.push([key, value]); return query }),
       update: jest.fn((payload) => { operation = 'update'; updatePayload = payload; writes.push({ table, operation }); return query }),
       insert: jest.fn((payload) => { operation = 'insert'; updatePayload = payload; writes.push({ table, operation }); return query }),
       delete: jest.fn(() => { operation = 'delete'; writes.push({ table, operation }); return query }),
-      range: jest.fn(async (from, to) => { reads.push({ table, filters, from, to }); return { data: rows.filter((row) => filters.every(([key, value]) => row[key] === value)).slice(from, to + 1), error: null } }),
+      range: jest.fn(async (from, to) => { reads.push({ table, filters, ranges, from, to }); return { data: (table === 'invoice_payments' ? paymentRows : rows).filter((row) => filters.every(([key, value]) => row[key] === value) && ranges.every(([key, value, operator]) => operator === 'gte' ? row[key] >= value : row[key] <= value)).slice(from, to + 1), error: null } }),
       maybeSingle: jest.fn(async () => {
         reads.push({ table, filters, operation })
         if (table === 'clients') return { data: draft().client, error: null }
@@ -38,7 +42,7 @@ beforeEach(async () => {
   controller = await import('../controllers/invoiceController.js')
 })
 const invoke = async (name, body = {}) => {
-  const req = { tenantId: 'tenant-1', user: { id: 'user-1' }, profile: { company: 'Issuer original' }, params: { id: 'invoice-1' }, query: {}, body }
+  const req = { tenantId: 'tenant-1', user: { id: 'user-1' }, profile: { company: 'Issuer original' }, params: { id: 'invoice-1' }, query: name === 'getSummary' ? { start: '2026-10-01', end: '2026-10-31', period: 'month' } : {}, body }
   const res = { json: jest.fn(), status: jest.fn().mockReturnThis(), send: jest.fn() }
   const next = jest.fn()
   await controller[name](req, res, next)
@@ -101,12 +105,41 @@ test('service-role joins never expose a foreign tenant’s client', async () => 
 test('summary filters currency before aggregation and reads beyond the first server page', async () => {
   rows = [...Array.from({ length: 501 }, (_, i) => ({ ...draft(), id: String(i), status: 'paid', paid_at: '2026-10-24', total_amount: 1 })),
     { ...draft(), id: 'cdf', currency: 'CDF', total_amount: 100000 }]
+  paymentRows = Array.from({ length: 501 }, (_, i) => ({ id: String(i), tenant_id: 'tenant-1', currency: 'USD', amount: 1, paid_on: '2026-10-24', voided_at: null }))
   const { res, next } = await invoke('getSummary')
   expect(next).not.toHaveBeenCalled()
   expect(res.json.mock.calls[0][0].totals.revenue).toBe(501)
   expect(res.json.mock.calls[0][0].totals.averagePaymentDelay).toBe(2)
   expect(res.json.mock.calls[0][0].meta.currency).toBe('USD')
-  expect(reads).toHaveLength(2)
+  expect(reads.filter((read) => read.table === 'invoices')).toHaveLength(2)
+  expect(reads.filter((read) => read.table === 'invoice_payments')).toHaveLength(2)
+})
+
+test('partial receipts reduce outstanding balances and count as cash even without an invoice issued in the period', async () => {
+  rows = [{ ...draft(), status: 'partially_paid', total_amount: 350, paid_amount: 150 }]
+  paymentRows = [
+    { id: 'one', tenant_id: 'tenant-1', currency: 'USD', amount: 150, paid_on: '2026-10-24', voided_at: null },
+    { id: 'earlier-invoice', tenant_id: 'tenant-1', currency: 'USD', amount: 25, paid_on: '2026-10-24', voided_at: null },
+    { id: 'voided', tenant_id: 'tenant-1', currency: 'USD', amount: 500, paid_on: '2026-10-24', voided_at: '2026-10-24' },
+    { id: 'foreign', tenant_id: 'tenant-2', currency: 'USD', amount: 9999, paid_on: '2026-10-24', voided_at: null },
+    { id: 'cdf', tenant_id: 'tenant-1', currency: 'CDF', amount: 9999, paid_on: '2026-10-24', voided_at: null },
+    { id: 'past', tenant_id: 'tenant-1', currency: 'USD', amount: 9999, paid_on: '2026-09-30', voided_at: null },
+    { id: 'future', tenant_id: 'tenant-1', currency: 'USD', amount: 9999, paid_on: '2026-11-01', voided_at: null }
+  ]
+  const { res, next } = await invoke('getSummary')
+  expect(next).not.toHaveBeenCalled()
+  expect(res.json.mock.calls[0][0].totals).toMatchObject({ revenue: 175, outstanding: 200, invoiceCount: 1 })
+  expect(res.json.mock.calls[0][0].charts.revenue).toEqual([{ label: '2026-10', total: 175 }])
+  const paymentRead = reads.find((read) => read.table === 'invoice_payments')
+  expect(paymentRead.filters).toContainEqual(['voided_at', null])
+  expect(paymentRead.ranges).toEqual([['paid_on', '2026-10-01', 'gte'], ['paid_on', '2026-10-31', 'lte']])
+})
+
+test('receipts for earlier invoices remain visible when no invoice was issued during the selected period', async () => {
+  paymentRows = [{ id: 'receipt', tenant_id: 'tenant-1', currency: 'USD', amount: 150, paid_on: '2026-10-24', voided_at: null }]
+  const { res, next } = await invoke('getSummary')
+  expect(next).not.toHaveBeenCalled()
+  expect(res.json.mock.calls[0][0].totals).toMatchObject({ revenue: 150, invoiceCount: 0, outstanding: 0 })
 })
 test('issued invoices without historical snapshots cannot be re-created from today’s profile', async () => {
   existing.status = 'sent'

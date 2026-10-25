@@ -21,6 +21,29 @@ const render = async (data, issuer = { company: 'Entreprise originale' }, logo =
   doc.end()
   return getDocument({ data: await ready, useSystemFonts: true }).promise
 }
+for (const currency of ['USD', 'CDF']) {
+  test(`partially paid ${currency} PDF retains invoice total and shows receipts, balance and statement date`, async () => {
+    const pdf = await render({ ...invoice(1), status: 'partially_paid', currency, subtotal_amount: 350, total_amount: 350, paid_amount: 150,
+      items: [{ description: 'Service', quantity: 1, unitPrice: 350 }] })
+    try {
+      let text = ''
+      for (let i = 1; i <= pdf.numPages; i += 1) {
+        const content = await (await pdf.getPage(i)).getTextContent()
+        text += content.items.map((item) => item.str).join(' ') + ' '
+        for (const item of content.items) {
+          if (!item.str.trim() || item.str.includes('Document généré avec Kadi') || /^Page \d+\/\d+$/u.test(item.str)) continue
+          assert.ok(item.transform[5] >= 80, 'payment summary overlaps footer')
+          assert.ok(item.transform[4] + item.width <= 548, 'payment summary overflows right margin')
+        }
+      }
+      assert.match(text, /Partiellement payée/u)
+      assert.match(text, new RegExp(`Total\\s+350,00 ${currency}`, 'u'))
+      assert.match(text, new RegExp(`Déjà reçu\\s+150,00 ${currency}`, 'u'))
+      assert.match(text, new RegExp(`Reste à payer\\s+200,00 ${currency}`, 'u'))
+      assert.match(text, /Situation des versements déclarés au/u)
+    } finally { await pdf.loadingTask.destroy() }
+  })
+}
 test('taxed PDF shows the recorded subtotal, tax and total without rewriting historical values', async () => {
   const pdf = await render({ ...invoice(1), subtotal_amount: 100, tax_rate: 16, tax_amount: 15, total_amount: 115 })
   try {

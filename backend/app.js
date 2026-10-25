@@ -33,6 +33,10 @@ if (allowedOrigins.length > 0) {
 const mapDatabaseError = (error) => {
   if (!error) return null
 
+  if (['PT400', 'PT403', 'PT404', 'PT409'].includes(error.code)) {
+    return { status: Number(error.code.slice(2)), message: error.message }
+  }
+
   if (error.code === '23505') {
     const constraint = error.constraint || error.message || ''
     if (constraint.includes('catalog_items_tenant_sku_key')) {
@@ -47,7 +51,7 @@ const mapDatabaseError = (error) => {
     }
   }
 
-  if (['42703', 'PGRST204'].includes(error.code)) return { status: 503, message: 'Mise à jour de la base de données requise. Contactez l’administrateur.' }
+  if (['42703', '42P01', 'PGRST202', 'PGRST204', 'PGRST205'].includes(error.code)) return { status: 503, message: 'Mise à jour de la base de données requise. Contactez l’administrateur.' }
 
   if (error.code === '23514') return { status: 409, message: 'Cette opération ne respecte pas les règles de la facture ou du catalogue.' }
 
