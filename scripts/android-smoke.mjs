@@ -13,11 +13,14 @@ const isKadiResumed = () => {
   assert.ok(lines.length, "Android must report its resumed activity");
   return lines.some(line => line.includes(packageId + "/"));
 };
-const screenshot = (name) =>
-  writeFile(
+const screenshot = async (name) => {
+  // WebView DOM updates can precede Android's next surface composition.
+  await pause(400);
+  return writeFile(
     output + "/" + name + ".png",
     execFileSync("adb", ["exec-out", "screencap", "-p"]),
   );
+};
 await mkdir(output, { recursive: true });
 adb(
   "install",
