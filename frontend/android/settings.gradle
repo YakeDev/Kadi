@@ -3,3 +3,9 @@ include ':capacitor-cordova-android-plugins'
 project(':capacitor-cordova-android-plugins').projectDir = new File('./capacitor-cordova-android-plugins/')
 
 apply from: 'capacitor.settings.gradle'
+
+// Separate receiver app used only by the emulator to verify PDF URI grants.
+// It is never packaged inside Kadi or built by the normal APK command.
+if (hasProperty('kadiShareFixture')) {
+    include ':smoke-recipient'
+}

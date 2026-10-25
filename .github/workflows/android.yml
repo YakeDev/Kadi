@@ -39,7 +39,7 @@ jobs:
       - name: Build test APK
         working-directory: frontend/android
         run: |
-          ./gradlew --no-daemon assembleDebug lintDebug
+          ./gradlew --no-daemon -PkadiShareFixture :app:assembleDebug :app:lintDebug :smoke-recipient:assembleDebug
           mkdir -p ../../android-artifacts
           cp app/build/outputs/apk/debug/app-debug.apk ../../android-artifacts/Kadi-Android-pilote.apk
           cd ../../android-artifacts
