@@ -57,16 +57,30 @@ try {
     window.Capacitor.nativePromise('Share', 'share', { files: [uri], title: 'devis-test.pdf', dialogTitle: 'Partager le PDF' }).catch(() => {})
   }, file.uri)
   await pause(1500)
+  // Android initially shows only its suggested targets. Expand the sheet so
+  // the separate PDF receiver is visible alongside the other installed apps.
+  await screenshot('android-share-collapsed')
+  const screenSize = adb('shell', 'wm', 'size').match(/(\d+)x(\d+)/)
+  assert.ok(screenSize, 'Emulator screen dimensions must be available')
+  const screenWidth = Number(screenSize[1]), screenHeight = Number(screenSize[2])
+  adb('shell', 'input', 'swipe', String(Math.round(screenWidth / 2)), String(Math.round(screenHeight * 0.61)), String(Math.round(screenWidth / 2)), String(Math.round(screenHeight * 0.2)), '500')
+  await pause(500)
   adb('shell', 'uiautomator', 'dump', '/sdcard/kadi-share.xml')
   const chooser = adb('shell', 'cat', '/sdcard/kadi-share.xml')
+  await writeFile(output + '/android-share.xml', chooser)
   const receiver = (chooser.match(/<node\b[^>]*>/g) || []).find(node => /(?:text|content-desc)="[^"]*Kadi PDF[^"]*"/.test(node))
   assert.ok(receiver, 'PDF recipient must be visible in the active Android chooser')
   await screenshot('android-share')
   const bounds = receiver.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/)
   assert.ok(bounds, 'PDF recipient must have tappable bounds')
   adb('shell', 'input', 'tap', String(Math.round((Number(bounds[1]) + Number(bounds[3])) / 2)), String(Math.round((Number(bounds[2]) + Number(bounds[4])) / 2)))
-  await pause(500)
-  assert.match(adb('logcat', '-d', '-s', 'KadiPdfTest:I', '*:S'), /PDF_READ_OK/, 'Recipient must read the granted PDF content URI')
+  let receipt = ''
+  for (let i = 0; i < 20; i++) {
+    receipt = adb('logcat', '-d', '-s', 'KadiPdfTest:I', '*:S')
+    if (receipt.includes('PDF_READ_OK')) break
+    await pause(250)
+  }
+  assert.match(receipt, /PDF_READ_OK/, 'Recipient must read the granted PDF content URI')
   await screenshot('android-pdf-received')
   adb('shell', 'am', 'start', '-n', packageId + '/com.ericaystudio.kadi.MainActivity')
   assert.equal(await page.evaluate(() => {
