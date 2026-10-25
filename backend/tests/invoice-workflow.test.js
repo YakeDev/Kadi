@@ -83,6 +83,40 @@ test('marking a historical taxed invoice paid never recalculates its recorded am
   expect(next).not.toHaveBeenCalled()
   expect(updatePayload).toEqual({ status: 'paid', paid_at: expect.any(String) })
 })
+
+test('discounts are calculated by the API on create and on a discount-only draft PATCH', async () => {
+  const { next } = await invoke('createInvoice', { items: [{ description: 'Service', quantity: 1, unitPrice: 350,
+    discountType: 'percent', discountValue: 15 }], tax_rate: 16, discount_type: 'percent', discount_value: 10 })
+  expect(next).not.toHaveBeenCalled()
+  expect(updatePayload).toMatchObject({ subtotal_amount: 350, line_discount_amount: 52.5, discount_amount: 82.25,
+    tax_amount: 42.84, total_amount: 310.59 })
+  Object.assign(existing, { discount_type: 'percent', discount_value: 10 })
+  const patch = await invoke('updateInvoice', { discount_value: 20 })
+  expect(patch.next).not.toHaveBeenCalled()
+  expect(updatePayload).toMatchObject({ discount_type: 'percent', discount_value: 20, discount_amount: 2, total_amount: 8 })
+})
+
+test('an excessive discount PATCH and a discount on an issued invoice cannot change stored amounts', async () => {
+  const excessive = await invoke('updateInvoice', { discount_type: 'fixed', discount_value: 11 })
+  expect(excessive.next).toHaveBeenCalledWith(expect.objectContaining({ status: 400 }))
+  expect(writes).toEqual([])
+  existing.status = 'sent'
+  const issued = await invoke('updateInvoice', { discount_type: 'percent', discount_value: 10 })
+  expect(issued.next).toHaveBeenCalledWith(expect.objectContaining({ status: 409 }))
+  expect(writes).toEqual([])
+})
+
+test('dashboard outstanding and product rankings reflect the actual discounted invoice', async () => {
+  rows = [{ ...draft(), status: 'partially_paid', paid_amount: 50, total_amount: 232, discount_amount: 50, line_discount_amount: 25,
+    items: [{ description: 'Design', quantity: 2, unitPrice: 100, discountType: 'percent', discountValue: 10 },
+      { description: 'Conseil', quantity: 1, unitPrice: 50, discountType: 'fixed', discountValue: 5 }] }]
+  paymentRows = [{ id: 'payment', tenant_id: 'tenant-1', currency: 'USD', amount: 50, paid_on: '2026-10-24', voided_at: null }]
+  const { res, next } = await invoke('getSummary')
+  expect(next).not.toHaveBeenCalled()
+  const summary = res.json.mock.calls[0][0]
+  expect(summary.totals).toMatchObject({ outstanding: 182, revenue: 50, totalAmount: 232 })
+  expect(summary.charts.topProducts.reduce((sum, product) => sum + product.total, 0)).toBe(200)
+})
 test('issuing captures immutable issuer/client details and guards against concurrent updates', async () => {
   const { next, res } = await invoke('updateInvoice', { status: 'sent' })
   expect(next).not.toHaveBeenCalled()

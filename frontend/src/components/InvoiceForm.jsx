@@ -22,7 +22,8 @@ import CollapsibleSection from './CollapsibleSection.jsx'
 import ClientPickerModal from './ClientPickerModal.jsx'
 import CatalogPickerModal from './CatalogPickerModal.jsx'
 import InvoicePreview from './InvoicePreview.jsx'
-import { getInvoiceTotals, formatInvoiceMoney } from '../utils/invoiceTotals.js'
+import { getInvoiceTotals, getInvoiceLineTotals, formatInvoiceMoney } from '../utils/invoiceTotals.js'
+import DiscountFields from './DiscountFields.jsx'
 import { clearInvoiceDraft, invoiceDraftKey, readInvoiceDraft, writeInvoiceDraft } from '../utils/invoiceDraft.js'
 
 const createEmptyItem = (currency = 'USD') => ({
@@ -30,7 +31,9 @@ const createEmptyItem = (currency = 'USD') => ({
   description: '',
   quantity: 1,
   unitPrice: 0,
-  currency
+  currency,
+  discountType: 'none',
+  discountValue: 0
 })
 
 const statusOptions = [
@@ -49,6 +52,8 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
       notes: '',
       currency: 'USD',
       tax_rate: 0,
+      discount_type: 'none',
+      discount_value: 0,
       items: [createEmptyItem()]
     }
   }
@@ -59,6 +64,8 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
         description: line.description ?? '',
         quantity: Number(line.quantity ?? 1),
         unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
+        discountType: line.discountType || 'none',
+        discountValue: Number(line.discountValue || 0),
         currency: (line.currency ?? invoice.currency) === '$' ? 'USD' : line.currency ?? invoice.currency ?? 'USD'
       }))
     : [createEmptyItem()]
@@ -71,6 +78,8 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
     notes: invoice.notes ?? '',
     currency: invoice.currency === '$' ? 'USD' : invoice.currency || 'USD',
     tax_rate: Number(invoice.tax_rate || 0),
+    discount_type: invoice.discount_type || 'none',
+    discount_value: Number(invoice.discount_value || 0),
     items
   }
 }
@@ -160,8 +169,11 @@ const InvoiceEditor = ({
 
   const updateField = (field, value) => {
     if (field === 'currency') {
-      setForm((prev) => ({ ...prev, currency: value, items: prev.items.map((item) => ({ ...item, currency: value, unitPrice: 0, catalogItemId: null })) }))
-      toast('Devise modifiée. Ressaisissez les prix dans cette devise ; aucune conversion automatique.')
+      setForm((prev) => ({ ...prev, currency: value,
+        discount_value: prev.discount_type === 'fixed' ? 0 : prev.discount_value,
+        items: prev.items.map((item) => ({ ...item, currency: value, unitPrice: 0, catalogItemId: null,
+          discountValue: item.discountType === 'fixed' ? 0 : item.discountValue })) }))
+      toast('Devise modifiée. Ressaisissez les prix et remises fixes ; aucune conversion automatique.')
       return
     }
     setForm((prev) => ({ ...prev, [field]: value }))
@@ -241,6 +253,11 @@ const InvoiceEditor = ({
 
   const handleSubmit = async (event) => {
     event.preventDefault()
+    const checked = getInvoiceTotals(form)
+    if (checked.calculationError) {
+      notifyError(checked.calculationError)
+      return
+    }
     setIsSubmitting(true)
     try {
       if (isEditing) {
@@ -299,7 +316,7 @@ const InvoiceEditor = ({
     }
   }
 
-  const { total, currency } = getInvoiceTotals(form)
+  const { total, currency, calculationError } = getInvoiceTotals(form)
   const inputClass = isDrawer ? 'input-compact' : 'input'
   const textareaClass = isDrawer ? 'textarea textarea-compact' : 'textarea'
   const layoutClass = isDrawer
@@ -508,6 +525,7 @@ const InvoiceEditor = ({
             <div className='space-y-3'>
               {form.items.map((item, index) => {
                 const selectedCatalog = catalog.find((entry) => entry.id === item.catalogItemId)
+                const line = getInvoiceLineTotals(item)
                 return (
                   <div
                     key={`invoice-item-${index}`}
@@ -570,6 +588,10 @@ const InvoiceEditor = ({
                         className={inputClass}
                       />
                     </div>
+                    <div className='col-span-2 min-w-0 space-y-2 md:col-span-4'>
+                      <DiscountFields id={`line-discount-${index}`} label={`Remise de la ligne ${index + 1}`} currency={form.currency} type={item.discountType || 'none'} value={item.discountValue ?? 0} onChange={(discount) => setForm((prev) => ({ ...prev, items: prev.items.map((entry, idx) => idx === index ? { ...entry, discountType: discount.type, discountValue: discount.value } : entry) }))} />
+                      <p className='text-sm font-semibold'>{line.calculationError ? line.calculationError : `Total de la ligne : ${formatInvoiceMoney(line.net, form.currency)}`}</p>
+                    </div>
                     {form.items.length > 1 ? (
                       <button
                         type='button'
@@ -585,6 +607,11 @@ const InvoiceEditor = ({
               })}
             </div>
           </CollapsibleSection>
+
+          <CollapsibleSection title='Remise globale' description='Appliquée après les remises par ligne et avant la taxe éventuelle.' defaultOpen>
+            <DiscountFields id='invoice-discount' label='Remise globale' currency={form.currency} type={form.discount_type || 'none'} value={form.discount_value ?? 0} onChange={(discount) => setForm((prev) => ({ ...prev, discount_type: discount.type, discount_value: discount.value }))} />
+          </CollapsibleSection>
+          {calculationError ? <p role='alert' className='rounded-lg bg-red-50 p-3 text-sm text-red-800'>{calculationError}</p> : null}
 
           <CollapsibleSection
             title='Notes & conditions'
@@ -623,7 +650,7 @@ const InvoiceEditor = ({
 
       {isFullPage ? (
         <div className='fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t border-[var(--border)] bg-white px-4 py-3 shadow-lg lg:hidden'>
-          <div><p className='text-xs text-[var(--text-muted)]'>Total de la facture</p><output aria-label='Total de la facture' aria-live='polite' className='text-lg font-semibold'>{formatInvoiceMoney(total, currency)}</output></div>
+          <div><p className='text-xs text-[var(--text-muted)]'>Total de la facture</p><output aria-label='Total de la facture' aria-live='polite' className='text-lg font-semibold'>{calculationError ? 'À vérifier' : formatInvoiceMoney(total, currency)}</output></div>
           <button type='button' aria-expanded={isPreviewOpen} aria-controls='invoice-preview' className='btn-secondary' onClick={() => {
             setIsPreviewOpen((prev) => !prev)
             if (!isPreviewOpen) requestAnimationFrame(() => {
