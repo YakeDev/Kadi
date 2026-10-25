@@ -1,5 +1,5 @@
 import { randomBytes } from 'crypto'
-import { computeTotals, lineTotalCents, MAX_INVOICE_AMOUNT } from './money.js'
+import { computeTotals, lineTotalCents, normalizeDiscount, MAX_INVOICE_AMOUNT } from './money.js'
 import { paymentBusinessDate } from './payments.js'
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
@@ -20,7 +20,9 @@ const INVOICE_ALLOWED_FIELDS = [
   'notes',
   'items',
   'currency',
-  'tax_rate'
+  'tax_rate',
+  'discount_type',
+  'discount_value'
 ]
 const INVOICE_BLOCKED_FIELDS = [
   'id',
@@ -29,6 +31,8 @@ const INVOICE_BLOCKED_FIELDS = [
   'subtotal_amount',
   'total_amount',
   'tax_amount',
+  'discount_amount',
+  'line_discount_amount',
   'created_at',
   'updated_at'
 ]
@@ -41,7 +45,9 @@ const INVOICE_ITEM_ALLOWED_FIELDS = [
   'qty',
   'unitPrice',
   'unit_price',
-  'currency'
+  'currency',
+  'discountType',
+  'discountValue'
 ]
 const INVOICE_STATUSES = ['draft', 'sent', 'paid', 'overdue']
 
@@ -212,6 +218,12 @@ const sanitizeInvoiceItem = (value, index) => {
     unitPrice
   }
 
+  if (hasOwn(payload, 'discountType') || hasOwn(payload, 'discountValue')) {
+    const discount = normalizeDiscount(payload.discountType ?? 'none', payload.discountValue ?? 0)
+    sanitized.discountType = discount.type
+    sanitized.discountValue = discount.value
+  }
+
   if (currency) {
     sanitized.currency = currency
   }
@@ -310,6 +322,13 @@ export const sanitizeInvoicePayload = (body = {}, { partial = false } = {}) => {
     sanitized.tax_rate = computeTotals([], payload.tax_rate ?? 0).taxRate
   }
 
+  if (hasOwn(payload, 'discount_type')) {
+    sanitized.discount_type = normalizeDiscount(payload.discount_type, 0).type
+  }
+  if (hasOwn(payload, 'discount_value')) {
+    sanitized.discount_value = normalizeDiscount('fixed', payload.discount_value).value
+  }
+
   if (!partial || hasOwn(payload, 'items')) {
     const rawItems = payload.items ?? []
     if (!Array.isArray(rawItems)) {
@@ -328,7 +347,7 @@ export const sanitizeInvoicePayload = (body = {}, { partial = false } = {}) => {
   if (issueDate && dueDate && dueDate < issueDate) {
     throw createValidationError("La date d'échéance doit être postérieure ou égale à la date d'émission.")
   }
-  if (sanitized.items) computeTotals(sanitized.items, sanitized.tax_rate)
+  if (sanitized.items) computeTotals(sanitized.items, sanitized.tax_rate, sanitized)
   if (sanitized.items && sanitized.currency) assertInvoiceCurrency(sanitized)
 
   if (partial && Object.keys(sanitized).length === 0) {
@@ -347,7 +366,7 @@ export const assertInvoiceCurrency = ({ items = [], currency }) => {
 
 export const validateInvoiceState = (invoice) => {
   assertInvoiceCurrency(invoice)
-  computeTotals(invoice.items, invoice.tax_rate)
+  computeTotals(invoice.items, invoice.tax_rate, invoice)
   const issueDate = normalizeDate(invoice.issue_date, 'issue_date')
   const dueDate = normalizeDate(invoice.due_date, 'due_date')
   if (issueDate && dueDate && dueDate < issueDate) {

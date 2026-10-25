@@ -4,6 +4,7 @@ import sharp from 'sharp'
 import { getDocument, OPS } from 'pdfjs-dist/legacy/build/pdf.mjs'
 import { createInvoicePdf } from '../utils/invoicePdf.js'
 import { normalizeLogoImage } from '../utils/logoImage.js'
+import { computeTotals } from '../utils/money.js'
 
 const invoice = (count, description = '') => ({
   invoice_number: 'FAC-TEST', issue_date: '2026-10-22', due_date: '2026-11-22', currency: 'USD',
@@ -20,6 +21,36 @@ const render = async (data, issuer = { company: 'Entreprise originale' }, logo =
   })
   doc.end()
   return getDocument({ data: await ready, useSystemFonts: true }).promise
+}
+
+for (const currency of ['USD', 'CDF']) {
+  test(`discounted ${currency} PDF shows line/global discounts, net tax and the actual remaining balance`, async () => {
+    const items = [{ description: 'Conception', quantity: 1, unitPrice: 350, discountType: 'percent', discountValue: 15 }]
+    const totals = computeTotals(items, 16, { discount_type: 'percent', discount_value: 10 })
+    const pdf = await render({ ...invoice(1), items, currency, status: 'partially_paid', subtotal_amount: totals.subtotal,
+      discount_type: 'percent', discount_value: 10, line_discount_amount: totals.lineDiscountAmount,
+      discount_amount: totals.discountAmount, tax_rate: 16, tax_amount: totals.taxAmount, total_amount: totals.total, paid_amount: 150 })
+    try {
+      assert.equal(pdf.numPages, 1, 'a short discounted invoice fits on one page')
+      let text = ''
+      for (let i = 1; i <= pdf.numPages; i += 1) {
+        const content = await (await pdf.getPage(i)).getTextContent()
+        text += content.items.map((item) => item.str).join(' ') + ' '
+        for (const item of content.items) {
+          if (!item.str.trim() || item.str.includes('Document généré avec Kadi') || /^Page \d+\/\d+$/u.test(item.str)) continue
+          assert.ok(item.transform[5] >= 80, 'discount summary overlaps footer')
+          assert.ok(item.transform[4] + item.width <= 548, 'discount summary overflows right margin')
+        }
+      }
+      assert.match(text, /Remise \(15 %\)/u)
+      assert.match(text, /Remises sur lignes/u)
+      assert.match(text, /Remise globale \(10 %\)/u)
+      text = text.replace(/(\d)\s+,/gu, '$1,')
+      assert.match(text, new RegExp(`Net avant taxe\\s+267,75 ${currency}`, 'u'))
+      assert.match(text, new RegExp(`Total\\s+310,59 ${currency}`, 'u'))
+      assert.match(text, new RegExp(`Reste à payer\\s+160,59 ${currency}`, 'u'))
+    } finally { await pdf.loadingTask.destroy() }
+  })
 }
 for (const currency of ['USD', 'CDF']) {
   test(`partially paid ${currency} PDF retains invoice total and shows receipts, balance and statement date`, async () => {

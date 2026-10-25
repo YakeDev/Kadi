@@ -8,7 +8,7 @@ describe('Exact bounded invoice calculations', () => {
     expect(computeTotals([{ quantity: 0.5, unitPrice: 0.01 }]).subtotal).toBe(0.01)
   })
   test('computes optional tax in cents and includes it in the invoice limit', () => {
-    expect(computeTotals([{ quantity: 1, unitPrice: 100 }], 16)).toEqual({ subtotal: 100, taxRate: 16, taxAmount: 16, total: 116 })
+    expect(computeTotals([{ quantity: 1, unitPrice: 100 }], 16)).toMatchObject({ subtotal: 100, taxRate: 16, taxAmount: 16, total: 116 })
     expect(computeTotals([{ quantity: 1, unitPrice: 0.01 }], 50).taxAmount).toBe(0.01)
     expect(() => computeTotals([{ quantity: 1000, unitPrice: 1_000_000_000 }], 16)).toThrow('hors limites')
     for (const rate of [-1, 101, 1.001, true, {}, NaN]) expect(() => computeTotals([], rate)).toThrow('taux de taxe')

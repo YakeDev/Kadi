@@ -10,7 +10,7 @@ import {
 } from '../utils/validation.js'
 import { downloadStoredLogoBuffer } from '../utils/logoStorage.js'
 import { normalizeLogoImage } from '../utils/logoImage.js'
-import { computeTotals } from '../utils/money.js'
+import { computeTotals, allocateNetLineCents } from '../utils/money.js'
 import { validateInvoiceState, normalizeCurrency } from '../utils/validation.js'
 import { createInvoicePdf } from '../utils/invoicePdf.js'
 import { invoicePaymentSummary, paymentBusinessDate } from '../utils/payments.js'
@@ -138,12 +138,14 @@ export const createInvoice = async (req, res, next) => {
     const payload = sanitizeInvoicePayload(req.body)
     validateInvoiceState(payload)
     const client = await getClient(payload.client_id, req.tenantId)
-    const totals = computeTotals(payload.items, payload.tax_rate)
+    const totals = computeTotals(payload.items, payload.tax_rate, payload)
     const snapshots = await issueSnapshot(payload, req, client)
     const { data, error } = await supabase.from('invoices').insert({
       ...payload, ...snapshots, tenant_id: req.tenantId,
       invoice_number: generateInvoiceNumber(), subtotal_amount: totals.subtotal,
-      tax_rate: totals.taxRate, tax_amount: totals.taxAmount, total_amount: totals.total, version: 0
+      tax_rate: totals.taxRate, tax_amount: totals.taxAmount, total_amount: totals.total, version: 0,
+      discount_type: totals.discountType, discount_value: totals.discountValue,
+      discount_amount: totals.discountAmount, line_discount_amount: totals.lineDiscountAmount
     }).select('*, client:clients(*)').single()
     if (error) throw error
     const saved = data.status === 'paid' ? await readInvoice(data.id, req.tenantId) : data
@@ -169,9 +171,11 @@ export const updateInvoice = async (req, res, next) => {
       const merged = { ...existing, ...updates }
       validateInvoiceState(merged)
       const client = await getClient(merged.client_id, req.tenantId)
-      const totals = computeTotals(merged.items, merged.tax_rate)
+      const totals = computeTotals(merged.items, merged.tax_rate, merged)
       updates = { ...updates, subtotal_amount: totals.subtotal, tax_rate: totals.taxRate,
         tax_amount: totals.taxAmount, total_amount: totals.total,
+        discount_type: totals.discountType, discount_value: totals.discountValue,
+        discount_amount: totals.discountAmount, line_discount_amount: totals.lineDiscountAmount,
         ...await issueSnapshot(merged, req, client) }
     }
     const { data, error } = await supabase.from('invoices').update(updates)
@@ -275,10 +279,12 @@ const rankProducts = (invoices) => {
 
 	invoices.forEach((invoice) => {
 		const items = Array.isArray(invoice.items) ? invoice.items : []
-		items.forEach((item) => {
+		const netAmounts = Number(invoice.discount_amount || 0) > 0
+      ? allocateNetLineCents(items, Number(invoice.discount_amount || 0) - Number(invoice.line_discount_amount || 0)) : null
+		items.forEach((item, index) => {
 			const quantity = Number(item.quantity || 0)
 			const unitPrice = Number(item.unitPrice || item.unit_price || 0)
-			const total = quantity * unitPrice
+			const total = netAmounts ? netAmounts[index] / 100 : quantity * unitPrice
 			const label = item.description || item.name || 'Article sans nom'
 
 			if (!products.has(label)) {
@@ -310,7 +316,7 @@ export const getSummary = async (req, res, next) => {
     let offset = 0
     while (true) {
       const { data, error } = await supabase.from('invoices')
-		.select('id, total_amount, paid_amount, status, issue_date, paid_at, currency, items, client_id, client_snapshot, client:clients(company_name, tenant_id)')
+		.select('id, total_amount, paid_amount, discount_amount, line_discount_amount, status, issue_date, paid_at, currency, items, client_id, client_snapshot, client:clients(company_name, tenant_id)')
         .eq('tenant_id', tenantId).eq('currency', currency)
         .gte('issue_date', startDate.format('YYYY-MM-DD')).lte('issue_date', endDate.format('YYYY-MM-DD'))
         .order('id', { ascending: true }).range(offset, offset + 499)

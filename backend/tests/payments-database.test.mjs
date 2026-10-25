@@ -36,6 +36,7 @@ before(async () => {
       ('${zeroId}','${t1}','${c1}','ZERO-PAID','paid','2026-01-01',0,0,0,0,'CDF');`)
   await db.exec(await sql(paths[1]))
   await db.exec(await sql(paths.find((path) => path.includes('partial_payments'))))
+  await db.exec(await sql(paths.find((path) => path.includes('invoice_discounts'))))
 })
 after(async () => { await db?.close() })
 
@@ -64,6 +65,8 @@ test('legacy paid invoices retain exact tax, totals and archive availability, wi
   assert.equal(Number(invoice.total_amount), 115)
   assert.equal(Number(invoice.tax_amount), 15)
   assert.equal(Number(invoice.paid_amount), 115)
+  assert.equal(Number(invoice.discount_amount), 0)
+  assert.equal(Number(invoice.line_discount_amount), 0)
   assert.equal(invoice.client_snapshot, null)
   const receipts = (await db.query('select * from invoice_payments where invoice_id=$1', [legacyId])).rows
   assert.equal(receipts.length, 1)
@@ -181,4 +184,34 @@ test('legacy mark-paid writes still record exactly one complete settlement durin
   assert.equal(Number((await readBill(id)).paid_amount), 115)
   await db.query("update invoices set status='paid' where id=$1", [id])
   assert.equal((await db.query('select count(*)::int as count from invoice_payments where invoice_id=$1', [id])).rows[0].count, 1)
+})
+
+for (const currency of ['USD', 'CDF']) {
+  test(`discounted ${currency} invoices accept receipts only up to the discounted amount and keep their archive`, async () => {
+    const id = await bill(350, currency, t1, 'draft')
+    await db.query(`update invoices set items=$2, discount_type='percent', discount_value=10,
+      line_discount_amount=52.5, discount_amount=82.25, tax_rate=16, tax_amount=42.84, total_amount=310.59, status='sent' where id=$1`,
+    [id, JSON.stringify([{ description: 'Service', quantity: 1, unitPrice: 350, currency, discountType: 'percent', discountValue: 15 }])])
+    await asRole('service_role', async () => {
+      await record(id, 150)
+      assert.equal(Number((await readBill(id)).paid_amount), 150)
+      await assert.rejects(record(id, 160.6), /dépasse/)
+      await record(id, 160.59)
+    })
+    const invoice = await readBill(id)
+    assert.equal(invoice.status, 'paid')
+    assert.equal(Number(invoice.paid_amount), 310.59)
+    assert.equal(Number(invoice.total_amount), 310.59)
+    assert.equal(Number(invoice.discount_amount), 82.25)
+    await assert.rejects(db.query("update invoices set discount_value=20 where id=$1", [id]), /immutable/)
+  })
+}
+
+test('database constraints reject inconsistent discount and total fields, including direct server writes', async () => {
+  const id = await bill(100, 'USD', t1, 'draft')
+  await db.query("update invoices set discount_type='percent',discount_value=10,discount_amount=10,total_amount=90 where id=$1", [id])
+  for (const sql of ["discount_type='other'", 'discount_value=101', 'discount_value=-1', 'discount_amount=101',
+    'line_discount_amount=20', 'total_amount=92', "discount_type='none'"])
+    await assert.rejects(db.query(`update invoices set ${sql} where id=$1`, [id]), /check constraint/)
+  assert.equal(Number((await readBill(id)).total_amount), 90)
 })

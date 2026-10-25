@@ -1,5 +1,5 @@
 import clsx from 'clsx'
-import { getInvoiceTotals } from '../utils/invoiceTotals.js'
+import { getInvoiceTotals, getInvoiceLineTotals } from '../utils/invoiceTotals.js'
 import { paymentBalance } from '../utils/payments.js'
 
 const formatCurrency = (value, currency = 'USD') =>
@@ -22,7 +22,7 @@ const formatDate = (value) =>
 
 const InvoicePreview = ({ id, className, company, client, invoice }) => {
   const items = invoice.items ?? []
-  const { subtotal, taxRate, taxAmount, total, currency } = getInvoiceTotals(invoice)
+  const { subtotal, lineDiscountAmount, globalDiscountAmount, discountAmount, netSubtotal, taxRate, taxAmount, total, currency, calculationError } = getInvoiceTotals(invoice)
   const { paid, remaining } = paymentBalance({ ...invoice, total_amount: total })
 
   const companyLocation = [company?.city, company?.state].filter(Boolean).join(', ')
@@ -112,16 +112,19 @@ const InvoicePreview = ({ id, className, company, client, invoice }) => {
                 </tr>
               </thead>
               <tbody>
-                {items.slice(0, 4).map((item, index) => (
+                {items.slice(0, 4).map((item, index) => {
+                  const line = getInvoiceLineTotals(item)
+                  return (
                   <tr key={index} className='border-b border-slate-200 align-top'>
-                    <td className='break-words px-2 py-3 text-slate-800'>{item.description || 'Article sans titre'}</td>
+                    <td className='break-words px-2 py-3 text-slate-800'>{item.description || 'Article sans titre'}{line.discount > 0 ? <p className='mt-1 text-[9px] text-slate-500'>Remise : {item.discountType === 'percent' ? `${item.discountValue} % · ` : ''}{formatCurrency(line.discount, currency)}</p> : null}</td>
                     <td className='break-words px-1 py-3 text-right'>{Number(item.quantity || 0).toLocaleString('fr-FR')}</td>
                     <td className='break-words px-2 py-3 text-right'>{formatCurrency(Number(item.unitPrice || 0), currency)}</td>
                     <td className='break-words px-2 py-3 text-right font-semibold text-slate-800'>
-                      {formatCurrency(Math.round((Number(item.quantity || 0) * Number(item.unitPrice || 0) + Number.EPSILON) * 100) / 100, currency)}
+                      {line.calculationError ? '—' : formatCurrency(line.net, currency)}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </div>
@@ -129,17 +132,20 @@ const InvoicePreview = ({ id, className, company, client, invoice }) => {
         {items.length > 4 ? <p className='mt-2 text-[10px] text-slate-500'>+ {items.length - 4} ligne(s) supplémentaire(s) dans le PDF</p> : null}
       </div>
 
-      <div className='ml-auto mt-5 w-full max-w-[260px] rounded-md bg-blue-50 px-4 py-4 text-xs text-slate-800'>
-        {taxAmount !== 0 ? (
+      {calculationError ? <p className='mt-5 text-sm text-red-800'>Total à vérifier : {calculationError}</p> : <div className='ml-auto mt-5 w-full max-w-[260px] rounded-md bg-blue-50 px-4 py-4 text-xs text-slate-800'>
+        {taxAmount !== 0 || discountAmount > 0 ? (
           <div className='mb-3 space-y-2 border-b border-blue-100 pb-3'>
             <div className='flex justify-between gap-3'><span>Sous-total</span><span>{formatCurrency(subtotal, currency)}</span></div>
-            <div className='flex justify-between gap-3'><span>Taxe ({taxRate} %)</span><span>{formatCurrency(taxAmount, currency)}</span></div>
+            {lineDiscountAmount > 0 ? <div className='flex justify-between gap-3'><span>Remises sur lignes</span><span>−{formatCurrency(lineDiscountAmount, currency)}</span></div> : null}
+            {globalDiscountAmount > 0 ? <div className='flex justify-between gap-3'><span>Remise globale{invoice.discount_type === 'percent' ? ` (${invoice.discount_value} %)` : ''}</span><span>−{formatCurrency(globalDiscountAmount, currency)}</span></div> : null}
+            {discountAmount > 0 && taxAmount !== 0 ? <div className='flex justify-between gap-3'><span>Net avant taxe</span><span>{formatCurrency(netSubtotal, currency)}</span></div> : null}
+            {taxAmount !== 0 ? <div className='flex justify-between gap-3'><span>Taxe ({taxRate} %)</span><span>{formatCurrency(taxAmount, currency)}</span></div> : null}
           </div>
         ) : null}
         <p className='text-[10px] font-semibold text-slate-600'>Total</p>
         <p className='mt-1 break-words text-right text-xl font-semibold'>{formatCurrency(total, currency)}</p>
         {invoice.status && invoice.status !== 'draft' ? <dl className='mt-3 space-y-2 border-t border-blue-100 pt-3'><div className='flex justify-between gap-3'><dt>Déjà reçu</dt><dd>{formatCurrency(paid, currency)}</dd></div><div className='flex justify-between gap-3 font-semibold'><dt>Reste à payer</dt><dd>{formatCurrency(remaining, currency)}</dd></div></dl> : null}
-      </div>
+      </div>}
 
       {invoice.notes ? (
         <div className='mt-6 text-[11px] text-slate-500'>

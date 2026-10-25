@@ -1,7 +1,7 @@
 import PDFDocument from 'pdfkit'
 import dayjs from 'dayjs'
 import { fileURLToPath } from 'node:url'
-import { lineTotalCents } from './money.js'
+import { lineAmounts } from './money.js'
 import { invoicePaymentSummary, paymentBusinessDate } from './payments.js'
 
 const colors = {
@@ -166,7 +166,10 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   if (y + 70 > bottom) nextPage(true)
   else tableHeader()
   for (const [index, item] of (invoice.items || []).entries()) {
-    const lines = wrap(item.description || '-', columns.description.width, 9)
+    const amounts = lineAmounts(item)
+    const discountNote = amounts.discountCents > 0
+      ? `\nRemise${item.discountType === 'percent' ? ` (${item.discountValue} %)` : ''} : ${money(amounts.discountCents / 100)}` : ''
+    const lines = wrap(`${item.description || '-'}${discountNote}`, columns.description.width, 9)
     const rowHeight = Math.max(40, lines.length * 13.5 + 20)
     // Keep ordinary rows intact; split unusually tall descriptions across pages.
     if (y + rowHeight > bottom && rowHeight <= bottom - 118) nextPage(true)
@@ -182,7 +185,7 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
       if (offset === 0) {
         fitText(quantity.format(Number(item.quantity || 0)).replace(/\s/gu, ' '), columns.quantity.x, y + 10, columns.quantity.width)
         fitText(money(item.unitPrice), columns.unit.x, y + 10, columns.unit.width)
-        fitText(money(lineTotalCents(item) / 100), columns.total.x, y + 10, columns.total.width, 9, true)
+        fitText(money(amounts.netCents / 100), columns.total.x, y + 10, columns.total.width, 9, true)
       }
       y += height
       rule(y)
@@ -192,19 +195,29 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   }
 
   const hasTax = Number(invoice.tax_amount || 0) !== 0
+  const discountAmount = Number(invoice.discount_amount || 0)
+  const lineDiscountAmount = Number(invoice.line_discount_amount || 0)
+  const globalDiscountAmount = Math.round((discountAmount - lineDiscountAmount) * 100) / 100
+  const summaryRows = []
+  if (hasTax || discountAmount > 0) summaryRows.push(['Sous-total', invoice.subtotal_amount])
+  if (lineDiscountAmount > 0) summaryRows.push(['Remises sur lignes', -lineDiscountAmount])
+  if (globalDiscountAmount > 0) summaryRows.push([`Remise globale${invoice.discount_type === 'percent' ? ` (${Number(invoice.discount_value)} %)` : ''}`, -globalDiscountAmount])
+  if (hasTax && discountAmount > 0) summaryRows.push(['Net avant taxe', Number(invoice.subtotal_amount) - discountAmount])
+  if (hasTax) summaryRows.push([`Taxe (${Number(invoice.tax_rate || 0)} %)`, invoice.tax_amount])
   const showPayments = invoice.status !== 'draft'
   const settlement = invoicePaymentSummary(invoice)
-  const summaryHeight = (hasTax ? 128 : 78) + (showPayments ? 74 : 0)
+  const summaryHeight = 78 + (summaryRows.length ? summaryRows.length * 21 + 15 : 0) + (showPayments ? 74 : 0)
   if (y + 22 + summaryHeight > bottom) nextPage()
   y += 22
-  const summaryWidth = 240
+  const summaryTop = y
+  const summaryWidth = discountAmount > 0 ? 286 : 240
   const summaryX = right - summaryWidth
   doc.roundedRect(summaryX, y, summaryWidth, summaryHeight, 6).fill(colors.blue)
   let summaryY = y + 15
-  if (hasTax) {
-    for (const [label, value] of [['Sous-total', invoice.subtotal_amount], [`Taxe (${Number(invoice.tax_rate || 0)} %)`, invoice.tax_amount]]) {
-      text(label, summaryX + 16, summaryY, 96, 8.5, false, colors.muted)
-      fitText(money(value), summaryX + 118, summaryY, summaryWidth - 134, 9)
+  if (summaryRows.length) {
+    for (const [label, value] of summaryRows) {
+      text(label, summaryX + 16, summaryY, summaryWidth - 160, 8, false, colors.muted)
+      fitText(money(value), right - 132, summaryY, 116, 9)
       summaryY += 21
     }
     rule(summaryY + 1, summaryX + 16, summaryWidth - 32)
@@ -221,13 +234,23 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
       fitText(money(value), summaryX + 118, summaryY, summaryWidth - 134, 10, true)
     }
   }
-  y += summaryHeight + 28
+  // Keep a short payment statement and terms beside the totals rather than orphaning them.
+  const summaryEnd = summaryTop + summaryHeight + 28
+  const sideWidth = width - summaryWidth - 24
+  y = summaryTop + 4
   if (showPayments) {
-    flow(`Situation des versements déclarés au ${date(paymentBusinessDate())}.`, left, width, 7.5, false, colors.muted)
+    flow(`Situation des versements déclarés au ${date(paymentBusinessDate())}.`, left, sideWidth, 7.5, false, colors.muted)
     y += 10
   }
+  const notesBeside = invoice.notes && y - summaryTop + 28 + wrap(invoice.notes, sideWidth, 9).length * 13.5 <= summaryHeight
+  if (notesBeside) {
+    flow('NOTES ET MODALITÉS', left, sideWidth, 8, true, colors.muted)
+    y += 8
+    flow(invoice.notes, left, sideWidth, 9, false, colors.muted)
+  }
+  y = summaryEnd
 
-  if (invoice.notes) {
+  if (invoice.notes && !notesBeside) {
     if (y + 48 > bottom) nextPage()
     flow('NOTES ET MODALITÉS', left, width, 8, true, colors.muted)
     y += 8
