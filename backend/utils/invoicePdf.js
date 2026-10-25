@@ -2,6 +2,7 @@ import PDFDocument from 'pdfkit'
 import dayjs from 'dayjs'
 import { fileURLToPath } from 'node:url'
 import { lineTotalCents } from './money.js'
+import { invoicePaymentSummary, paymentBusinessDate } from './payments.js'
 
 const colors = {
   ink: '#172b3a', muted: '#64748b', accent: '#2563eb',
@@ -11,7 +12,8 @@ const statuses = {
   draft: ['Brouillon', '#fff4db', '#92400e'],
   sent: ['Émise', '#eff6ff', '#1d4ed8'],
   overdue: ['Échue', '#fef2f2', '#b91c1c'],
-  paid: ['Payée', '#ecfdf5', '#047857']
+  paid: ['Payée', '#ecfdf5', '#047857'],
+  partially_paid: ['Partiellement payée', '#fff4db', '#92400e']
 }
 
 export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
@@ -190,7 +192,9 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   }
 
   const hasTax = Number(invoice.tax_amount || 0) !== 0
-  const summaryHeight = hasTax ? 128 : 78
+  const showPayments = invoice.status !== 'draft'
+  const settlement = invoicePaymentSummary(invoice)
+  const summaryHeight = (hasTax ? 128 : 78) + (showPayments ? 74 : 0)
   if (y + 22 + summaryHeight > bottom) nextPage()
   y += 22
   const summaryWidth = 240
@@ -208,7 +212,20 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   }
   text('Total', summaryX + 16, summaryY, summaryWidth - 32, 8.5, true, colors.muted)
   fitText(money(invoice.total_amount), summaryX + 16, summaryY + 18, summaryWidth - 32, 22, true, colors.ink)
+  if (showPayments) {
+    summaryY += 54
+    rule(summaryY, summaryX + 16, summaryWidth - 32)
+    for (const [label, value] of [['Déjà reçu', settlement.paid_amount], ['Reste à payer', settlement.balance_due]]) {
+      summaryY += 20
+      text(label, summaryX + 16, summaryY, 96, 8.5, true)
+      fitText(money(value), summaryX + 118, summaryY, summaryWidth - 134, 10, true)
+    }
+  }
   y += summaryHeight + 28
+  if (showPayments) {
+    flow(`Situation des versements déclarés au ${date(paymentBusinessDate())}.`, left, width, 7.5, false, colors.muted)
+    y += 10
+  }
 
   if (invoice.notes) {
     if (y + 48 > bottom) nextPage()

@@ -1,5 +1,6 @@
 import { randomBytes } from 'crypto'
-import { computeTotals, lineTotalCents } from './money.js'
+import { computeTotals, lineTotalCents, MAX_INVOICE_AMOUNT } from './money.js'
+import { paymentBusinessDate } from './payments.js'
 
 const hasOwn = (value, key) => Object.prototype.hasOwnProperty.call(value, key)
 
@@ -386,4 +387,38 @@ export const generateInvoiceNumber = () => {
   const datePart = new Date().toISOString().slice(0, 10).replace(/-/g, '')
   const randomPart = randomBytes(4).toString('hex').toUpperCase()
   return `FAC-${datePart}-${randomPart}`
+}
+
+export const sanitizePaymentPayload = (body) => {
+  const payload = assertPlainObject(body)
+  rejectUnexpectedFields(payload, ['idempotency_key', 'amount', 'paid_on', 'method', 'reference'])
+  if (!['number', 'string'].includes(typeof payload.amount) ||
+      !/^\d+(?:\.\d{1,2})?$/.test(String(payload.amount).trim())) {
+    throw createValidationError('Indiquez un montant positif avec deux décimales maximum.')
+  }
+  const amount = Number(payload.amount)
+  if (!Number.isFinite(amount) || amount <= 0 || amount > MAX_INVOICE_AMOUNT) {
+    throw createValidationError('Le montant du versement est hors limites.')
+  }
+  const paidOn = normalizeDate(payload.paid_on, 'paid_on')
+  if (!paidOn || paidOn > paymentBusinessDate()) {
+    throw createValidationError('Indiquez une date de réception valide, au plus tard aujourd’hui.')
+  }
+  const method = payload.method ?? 'other'
+  if (!['cash', 'bank_transfer', 'mobile_money', 'other'].includes(method)) {
+    throw createValidationError('Mode de paiement invalide.')
+  }
+  return {
+    idempotency_key: normalizeUuid(payload.idempotency_key, 'idempotency_key', { allowNull: false }),
+    amount, paid_on: paidOn, method,
+    reference: normalizeString(payload.reference, { field: 'reference', maxLength: 160 })
+  }
+}
+
+export const sanitizePaymentVoid = (body) => {
+  const payload = assertPlainObject(body)
+  rejectUnexpectedFields(payload, ['reason'])
+  const reason = normalizeString(payload.reason, { field: 'reason', required: true, maxLength: 500 })
+  if (reason.length < 3) throw createValidationError('Le motif doit contenir au moins 3 caractères.')
+  return reason
 }

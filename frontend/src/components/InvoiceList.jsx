@@ -19,11 +19,15 @@ import {
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import Pagination from './Pagination.jsx'
+import PaymentPanel from './PaymentPanel.jsx'
+import { paymentBalance } from '../utils/payments.js'
+import { formatInvoiceMoney } from '../utils/invoiceTotals.js'
 
 const statusStyles = {
   draft: 'bg-[var(--primary-soft)] text-[var(--primary)]',
   sent: 'bg-[rgba(52,199,89,0.16)] text-[#176b37]',
   paid: 'bg-[rgba(48,209,88,0.18)] text-[#176b37]',
+  partially_paid: 'bg-amber-50 text-amber-800',
   overdue: 'bg-[rgba(255,69,58,0.16)] text-[#b42318]'
 }
 
@@ -31,6 +35,7 @@ const statusLabels = {
   draft: 'Brouillon',
   sent: 'Envoyée',
   paid: 'Payée',
+  partially_paid: 'Partiellement payée',
   overdue: 'En retard'
 }
 
@@ -39,6 +44,7 @@ const statusFilters = [
   { value: 'draft', label: 'Brouillons' },
   { value: 'sent', label: 'Envoyées' },
   { value: 'paid', label: 'Payées' },
+  { value: 'partially_paid', label: 'Paiements partiels' },
   { value: 'overdue', label: 'En retard' }
 ]
 
@@ -47,6 +53,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
   const requestedStatus = searchParams.get('status')
   const status = statusFilters.some((filter) => filter.value === requestedStatus) ? requestedStatus : 'all'
   const [invoices, setInvoices] = useState([])
+  const [paymentInvoice, setPaymentInvoice] = useState(null)
   const [isLoading, setIsLoading] = useState(false)
   const [filters, setFilters] = useState({
     search: '',
@@ -367,11 +374,13 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                         maximumFractionDigits: 2
                       })}{' '}
                       {invoice.currency === '$' ? 'USD' : invoice.currency || 'USD'}
+                      {invoice.status !== 'draft' ? <div className='mt-1 space-y-1 text-xs font-normal text-[var(--text-muted)]'><p>Reçu : {formatInvoiceMoney(paymentBalance(invoice).paid, invoice.currency === '$' ? 'USD' : invoice.currency || 'USD')}</p><p className='font-medium'>Solde : {formatInvoiceMoney(paymentBalance(invoice).remaining, invoice.currency === '$' ? 'USD' : invoice.currency || 'USD')}</p></div> : null}
                     </td>
                     <td data-label='Statut' className='px-4 py-3'>
                       <span className={`badge ${statusStyles[invoice.status] || statusStyles.draft}`}>
                         {statusLabels[invoice.status] ?? invoice.status}
                       </span>
+                      {invoice.status === 'partially_paid' && invoice.is_overdue ? <span className='mt-1 block text-xs font-medium text-red-800'>Solde en retard</span> : null}
                     </td>
                     <td data-label='Émise' className='px-4 py-3 text-[var(--text-muted)]'>
                       {invoice.issue_date
@@ -379,19 +388,21 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
                         : '—'}
                     </td>
                     <td data-label='Actions' className='px-4 py-3 text-right'>
-                      <div className='flex items-center justify-end gap-2'>
+                      <div className='flex flex-wrap items-center justify-end gap-2'>
                         <select
                           value={invoice.status}
                           aria-label={`Statut de la facture ${invoice.invoice_number}`}
-                          disabled={invoice.status === 'paid'}
+                          disabled={['paid', 'partially_paid'].includes(invoice.status)}
                           onChange={(event) => handleStatusChange(invoice.id, event.target.value)}
                           className='input-compact h-9 w-36 border-[var(--border)] bg-[var(--bg-panel)] text-xs'
                         >
                           {invoice.status === 'draft' ? <option value='draft'>Brouillon</option> : null}
-                          {invoice.status !== 'paid' ? <option value='sent'>Envoyée</option> : null}
-                          <option value='paid'>Payée</option>
-                          {invoice.status !== 'paid' ? <option value='overdue'>En retard</option> : null}
+                          {!['paid', 'partially_paid'].includes(invoice.status) ? <option value='sent'>Envoyée</option> : null}
+                          {invoice.status === 'partially_paid' ? <option value='partially_paid'>Partiellement payée</option> : null}
+                          {invoice.status === 'paid' || Number(invoice.total_amount) === 0 ? <option value='paid'>Payée</option> : null}
+                          {!['paid', 'partially_paid'].includes(invoice.status) ? <option value='overdue'>En retard</option> : null}
                         </select>
+                    {invoice.status !== 'draft' ? <button type='button' onClick={() => setPaymentInvoice(invoice)} aria-label={`Versements de la facture ${invoice.invoice_number}`} className='btn-ghost text-xs font-semibold'><Wallet className='h-4 w-4' />Versements</button> : null}
                     <button
                       type='button'
                       onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}
@@ -434,6 +445,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
         onPageSizeChange={handlePageSizeChange}
         isLoading={isLoading}
       />
+      {paymentInvoice ? <PaymentPanel key={paymentInvoice.id} invoice={paymentInvoice} onClose={() => setPaymentInvoice(null)} onUpdated={() => fetchInvoices(currentQuery.current)} /> : null}
     </div>
   )
 }

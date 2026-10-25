@@ -24,7 +24,7 @@ test('the only currency choices are USD and CDF and optional tax is included in 
 test('issued preview retains recorded totals and accepts a legacy dollar label', () => {
   render(<InvoicePreview invoice={{ status: 'sent', currency: '$', subtotal_amount: 100, tax_rate: 16,
     tax_amount: 15, total_amount: 115, items: [] }} />)
-  expect(screen.getByText(/115,00/)).toBeInTheDocument()
+  expect(screen.getByText(/115,00/, { selector: 'p' })).toBeInTheDocument()
   expect(screen.getByText(/^15,00/)).toBeInTheDocument()
   expect(screen.queryByText(/116,00/)).toBeNull()
 })

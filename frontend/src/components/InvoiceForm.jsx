@@ -36,7 +36,6 @@ const createEmptyItem = (currency = 'USD') => ({
 const statusOptions = [
   { value: 'draft', label: 'Brouillon' },
   { value: 'sent', label: 'Envoyée' },
-  { value: 'paid', label: 'Payée' },
   { value: 'overdue', label: 'En retard' }
 ]
 

@@ -166,7 +166,7 @@ const Dashboard = () => {
   const meta = state.summary?.meta ?? {}
   const recent = state.recent ?? []
   const isNewAccount = isReady && recent.length === 0
-  const isEmptyPeriod = isReady && Number(totals.invoiceCount || 0) === 0
+  const isEmptyPeriod = isReady && Number(totals.invoiceCount || 0) === 0 && Number(totals.revenue || 0) === 0 && Number(totals.draftCount || 0) === 0
   const name =
     user?.user_metadata?.full_name ||
     profile?.manager_name ||
@@ -304,7 +304,7 @@ const Dashboard = () => {
             </p>
           ) : null}
           <p className='mt-2 text-xs text-[var(--text-muted)]'>
-            Statistiques selon la date d’émission, dans la devise choisie.
+            Encaissements selon la date de réception ; factures et soldes selon la date d’émission, dans la devise choisie.
             Aucune conversion automatique.
           </p>
         </details>
@@ -347,20 +347,20 @@ const Dashboard = () => {
             <StatsCard
               title='Revenus encaissés'
               value={money(totals.revenue, currency)}
-              helperText='Factures payées de la période'
+              helperText='Versements reçus sur la période'
               actions={
                 <Link
-                  to='/factures?status=paid'
+                  to='/factures'
                   className='text-sm font-medium text-[var(--primary)]'
                 >
-                  Voir les payées
+                  Voir les factures
                 </Link>
               }
             />
             <StatsCard
               title='Montant en attente'
               value={money(totals.outstanding, currency)}
-              helperText='Factures envoyées ou en retard'
+              helperText='Solde actuel des factures émises sur la période'
               actions={
                 <Link
                   to='/factures?status=overdue'
@@ -466,7 +466,7 @@ const Dashboard = () => {
                           <p className='break-words font-medium'>
                             {item.client?.company_name || 'Client'} ·{' '}
                             {money(
-                              item.total_amount,
+                                item.balance_due ?? item.total_amount,
                               item.currency === '$'
                                 ? 'USD'
                                 : item.currency || 'USD'

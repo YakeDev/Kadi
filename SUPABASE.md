@@ -6,7 +6,11 @@ Le projet hébergé `kadi-db` a pu être inspecté le 22 octobre 2026. Le [contr
 
 ## Nouveau projet vide
 
-Les deux fichiers dans `supabase/migrations/`, créés par `supabase migration new`, sont ordonnés : schéma initial, puis protections. Ils supposent les rôles Supabase `anon`, `authenticated`, `service_role` et le schéma `auth` existants. Exécuter les deux dans un environnement de test dédié avant toute ouverture de l’application.
+Les fichiers dans `supabase/migrations/`, créés par `supabase migration new`, sont ordonnés : schéma initial, protections, puis versements partiels. Ils supposent les rôles Supabase `anon`, `authenticated`, `service_role` et le schéma `auth` existants. Les exécuter dans un environnement de test dédié avant toute ouverture de l’application.
+
+## Versements partiels
+
+La migration `20261024234736_partial_payments.sql` doit précéder le déploiement du serveur qui expose les versements. Elle ajoute un journal protégé par RLS et un cumul `paid_amount`, sans changer les prix, taxes, totaux ou archives des factures. Sauvegarder d’abord la base et valider sur staging. Le [guide des versements](docs/partial-payments.md) décrit la reprise des anciens statuts payés, les contrôles de cohérence et la recette.
 
 ## Projet existant
 
