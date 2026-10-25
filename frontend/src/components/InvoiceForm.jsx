@@ -294,6 +294,7 @@ const InvoiceEditor = ({
         ...prev,
         client_id: prev.client_id,
         currency: data.currency || prev.currency,
+        discount_value: data.currency && data.currency !== prev.currency && prev.discount_type === 'fixed' ? 0 : prev.discount_value,
         issue_date: data.issue_date || prev.issue_date,
         due_date: data.due_date || prev.due_date,
         status: data.status || prev.status,
