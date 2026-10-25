@@ -1,11 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
-import { ArrowLeft, UserPlus, FileText, X, Loader2 } from 'lucide-react'
+import { ArrowLeft, UserPlus, X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import InvoiceForm from '../components/InvoiceForm.jsx'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
-import PageHeader from '../components/PageHeader.jsx'
 import { useModalFocus } from '../hooks/useModalFocus.js'
 
 const InvoiceCreate = () => {
@@ -99,22 +98,10 @@ const InvoiceCreate = () => {
   if (invoice && invoice.status !== 'draft') return <div className='card space-y-3 p-6'><p>Cette facture est émise et ne peut plus être modifiée.</p><Link to='/factures' className='underline'>Retour aux factures</Link></div>
 
 	return (
-		<div className='space-y-6 pb-20 lg:pb-0'>
-			<PageHeader
-				icon={FileText}
-				title={invoiceId ? 'Modifier une facture' : 'Nouvelle facture'}
-				subtitle='Prévisualisez votre document pendant la saisie.'
-				actions={[
-					<Link key='back' to='/factures' className='btn-ghost h-11 justify-center'>
-						<ArrowLeft className='mr-2 h-4 w-4' />
-						Retour
-					</Link>,
-					<button key='client' type='button' onClick={() => setIsClientModalOpen(true)} className='btn-secondary h-11 justify-center'>
-						<UserPlus className='mr-2 h-4 w-4' />
-						Nouveau client
-					</button>,
-				]}
-			/>
+		<div className='space-y-4'>
+      <Link to='/factures' className='inline-flex items-center gap-2 py-2 text-sm text-[var(--text-muted)]'>
+        <ArrowLeft aria-hidden='true' className='h-4 w-4' /> Retour aux factures
+      </Link>
 
 			{!hasClients ? (
 				<div className='rounded-[var(--radius-xl)] border border-dashed border-[var(--border)] bg-white p-6 text-sm text-[var(--text-muted)]'>
@@ -131,11 +118,12 @@ const InvoiceCreate = () => {
 				invoice={invoice}
 				onCreated={handleInvoiceCreated}
 				onUpdated={handleInvoiceUpdated}
+        onNewClient={() => setIsClientModalOpen(true)}
 				variant='page'
 			/>
 
 			{isClientModalOpen ? (
-				<div className='fixed inset-0 z-50 flex items-center justify-center bg-[rgba(15,23,42,0.35)] backdrop-blur-sm px-4'>
+				<div className='fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(15,23,42,0.35)] backdrop-blur-sm px-4'>
 					<div ref={clientPanelRef} role='dialog' aria-modal='true' aria-labelledby='new-client-title' tabIndex={-1} className='w-full max-w-lg rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white max-h-[calc(100vh-3rem)] overflow-y-auto'>
 						<div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
 							<div className='space-y-1'>

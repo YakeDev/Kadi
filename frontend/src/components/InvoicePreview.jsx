@@ -20,7 +20,7 @@ const formatDate = (value) =>
       })
     : '—'
 
-const InvoicePreview = ({ id, className, company, client, invoice }) => {
+const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4 }) => {
   const items = invoice.items ?? []
   const { subtotal, lineDiscountAmount, globalDiscountAmount, discountAmount, netSubtotal, taxRate, taxAmount, total, currency, calculationError } = getInvoiceTotals(invoice)
   const { paid, remaining } = paymentBalance({ ...invoice, total_amount: total })
@@ -112,7 +112,7 @@ const InvoicePreview = ({ id, className, company, client, invoice }) => {
                 </tr>
               </thead>
               <tbody>
-                {items.slice(0, 4).map((item, index) => {
+                {items.slice(0, maxItems).map((item, index) => {
                   const line = getInvoiceLineTotals(item)
                   return (
                   <tr key={index} className='border-b border-slate-200 align-top'>
@@ -129,7 +129,7 @@ const InvoicePreview = ({ id, className, company, client, invoice }) => {
             </table>
           </div>
         )}
-        {items.length > 4 ? <p className='mt-2 text-[10px] text-slate-500'>+ {items.length - 4} ligne(s) supplémentaire(s) dans le PDF</p> : null}
+        {items.length > maxItems ? <p className='mt-2 text-[10px] text-slate-500'>+ {items.length - maxItems} ligne(s) supplémentaire(s) dans le PDF</p> : null}
       </div>
 
       {calculationError ? <p className='mt-5 text-sm text-red-800'>Total à vérifier : {calculationError}</p> : <div className='ml-auto mt-5 w-full max-w-[260px] rounded-md bg-blue-50 px-4 py-4 text-xs text-slate-800'>
