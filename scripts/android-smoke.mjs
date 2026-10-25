@@ -223,8 +223,9 @@ try {
     data,
     pagination: { page: 1, pageSize: 10, total: data.length, totalPages: 1 },
   });
+  const fixtureHeaders = { "access-control-allow-origin": "https://localhost", "access-control-allow-headers": "authorization,apikey,x-client-info,content-type", "access-control-allow-methods": "GET,POST,OPTIONS" };
   await page.route("https://giksqprkorjbgikprksb.supabase.co/**", (route) =>
-    route.fulfill({ json: fixtureUser }),
+    route.fulfill({ headers: fixtureHeaders, json: fixtureUser }),
   );
   await page.route("https://kadi-facture.onrender.com/api/**", (route) => {
     const path = new URL(route.request().url()).pathname;
@@ -251,7 +252,7 @@ try {
       Object.hasOwn(responses, path),
       "Unexpected API request in isolated native UI fixture: " + path,
     );
-    return route.fulfill({ json: responses[path] });
+    return route.fulfill({ headers: fixtureHeaders, json: responses[path] });
   });
   await page.evaluate((user) => {
     const exp = Math.floor(Date.now() / 1000) + 3600;

@@ -38,6 +38,8 @@ html[data-native-platform='android'] .app-main > div > .space-y-8 > * { margin-b
 .native-page-actions { display: flex; align-items: center; gap: 6px; }
 html[data-native-platform='android'] .native-page-action { font-size: 13px; padding: 9px 12px; min-height: 44px; gap: 6px; }
 .native-page-action svg { width: 17px; height: 17px; margin: 0; }
+html[data-native-platform='android'] .invoice-editor-actions { position: fixed; z-index: 45; inset: auto 0 0; width: auto; flex-wrap: nowrap; justify-content: space-between; padding: 12px 20px calc(12px + var(--native-bottom)); background: white; border-top: 1px solid var(--border); }
+html[data-native-platform='android'] .app-main:has(.invoice-editor) { padding-bottom: calc(96px + var(--native-bottom)); }
 .native-collection-tools { display: flex; flex-direction: column; gap: 14px; }
 .native-search { display: flex; align-items: center; gap: 10px; min-height: 48px; padding: 0 14px; background: #eaf0f7; border-radius: 14px; color: var(--text-muted); }
 .native-search > svg { width: 19px; height: 19px; flex-shrink: 0; }
@@ -186,8 +188,6 @@ html[data-native-platform='android'] .auth-register-link { padding-top: 20px; ma
 @media (max-width: 1023px) {
   html[data-native-platform='android'] .invoice-editor-toolbar { top: calc(64px + var(--native-top)); }
   html[data-native-platform='android'] .invoice-editor-toolbar h1 { font-size: 20px; }
-  html[data-native-platform='android'] .invoice-editor-actions { position: fixed; z-index: 45; inset: auto 0 0; width: auto; flex-wrap: nowrap; justify-content: space-between; padding: 12px 20px calc(12px + var(--native-bottom)); background: white; border-top: 1px solid var(--border); }
-  html[data-native-platform='android'] .app-main:has(.invoice-editor) { padding-bottom: calc(96px + var(--native-bottom)); }
   html[data-native-platform='android'] .native-editor-back { display: none; }
 }
 @media (max-width: 359px) {
@@ -202,5 +202,6 @@ html[data-native-platform='android'] .auth-register-link { padding-top: 20px; ma
 }
 @media (min-width: 1024px) {
   html[data-native-platform='android'] .native-topbar { left: 256px; }
+  html[data-native-platform='android'] .invoice-editor-actions { left: 256px; }
   html[data-native-platform='android'] .app-main { padding-bottom: 32px; }
 }
