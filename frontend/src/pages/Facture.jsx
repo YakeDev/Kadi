@@ -7,6 +7,7 @@ import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import PageHeader from '../components/PageHeader.jsx'
 import ClientIdentifiers from '../components/ClientIdentifiers.jsx'
+import { isNativeAndroid } from '../native/platform.js'
 
 const Facture = () => {
   const [clients, setClients] = useState([])
@@ -101,13 +102,13 @@ const Facture = () => {
     <div className='space-y-8'>
       <PageHeader
         icon={FileText}
-        title='Gestion des factures'
+        title='Gestion des factures' nativeTitle='Factures' nativeCreateLabel='Créer'
         subtitle='Visualisez vos factures et créez-en de nouvelles en quelques secondes.'
         actions={[
-          <button key='client' type='button' onClick={openClientModal} className='btn-secondary h-11 justify-center'>
+          !isNativeAndroid() || !hasClients ? <button key='client' type='button' onClick={openClientModal} className='btn-secondary h-11 justify-center'>
             <UserPlus className='mr-2 h-4 w-4' />
             Nouveau client
-          </button>,
+          </button> : null,
           <button
             key='create'
             type='button'
@@ -118,7 +119,7 @@ const Facture = () => {
             <FileText className='mr-2 h-4 w-4' />
             Nouvelle facture
           </button>
-        ]}
+        ].filter(Boolean)}
       />
 
       {!hasClients ? (

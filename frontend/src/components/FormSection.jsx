@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 
-const baseCard = 'rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6'
+const baseCard = 'form-section rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6'
 
 const FormSection = ({ title, description, icon: Icon, children, className }) => (
   <section className={clsx(baseCard, 'space-y-4', className)}>

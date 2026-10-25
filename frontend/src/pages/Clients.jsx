@@ -19,6 +19,8 @@ import FormSection from '../components/FormSection.jsx'
 import { showErrorToast } from '../utils/errorToast.js'
 import PageHeader from '../components/PageHeader.jsx'
 import Pagination from '../components/Pagination.jsx'
+import { isNativeAndroid } from '../native/platform.js'
+import { NativeCollection, NativeEmpty } from '../native/NativeCollection.jsx'
 import ClientIdentifiers from '../components/ClientIdentifiers.jsx'
 import { clientIdentifierFields } from '../constants/clientIdentifiers.js'
 import { useModalFocus } from '../hooks/useModalFocus.js'
@@ -39,6 +41,7 @@ const Clients = () => {
   const [form, setForm] = useState(initialState)
   const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(true)
+  const [fetchError, setFetchError] = useState(false)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [editingClient, setEditingClient] = useState(null)
   const [isUpdatingClient, setIsUpdatingClient] = useState(false)
@@ -60,6 +63,7 @@ const Clients = () => {
   const fetchClients = useCallback(async ({ page, pageSize, search }) => {
     try {
       setIsFetching(true)
+      setFetchError(false)
       const { data } = await api.get('/clients', {
         params: {
           page,
@@ -88,6 +92,7 @@ const Clients = () => {
         return next
       })
     } catch (error) {
+      setFetchError(true)
       showErrorToast(toast.error, error)
     } finally {
       setIsFetching(false)
@@ -293,7 +298,7 @@ const Clients = () => {
     <div className='space-y-8'>
       <PageHeader
         icon={Users}
-        title='Répertoire client'
+        title='Répertoire client' nativeTitle='Clients' nativeCreateLabel='Ajouter'
         subtitle='Centralisez vos contacts pour accélérer la génération de devis et factures.'
         actions={[
           <button
@@ -318,6 +323,17 @@ const Clients = () => {
         ]}
       />
 
+      {isNativeAndroid() ? <>
+        <NativeCollection label='Clients' count={pagination.total} search={filters.draftSearch} onSearch={value => setFilters(prev => ({ ...prev, draftSearch: value }))} searchLabel='Nom, contact ou email' loading={isFetching} error={fetchError} onRetry={() => fetchClients({ ...pagination, search: filters.search })}
+          empty={<NativeEmpty icon={Users} title={filters.search ? 'Aucun client trouvé' : 'Votre carnet de clients'} description={filters.search ? 'Essayez un autre nom ou une adresse email.' : 'Ajoutez un client pour préparer ses devis et retrouver ses coordonnées.'} />}>
+          {clients.map(client => <article key={client.id} className='native-record'>
+            <button type='button' className='native-record-top' onClick={() => openEditClient(client)} aria-label={`Modifier ${client.company_name}`}><span className='native-record-icon'>{client.company_name?.slice(0, 2).toLocaleUpperCase('fr-FR')}</span><div className='native-record-heading'><strong>{client.company_name}</strong><p>{client.contact_name || 'Aucun contact renseigné'}</p></div><Pencil aria-hidden='true' className='h-4 w-4 text-[var(--text-muted)]' /></button>
+            {client.phone || client.email ? <p className='native-record-note'>{[client.phone, client.email].filter(Boolean).join(' · ')}</p> : null}
+            <div className='native-record-actions'><button type='button' onClick={() => handleDelete(client.id)} className='text-red-700'><Trash2 aria-hidden='true' />Supprimer</button><button type='button' className='native-record-main-action' onClick={() => openEditClient(client)}>Fiche client</button></div>
+          </article>)}
+        </NativeCollection>
+        <Pagination {...pagination} onPageChange={handlePageChange} isLoading={isFetching} />
+      </> : (
       <section className='card p-0'>
         <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
           <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
@@ -442,6 +458,7 @@ const Clients = () => {
           isLoading={isFetching || isLoading || isUpdatingClient}
         />
       </section>
+      )}
 
       {isDrawerOpen || editingClient ? (
         <div className='fixed inset-0 z-50 bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>

@@ -16,6 +16,9 @@ import { showErrorToast } from '../utils/errorToast.js'
 import FormSection from '../components/FormSection.jsx'
 import PageHeader from '../components/PageHeader.jsx'
 import Pagination from '../components/Pagination.jsx'
+import { isNativeAndroid } from '../native/platform.js'
+import { NativeCollection, NativeEmpty } from '../native/NativeCollection.jsx'
+import { useModalFocus } from '../hooks/useModalFocus.js'
 
 const emptyForm = {
   name: '',
@@ -43,6 +46,8 @@ const Catalogue = () => {
   const [isCreating, setIsCreating] = useState(false)
   const [blockingId, setBlockingId] = useState(null)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [fetchError, setFetchError] = useState(false)
+  const drawerRef = useModalFocus(isDrawerOpen, () => { if (!isCreating) closeDrawer() })
   const [pagination, setPagination] = useState({ page: 1, pageSize: 10, total: 0, totalPages: 1 })
 
   const [filters, setFilters] = useState({
@@ -161,6 +166,7 @@ const Catalogue = () => {
     async ({ page, pageSize, search, type, showInactive }) => {
       try {
         setIsLoading(true)
+        setFetchError(false)
         const params = {
           page,
           pageSize
@@ -196,6 +202,7 @@ const Catalogue = () => {
           return next
         })
       } catch (error) {
+        setFetchError(true)
         showErrorToast(toast.error, error)
       } finally {
         setIsLoading(false)
@@ -323,7 +330,7 @@ const Catalogue = () => {
     <div className='space-y-8'>
       <PageHeader
         icon={PackagePlus}
-        title='Produits & services'
+        title='Produits & services' nativeTitle='Catalogue' nativeCreateLabel='Ajouter'
         subtitle='Centralisez vos prestations pour les injecter en un clic dans vos factures.'
         actions={[
           <button
@@ -351,6 +358,20 @@ const Catalogue = () => {
         ]}
       />
 
+      {isNativeAndroid() ? <>
+        <NativeCollection label='Articles' count={pagination.total} search={filters.draftSearch} onSearch={value => setFilters(prev => ({ ...prev, draftSearch: value }))} searchLabel='Rechercher un article' filters={[{ value: 'all', label: 'Tous' }, { value: 'product', label: 'Produits' }, { value: 'service', label: 'Services' }]} value={filters.type} onFilter={handleFilterChange} loading={isLoading} error={fetchError} onRetry={() => fetchItems({ ...pagination, search: filters.search, type: filters.type, showInactive: filters.showInactive })}
+          extra={<label className='native-archive-toggle'><input type='checkbox' checked={filters.showInactive} onChange={event => { setFilters(prev => ({ ...prev, showInactive: event.target.checked })); resetPageToFirst() }} />Voir les articles archivés</label>}
+          empty={<NativeEmpty icon={PackagePlus} title={filters.search || filters.type !== 'all' ? 'Aucun article trouvé' : 'Vos tarifs, à portée de main'} description={filters.search || filters.type !== 'all' ? 'Essayez un autre nom ou un autre type d’article.' : 'Ajoutez vos produits et services pour les retrouver lors de la création d’un devis.'} />}>
+          {items.map(item => <article key={item.id} className='native-record'>
+            <div className='native-record-top'><span className='native-record-icon'>{item.item_type === 'service' ? <Wand2 aria-hidden='true' /> : <Package aria-hidden='true' />}</span><div className='native-record-heading'><strong>{item.name}</strong><p>{ITEM_TYPE_LABELS[item.item_type]}{item.sku ? ` · ${item.sku}` : ''}{!item.is_active ? ' · Archivé' : ''}</p></div>
+              <button type='button' className='native-icon-button' disabled={blockingId === item.id} onClick={() => handleToggleActive(item)} aria-label={`${item.is_active ? 'Archiver' : 'Réactiver'} ${item.name}`}>{blockingId === item.id ? <RefreshCcw className='animate-spin' /> : item.is_active ? <Archive /> : <BadgeCheck />}</button>
+            </div>
+            {item.description ? <p className='native-record-note'>{item.description}</p> : null}
+            <div className='native-record-money'><strong>{formatAmount(item.unit_price, item.currency)}</strong><span className='native-record-note'>Prix unitaire</span></div>
+          </article>)}
+        </NativeCollection>
+        <Pagination {...pagination} onPageChange={handlePageChange} isLoading={isLoading} />
+      </> : (
       <section className='card p-0'>
         <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
           <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
@@ -545,11 +566,12 @@ const Catalogue = () => {
           isLoading={isLoading || isCreating || Boolean(blockingId)}
         />
       </section>
+      )}
 
       {isDrawerOpen ? (
         <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
           <div className='flex min-h-full items-stretch justify-end'>
-            <div className='relative flex h-full min-h-full w-full max-w-lg flex-col border border-[var(--border)] bg-white'>
+            <div ref={drawerRef} role='dialog' aria-modal='true' aria-label='Ajouter un article' tabIndex={-1} className='native-edge-panel native-catalog-drawer relative flex h-full min-h-full w-full max-w-lg flex-col border border-[var(--border)] bg-white'>
               <div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
                 <div>
                   <h2 className='text-lg font-semibold text-[var(--text-dark)]'>Ajouter un article</h2>
@@ -560,16 +582,17 @@ const Catalogue = () => {
                 <button
                   type='button'
                   onClick={closeDrawer}
+                  aria-label='Fermer le formulaire'
                   className='rounded-full border border-[var(--border)] bg-white p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
                 >
                   <X className='h-4 w-4' />
                 </button>
               </div>
-              <form onSubmit={handleCreate} className='flex h-full flex-col'>
-                <div className='flex-1 space-y-4 overflow-y-auto px-6 py-6'>
+              <form onSubmit={handleCreate} className='catalog-drawer-form flex h-full flex-col'>
+                <div className='catalog-drawer-body flex-1 space-y-4 overflow-y-auto px-6 py-6'>
                   {renderCatalogueFormSections()}
                 </div>
-                <div className='flex items-center justify-between gap-2 border-t border-[var(--border)] px-6 py-4'>
+                <div className='catalog-drawer-footer flex items-center justify-between gap-2 border-t border-[var(--border)] px-6 py-4'>
                   <button
                     type='button'
                     onClick={resetForm}

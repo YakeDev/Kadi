@@ -1,3 +1,6 @@
+import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { isNativeAndroid } from '../native/platform.js'
+
 const defaultPageSizeOptions = [10, 25, 50]
 
 const Pagination = ({
@@ -32,6 +35,14 @@ const Pagination = ({
     }
   }
 
+  if (isNativeAndroid()) {
+    if (totalPages <= 1) return null
+    return <nav aria-label='Pagination' className='native-pagination'>
+      <button type='button' aria-label='Page précédente' disabled={!canGoPrev} onClick={handlePrev}><ChevronLeft aria-hidden='true' /></button>
+      <span>Page {Math.min(page, totalPages)} sur {totalPages}</span>
+      <button type='button' aria-label='Page suivante' disabled={!canGoNext} onClick={handleNext}><ChevronRight aria-hidden='true' /></button>
+    </nav>
+  }
   return (
     <div className='flex flex-col gap-3 border-t border-[var(--border)] bg-white px-4 py-3 text-sm text-[var(--text-muted)] sm:flex-row sm:items-center sm:justify-between'>
       <div className='flex items-center gap-2'>

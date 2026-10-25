@@ -11,6 +11,8 @@ import { api } from '../services/api.js'
 import { useAuth } from '../hooks/useAuth.jsx'
 import StatsCard from '../components/StatsCard.jsx'
 import DashboardChart from '../components/DashboardChart.jsx'
+import { isNativeAndroid } from '../native/platform.js'
+import NativeHome from '../native/NativeHome.jsx'
 
 const PERIODS = [
   { label: 'Jour', value: 'day' },
@@ -175,6 +177,8 @@ const Dashboard = () => {
   const availableCharts = CHARTS.filter(
     (chart) => charts[chart.key]?.length > 0
   )
+
+  if (isNativeAndroid()) return <NativeHome name={name} state={state} period={period} setPeriod={setPeriod} currency={currency} setCurrency={setCurrency} customRange={customRange} rangeDraft={rangeDraft} setRangeDraft={setRangeDraft} rangeError={rangeError} applyRange={applyRange} fetchData={fetchData} requestedRange={requestedRange} chartDefinitions={CHARTS} />
 
   return (
     <div className='space-y-5'>

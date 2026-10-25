@@ -1,3 +1,5 @@
+import { createPortal } from 'react-dom'
+import { isNativeAndroid } from '../native/platform.js'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import toast from 'react-hot-toast'
 import {
@@ -308,23 +310,27 @@ const InvoiceEditor = ({
   const totals = getInvoiceTotals(form)
   const { calculationError } = totals
 
+  const editorActions = (
+          <div className='invoice-editor-actions'>
+            <button type='button' className='btn-secondary' aria-haspopup='dialog' onClick={() => setIsPreviewOpen(true)}>
+              <Eye aria-hidden='true' className='h-4 w-4' />Aperçu
+            </button>
+            <button type='submit' form='document-editor' aria-label={isSubmitting ? 'Enregistrement…' : isEditing ? 'Mettre à jour' : `Enregistrer ${isQuote ? 'le devis' : 'la facture'}`} disabled={isSubmitting || isGenerating || Boolean(calculationError)} className='btn-primary'>
+              {isSubmitting ? <Loader2 aria-hidden='true' className='h-4 w-4 animate-spin' /> : <Save aria-hidden='true' className='h-4 w-4' />}
+              {isSubmitting ? 'Enregistrement…' : isEditing ? 'Mettre à jour' : 'Enregistrer'}
+            </button>
+          </div>
+  )
+
   return (
     <>
-      <form onSubmit={handleSubmit} className='invoice-editor'>
+      <form id='document-editor' onSubmit={handleSubmit} className='invoice-editor'>
         <header className='invoice-editor-toolbar'>
           <div className='invoice-editor-title'>
             {isFullPage ? <h1>{isQuote ? (isEditing ? 'Modifier le devis' : 'Nouveau devis') : (isEditing ? 'Modifier la facture' : 'Nouvelle facture')}</h1> : <h2>{isQuote ? (isEditing ? 'Modifier le devis' : 'Nouveau devis') : (isEditing ? 'Modifier la facture' : 'Nouvelle facture')}</h2>}
             <span className='invoice-editor-badge'>{form.status === 'draft' ? 'Brouillon' : isQuote ? 'Envoyé' : 'À émettre'}</span>
           </div>
-          <div className='invoice-editor-actions'>
-            <button type='button' className='btn-secondary' aria-haspopup='dialog' onClick={() => setIsPreviewOpen(true)}>
-              <Eye aria-hidden='true' className='h-4 w-4' />Aperçu
-            </button>
-            <button type='submit' aria-label={isSubmitting ? 'Enregistrement…' : isEditing ? 'Mettre à jour' : `Enregistrer ${isQuote ? 'le devis' : 'la facture'}`} disabled={isSubmitting || isGenerating || Boolean(calculationError)} className='btn-primary'>
-              {isSubmitting ? <Loader2 aria-hidden='true' className='h-4 w-4 animate-spin' /> : <Save aria-hidden='true' className='h-4 w-4' />}
-              {isSubmitting ? 'Enregistrement…' : isEditing ? 'Mettre à jour' : 'Enregistrer'}
-            </button>
-          </div>
+          {isNativeAndroid() ? createPortal(editorActions, document.body) : editorActions}
         </header>
 
         <section className='invoice-editor-meta' aria-label={`Client et dates du document`}>

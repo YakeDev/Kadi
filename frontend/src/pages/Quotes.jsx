@@ -8,6 +8,8 @@ import { formatInvoiceMoney } from '../utils/invoiceTotals.js'
 import { downloadDocument } from '../utils/documentDownload.js'
 import PageHeader from '../components/PageHeader.jsx'
 import Pagination from '../components/Pagination.jsx'
+import { isNativeAndroid } from '../native/platform.js'
+import { NativeCollection, NativeEmpty } from '../native/NativeCollection.jsx'
 
 const statuses = {
   draft: { label: 'Brouillon', color: 'bg-amber-50 text-amber-800' },
@@ -68,7 +70,7 @@ const Quotes = () => {
     <div className='space-y-8'>
       <PageHeader
         icon={FilePenLine}
-        title='Gestion des devis'
+        title='Gestion des devis' nativeTitle='Devis' nativeCreateLabel='Créer'
         subtitle='Préparez vos offres et convertissez-les en factures à réception d’un PO ou d’un acompte.'
         actions={[
           <button key='refresh' type='button' className='btn-ghost min-h-11 justify-center' disabled={loading} onClick={() => setAttempt(value => value + 1)}>
@@ -80,6 +82,24 @@ const Quotes = () => {
         ]}
       />
 
+      {isNativeAndroid() ? <>
+        <NativeCollection label='Devis' count={meta.total} search={search} onSearch={setSearch} searchLabel='Numéro ou client' filters={filters} value={status} onFilter={value => { setStatus(value); setPage(1) }} loading={loading} error={failure} onRetry={() => setAttempt(value => value + 1)}
+          empty={<NativeEmpty icon={FilePenLine} title={isFiltered ? 'Aucun devis trouvé' : 'Votre prochaine offre, ici'} description={isFiltered ? 'Essayez un autre client ou un autre statut.' : 'Créez un devis, partagez-le et suivez son avancement jusqu’à la facture.'} action={isFiltered ? <button type='button' className='btn-secondary' onClick={resetFilters}>Effacer les filtres</button> : null} />}>
+          {rows.map(quote => <article key={quote.id} className='native-record'>
+            <Link className='native-record-top' to={`/devis/${quote.id}`} aria-label={`Consulter ${quote.quote_number}`}>
+              <span className='native-record-icon'><FilePenLine aria-hidden='true' /></span>
+              <div className='native-record-heading'><strong>{quote.client?.company_name || 'Client'}</strong><p className='native-record-ref'>{quote.quote_number}</p></div>
+              <span className={`native-status ${statuses[quote.status]?.color || ''}`}>{statuses[quote.status]?.label || quote.status}</span>
+            </Link>
+            <div className='native-record-money'><strong>{formatInvoiceMoney(quote.total_amount, quote.currency)}</strong><span className='native-record-note'>Valide au {formatDate(quote.valid_until)}</span></div>
+            <div className='native-record-actions'>
+              {quote.status !== 'converted' ? <><button type='button' aria-label={`Télécharger ${quote.quote_number}`} onClick={() => download(quote)}><FileDown aria-hidden='true' />PDF</button><Link to={`/devis/nouveau?id=${quote.id}`}>Modifier</Link></> : null}
+              <Link className='native-record-main-action' to={`/devis/${quote.id}`}>{quote.status === 'converted' ? 'Consulter' : 'Ouvrir le devis'}</Link>
+            </div>
+          </article>)}
+        </NativeCollection>
+        <Pagination page={page} pageSize={pageSize} total={meta.total} totalPages={meta.totalPages} onPageChange={setPage} isLoading={loading} />
+      </> : (
       <section className='card min-w-0 overflow-hidden p-0' aria-labelledby='quotes-list-title'>
         <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
           <div>
@@ -137,6 +157,7 @@ const Quotes = () => {
         )}
         <Pagination page={page} pageSize={pageSize} total={meta.total} totalPages={meta.totalPages} onPageChange={setPage} onPageSizeChange={size => { setPageSize(size); setPage(1) }} isLoading={loading} />
       </section>
+      )}
     </div>
   )
 }

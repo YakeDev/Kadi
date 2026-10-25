@@ -21,7 +21,7 @@ export const useModalFocus = (isOpen, onClose) => {
     const firstInput = panel.querySelector(
       'input:not([disabled]), textarea:not([disabled])'
     )
-    ;(firstInput || getControls()[0] || panel).focus()
+    ;((firstInput?.getClientRects().length ? firstInput : null) || getControls()[0] || panel).focus()
 
     const handleKeyDown = (event) => {
       if (event.key === 'Escape') {

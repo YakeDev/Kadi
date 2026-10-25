@@ -4,10 +4,12 @@ import { Link, NavLink, useLocation } from 'react-router-dom'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
 import AppBrand from './AppBrand.jsx'
+import NativeTopbar from '../native/NativeTopbar.jsx'
+import { isNativeAndroid } from '../native/platform.js'
 
 const mobileIcons = { LayoutDashboard, FileText, FilePenLine, Building2, Package, Users }
 
-const Topbar = () => {
+const WebTopbar = () => {
   const { user, profile, logout, isSuperAdmin } = useAuth()
   const { pathname } = useLocation()
   const isPlatformPage = pathname.startsWith('/administration') && isSuperAdmin
@@ -127,5 +129,7 @@ const Topbar = () => {
     </header>
   )
 }
+
+const Topbar = () => isNativeAndroid() ? <NativeTopbar /> : <WebTopbar />
 
 export default Topbar

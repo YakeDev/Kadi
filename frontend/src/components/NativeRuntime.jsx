@@ -1,11 +1,15 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { WifiOff } from 'lucide-react'
 import { isNativeAndroid } from '../native/platform.js'
 
 const NativeRuntime = () => {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   const [offline, setOffline] = useState(false)
+  useEffect(() => {
+    if (isNativeAndroid() && window.scrollY) window.scrollTo(0, 0)
+  }, [pathname])
   useEffect(() => {
     if (!isNativeAndroid()) return
     let disposed = false

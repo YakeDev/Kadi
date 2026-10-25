@@ -1,6 +1,6 @@
 import clsx from 'clsx'
 
-const base = 'rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-5'
+const base = 'stats-card rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-5'
 
 const metric = 'break-words text-xl sm:text-2xl xl:text-3xl font-semibold text-[var(--text-dark)]'
 const helper = 'text-xs text-[var(--text-muted)]'
@@ -29,8 +29,8 @@ const StatsCard = ({ icon: Icon, title, value, helperText, trend, className, act
     <div className='flex items-start justify-between gap-3'>
       <div className='min-w-0 space-y-2'>
         {title ? <p className='text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]'>{title}</p> : null}
-        <p className={metric}>{value}</p>
-        {helperText ? <p className={helper}>{helperText}</p> : null}
+        <p className={clsx(metric, 'stats-value')}>{value}</p>
+        {helperText ? <p className={clsx(helper, 'stats-helper')}>{helperText}</p> : null}
         <TrendBadge trend={trend} />
       </div>
       {Icon ? (
@@ -39,7 +39,7 @@ const StatsCard = ({ icon: Icon, title, value, helperText, trend, className, act
         </span>
       ) : null}
     </div>
-    {actions ? <div className='mt-4 flex flex-wrap gap-2'>{actions}</div> : null}
+    {actions ? <div className='stats-actions mt-4 flex flex-wrap gap-2'>{actions}</div> : null}
   </div>
 )
 

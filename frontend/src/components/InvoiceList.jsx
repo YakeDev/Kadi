@@ -14,11 +14,15 @@ import {
   Search,
   Filter,
   PlusCircle,
-  Pencil
+  Pencil,
+  MoreHorizontal
 } from 'lucide-react'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import Pagination from './Pagination.jsx'
+import { isNativeAndroid } from '../native/platform.js'
+import { NativeCollection, NativeEmpty } from '../native/NativeCollection.jsx'
+import NativeSheet from '../native/NativeSheet.jsx'
 import PaymentPanel from './PaymentPanel.jsx'
 import { paymentBalance } from '../utils/payments.js'
 import { formatInvoiceMoney } from '../utils/invoiceTotals.js'
@@ -55,7 +59,9 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
   const linkedInvoiceId = searchParams.get('invoice')
   const status = statusFilters.some((filter) => filter.value === requestedStatus) ? requestedStatus : 'all'
   const [invoices, setInvoices] = useState([])
+  const [fetchError, setFetchError] = useState(false)
   const [paymentInvoice, setPaymentInvoice] = useState(null)
+  const [actionInvoice, setActionInvoice] = useState(null)
   useEffect(() => {
     if (!linkedInvoiceId) return
     let active = true
@@ -95,6 +101,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
       const version = ++requestVersion.current
       try {
         setIsLoading(true)
+        setFetchError(false)
         const params = { page, pageSize }
         if (status && status !== 'all') {
           params.status = status
@@ -125,7 +132,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
           return next
         })
       } catch (error) {
-        if (version === requestVersion.current) showErrorToast(toast.error, error)
+        if (version === requestVersion.current) { setFetchError(true); showErrorToast(toast.error, error) }
       } finally {
         if (version === requestVersion.current) setIsLoading(false)
       }
@@ -193,7 +200,43 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
   }
 
   return (
-    <div className='card p-0'>
+    <div className={isNativeAndroid() ? 'native-invoice-list' : 'card p-0'}>
+      {isNativeAndroid() ? <>
+        <NativeCollection label='Factures' count={pagination.total} search={filters.draftSearch} onSearch={value => setFilters(prev => ({ ...prev, draftSearch: value }))} searchLabel='Numéro ou client' filters={statusFilters} value={status} onFilter={handleStatusFilterChange} loading={isLoading} error={fetchError} onRetry={() => fetchInvoices(currentQuery.current)}
+          toolsAction={<button type='button' aria-label='Actualiser' className='native-icon-button' disabled={isLoading} onClick={() => fetchInvoices(currentQuery.current)}><RefreshCcw aria-hidden='true' /></button>}
+          empty={<NativeEmpty icon={FileText} title={filters.search || status !== 'all' ? 'Aucune facture trouvée' : 'Vos factures, au même endroit'} description={filters.search || status !== 'all' ? 'Essayez un autre client ou un autre statut.' : 'Créez votre première facture ou convertissez un devis accepté.'} />}>
+          {invoices.map(invoice => <article key={invoice.id} className='native-record'>
+            <button type='button' className='native-record-top' onClick={() => invoice.status === 'draft' ? onEdit?.(invoice) : setPaymentInvoice(invoice)} aria-label={`Ouvrir la facture ${invoice.invoice_number}`}>
+              <span className='native-record-icon'><FileText aria-hidden='true' /></span><div className='native-record-heading'><strong>{invoice.client?.company_name || 'Client'}</strong><p className='native-record-ref'>{invoice.invoice_number}</p></div>
+              <span className={`native-status ${statusStyles[invoice.status] || statusStyles.draft}`}>{statusLabels[invoice.status] || invoice.status}</span>
+            </button>
+            <div className='native-record-money'><strong>{formatInvoiceMoney(invoice.total_amount, invoice.currency === '$' ? 'USD' : invoice.currency || 'USD')}</strong><span className='native-record-note'>{invoice.issue_date ? new Date(invoice.issue_date).toLocaleDateString('fr-FR') : ''}</span></div>
+            {invoice.status !== 'draft' ? <p className='native-record-note'>Reçu {formatInvoiceMoney(paymentBalance(invoice).paid, invoice.currency === '$' ? 'USD' : invoice.currency || 'USD')} · Reste {formatInvoiceMoney(paymentBalance(invoice).remaining, invoice.currency === '$' ? 'USD' : invoice.currency || 'USD')}</p> : null}
+            {invoice.is_overdue ? <p className='native-record-note text-red-800'>Solde en retard</p> : null}
+            {invoice.pdf_available === false ? <p className='native-record-note'>Archive PDF non vérifiée</p> : null}
+            <div className='native-record-actions'>
+              <button type='button' aria-label={`Télécharger la facture ${invoice.invoice_number} en PDF`} disabled={invoice.pdf_available === false} onClick={() => handleDownloadPdf(invoice.id, invoice.invoice_number)}><Download aria-hidden='true' />PDF</button>
+              <button type='button' className='native-icon-button' aria-label={`Actions de la facture ${invoice.invoice_number}`} onClick={() => setActionInvoice(invoice)}><MoreHorizontal aria-hidden='true' /></button>
+              {invoice.status === 'draft' ? <button type='button' className='native-record-main-action' onClick={() => onEdit?.(invoice)}><Pencil aria-hidden='true' />Modifier</button> : <button type='button' className='native-record-main-action' aria-label={`Versements de la facture ${invoice.invoice_number}`} onClick={() => setPaymentInvoice(invoice)}><Wallet aria-hidden='true' />Versements</button>}
+            </div>
+          </article>)}
+        </NativeCollection>
+        {actionInvoice ? <NativeSheet title='Actions de la facture' onClose={() => setActionInvoice(null)}><p className='text-sm text-[var(--text-muted)]'>{actionInvoice.invoice_number}</p><label className='label mt-4 block'>Statut
+                        <select
+                          value={actionInvoice.status}
+                          aria-label={`Statut de la facture ${actionInvoice.invoice_number}`}
+                          disabled={['paid', 'partially_paid'].includes(actionInvoice.status)}
+                          onChange={(event) => { handleStatusChange(actionInvoice.id, event.target.value); setActionInvoice(null) }}
+                          className='input-compact h-9 w-36 border-[var(--border)] bg-[var(--bg-panel)] text-xs'
+                        >
+                          {actionInvoice.status === 'draft' ? <option value='draft'>Brouillon</option> : null}
+                          {!['paid', 'partially_paid'].includes(actionInvoice.status) ? <option value='sent'>Envoyée</option> : null}
+                          {actionInvoice.status === 'partially_paid' ? <option value='partially_paid'>Partiellement payée</option> : null}
+                          {actionInvoice.status === 'paid' || Number(actionInvoice.total_amount) === 0 ? <option value='paid'>Payée</option> : null}
+                          {!['paid', 'partially_paid'].includes(actionInvoice.status) ? <option value='overdue'>En retard</option> : null}
+                        </select>
+        </label></NativeSheet> : null}
+      </> : <>
       <div className='space-y-4 border-b border-[var(--border)] px-4 py-4'>
         <div className='flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between'>
           <div>
@@ -436,6 +479,7 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
           </tbody>
         </table>
       </div>
+      </>}
       <Pagination
         page={pagination.page}
         pageSize={pagination.pageSize}
