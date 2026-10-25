@@ -2,7 +2,7 @@ import { act, render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
 import { beforeEach, expect, test, vi } from 'vitest'
 const mocks = vi.hoisted(() => ({ native: true, callbacks: {}, remove: vi.fn(), minimize: vi.fn(), appListener: vi.fn(), networkListener: vi.fn(), getStatus: vi.fn() }))
-vi.mock('../native/platform.js', () => ({ isNativeAndroid: () => mocks.native }))
+vi.mock('../native/platform.js', async importOriginal => ({ ...await importOriginal(), isNativeAndroid: () => mocks.native }))
 vi.mock('@capacitor/app', () => ({ App: { addListener: mocks.appListener, minimizeApp: mocks.minimize } }))
 vi.mock('@capacitor/network', () => ({ Network: { addListener: mocks.networkListener, getStatus: mocks.getStatus } }))
 import NativeRuntime from '../components/NativeRuntime.jsx'

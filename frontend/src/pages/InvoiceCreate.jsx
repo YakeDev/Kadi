@@ -111,7 +111,7 @@ const InvoiceCreate = ({ documentType = 'invoice' }) => {
 
 	return (
 		<div className='space-y-4'>
-      <Link to={listPath} className='inline-flex items-center gap-2 py-2 text-sm text-[var(--text-muted)]'>
+      <Link to={listPath} className='native-editor-back inline-flex items-center gap-2 py-2 text-sm text-[var(--text-muted)]'>
         <ArrowLeft aria-hidden='true' className='h-4 w-4' /> {isQuote ? 'Retour aux devis' : 'Retour aux factures'}
       </Link>
 

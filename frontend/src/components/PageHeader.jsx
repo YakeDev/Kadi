@@ -1,9 +1,19 @@
 import clsx from 'clsx'
+import { Children, cloneElement } from 'react'
+import { Plus, RefreshCcw } from 'lucide-react'
+import { isNativeAndroid } from '../native/platform.js'
 
 const baseTitle = 'text-2xl font-semibold text-[var(--text-dark)]'
 const baseSubtitle = 'text-sm text-[var(--text-muted)]'
 
-const PageHeader = ({ icon: Icon, title, subtitle, actions = [], className, align = 'start' }) => {
+const PageHeader = ({ icon: Icon, title, nativeTitle, nativeCreateLabel, subtitle, actions = [], className, align = 'start' }) => {
+  if (isNativeAndroid()) return <header className='native-page-header'>
+    <h1>{nativeTitle || title}</h1>
+    <div className='native-page-actions'>{actions.filter(Boolean).map(action => action.key === 'refresh' ? cloneElement(action, { className: 'native-icon-button', 'aria-label': 'Actualiser', children: <RefreshCcw aria-hidden='true' /> }) : cloneElement(action, {
+      className: `${action.props.className || ''} native-page-action`,
+      ...(nativeCreateLabel && action.key === 'create' ? { 'aria-label': action.props['aria-label'] || Children.toArray(action.props.children).filter(child => typeof child === 'string').join('').trim(), children: <><Plus aria-hidden='true' />{nativeCreateLabel}</> } : {})
+    }))}</div>
+  </header>
   return (
     <div
       className={clsx(

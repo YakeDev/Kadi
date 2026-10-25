@@ -1,10 +1,13 @@
 import Sidebar from './Sidebar.jsx'
 import Topbar from './Topbar.jsx'
 import MobileTabBar from './MobileTabBar.jsx'
+import { useLocation } from 'react-router-dom'
+import { nativeRootPaths } from '../native/platform.js'
 
 const ShellLayout = ({ children }) => {
+  const { pathname } = useLocation()
   return (
-    <div className='flex min-h-screen w-full bg-[var(--bg-base)] text-[var(--text-dark)]'>
+    <div className='app-shell flex min-h-screen w-full bg-[var(--bg-base)] text-[var(--text-dark)]' data-native-root={nativeRootPaths.includes(pathname) ? 'true' : 'false'}>
       <Sidebar />
       <div className='flex min-h-screen min-w-0 flex-1 flex-col overflow-x-clip lg:ml-64'>
         <Topbar />

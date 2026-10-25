@@ -20,6 +20,7 @@ import {
 import { useAuth } from '../hooks/useAuth.jsx'
 import { showErrorToast } from '../utils/errorToast.js'
 import FormSection from '../components/FormSection.jsx'
+import { isNativeAndroid } from '../native/platform.js'
 
 const ACCOUNT_INITIAL = {
 	email: '',
@@ -140,7 +141,7 @@ const fileToDataUrl = (file) =>
 	})
 
 const RegistrationStepper = ({ currentStep, steps }) => (
-	<div className='mb-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]'>
+	<div className='auth-steps mb-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]'>
 		{steps.map((step, index) => {
 			const isActive = currentStep === step.id
 			const activeIndex = steps.findIndex((entry) => entry.id === currentStep)
@@ -618,18 +619,18 @@ const Login = () => {
 
 	const renderLoginForm = () => (
 		<>
-			<div className='mb-6 space-y-2 text-center'>
+			<div className='auth-login-heading mb-6 space-y-2 text-center'>
 				<p className='text-xs uppercase tracking-[0.25em] text-[var(--text-muted)]'>
 					Bienvenue sur
 				</p>
-				<h1 className='text-3xl font-semibold text-[var(--text-dark)]'>Kadi</h1>
+				<h1 className='text-3xl font-semibold text-[var(--text-dark)]'>{isNativeAndroid() ? 'Bon retour !' : 'Kadi'}</h1>
 				<p className='text-sm text-[var(--text-muted)]'>
 					Connectez-vous pour retrouver votre espace de facturation.
 				</p>
 			</div>
 			<form
 				onSubmit={handleLoginSubmit}
-				className='space-y-4 rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6'>
+				className='auth-login-form space-y-4 rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-6'>
 				{loginErrors.global ? (
 					<div className='rounded-[var(--radius-lg)] border border-[rgba(248,113,113,0.35)] bg-[rgba(248,113,113,0.08)] px-4 py-2 text-sm text-red-500'>
 						{loginErrors.global}
@@ -651,9 +652,10 @@ const Login = () => {
 					</button>
 				) : null}
 				<div className='flex flex-col gap-2'>
-					<label className='label'>Email</label>
+					<label className='label' htmlFor='login-email'>Email</label>
 					<input
-						type='email'
+						id='login-email'
+						type='email' autoComplete='username' inputMode='email' autoCapitalize='none'
 						name='email'
 						value={loginForm.email}
 						onChange={handleLoginChange}
@@ -668,9 +670,10 @@ const Login = () => {
 					) : null}
 				</div>
 				<div className='flex flex-col gap-2'>
-					<label className='label'>Mot de passe</label>
+					<label className='label' htmlFor='login-password'>Mot de passe</label>
 					<input
-						type='password'
+						id='login-password'
+						type='password' autoComplete='current-password'
 						name='password'
 						value={loginForm.password}
 						onChange={handleLoginChange}
@@ -703,12 +706,12 @@ const Login = () => {
 						setIsResetPasswordMode(true)
 						setResetEmail(loginForm.email)
 					}}
-					className='btn-ghost w-full justify-center text-sm font-semibold text-[var(--text-muted)]'>
+					className='auth-forgot btn-ghost w-full justify-center text-sm font-semibold text-[var(--text-muted)]'>
 					<KeyRound className='mr-2 h-4 w-4' />
 					Mot de passe oublié ?
 				</button>
 			</form>
-			<div className='mt-6 text-center text-sm text-[var(--text-muted)]'>
+			<div className='auth-register-link mt-6 text-center text-sm text-[var(--text-muted)]'>
 				Pas encore de compte ?{' '}
 				<button
 					onClick={handleSwitchToRegister}
@@ -1135,8 +1138,9 @@ const Login = () => {
 	)
 
 	return (
-		<div className='flex min-h-screen flex-col justify-center bg-[var(--bg-base)] px-4 py-6'>
-			<div className='mx-auto w-full max-w-[720px] rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white px-9 py-10'>
+		<div className='auth-screen flex min-h-screen flex-col justify-center bg-[var(--bg-base)] px-4 py-6'>
+			<div className='auth-surface mx-auto w-full max-w-[720px] rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white px-9 py-10'>
+				{isNativeAndroid() ? <div className='native-auth-brand'><span className='native-app-mark'><FileText aria-hidden='true' /></span>Kadi</div> : null}
 				{view === Steps.LOGIN && renderLoginForm()}
 				{view === Steps.ACCOUNT && renderAccountStep()}
 				{view === Steps.COMPANY_PROFILE && renderCompanyProfileStep()}

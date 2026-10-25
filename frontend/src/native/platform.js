@@ -5,3 +5,5 @@ export const isNativeAndroid = () => Capacitor.isNativePlatform() && Capacitor.g
 export const configureNativeDocument = () => {
   if (isNativeAndroid()) document.documentElement.dataset.nativePlatform = 'android'
 }
+
+export const nativeRootPaths = ['/', '/devis', '/factures', '/clients', '/catalogue']
