@@ -89,7 +89,7 @@ const fillReceipt = async (amount = '150') => {
   const amountField = await screen.findByLabelText('Montant reçu (USD)')
   fireEvent.change(amountField, { target: { value: amount } })
   fireEvent.change(screen.getByLabelText('Date de réception'), {
-    target: { value: '2026-01-05' }
+    target: { value: '05/01/2026' }
   })
   fireEvent.change(screen.getByLabelText('Mode de paiement'), {
     target: { value: 'cash' }
@@ -203,6 +203,29 @@ test('history loading errors block receipt entry and can be retried', async () =
     screen.getByRole('button', { name: 'Actualiser l’historique' })
   )
   await screen.findByLabelText('Montant reçu (USD)')
+})
+
+test('invalid or future receipt dates retain the entry and never reach the API', async () => {
+  mount()
+  await fillReceipt()
+  for (const date of ['31/02/2026', '01/01/2099', 'date inconnue']) {
+    fireEvent.change(screen.getByLabelText('Date de réception'), {
+      target: { value: date }
+    })
+    submitReceipt()
+    expect(await screen.findByRole('alert')).toHaveTextContent('JJ/MM/AAAA')
+    expect(mocks.post).not.toHaveBeenCalled()
+    expect(screen.getByLabelText('Date de réception')).toHaveValue(date)
+  }
+  fireEvent.change(screen.getByLabelText('Date de réception'), {
+    target: { value: '05/01/2026' }
+  })
+  submitReceipt()
+  await screen.findByText('200,00 USD')
+  expect(mocks.post).toHaveBeenCalledWith(
+    '/invoices/invoice-one/payments',
+    expect.objectContaining({ paid_on: '2026-01-05' })
+  )
 })
 
 test('legacy settlements are explicitly identified and history is paginated', async () => {

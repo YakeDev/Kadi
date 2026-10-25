@@ -10,6 +10,8 @@ import {
   paymentMethods
 } from '../utils/payments.js'
 import Pagination from './Pagination.jsx'
+import PaymentDateField from './PaymentDateField.jsx'
+import { formatPaymentDate, parsePaymentDate } from '../utils/paymentDates.js'
 
 const dateLabel = (day) =>
   day
@@ -36,7 +38,7 @@ const PaymentPanel = ({ invoice: initialInvoice, onClose, onUpdated }) => {
   const [error, setError] = useState('')
   const [form, setForm] = useState({
     amount: '',
-    paid_on: paymentDateToday(),
+    paid_on: formatPaymentDate(paymentDateToday()),
     method: '',
     reference: ''
   })
@@ -105,6 +107,13 @@ const PaymentPanel = ({ invoice: initialInvoice, onClose, onUpdated }) => {
   const savePayment = async (event) => {
     event.preventDefault()
     if (pending.current || loading || !ready) return
+    const paidOn = parsePaymentDate(form.paid_on)
+    if (!paidOn || paidOn > paymentDateToday()) {
+      setError(
+        'Indiquez une date de réception valide au format JJ/MM/AAAA, aujourd’hui ou dans le passé.'
+      )
+      return
+    }
     const normalized = form.amount.trim().replace(',', '.')
     const amount = Number(normalized)
     if (
@@ -119,6 +128,7 @@ const PaymentPanel = ({ invoice: initialInvoice, onClose, onUpdated }) => {
     }
     const payload = {
       ...form,
+      paid_on: paidOn,
       amount,
       reference: form.reference.trim() || null
     }
@@ -301,25 +311,13 @@ const PaymentPanel = ({ invoice: initialInvoice, onClose, onUpdated }) => {
                     }
                   />
                 </div>
-                <div>
-                  <label htmlFor={`${prefix}-date`} className="label">
-                    Date de réception
-                  </label>
-                  <input
-                    id={`${prefix}-date`}
-                    type="date"
-                    required
-                    max={paymentDateToday()}
-                    className="input mt-1 w-full"
-                    value={form.paid_on}
-                    onChange={(event) =>
-                      setForm((previous) => ({
-                        ...previous,
-                        paid_on: event.target.value
-                      }))
-                    }
-                  />
-                </div>
+                <PaymentDateField
+                  id={`${prefix}-date`}
+                  value={form.paid_on}
+                  onChange={(paid_on) =>
+                    setForm((previous) => ({ ...previous, paid_on }))
+                  }
+                />
                 <div>
                   <label htmlFor={`${prefix}-method`} className="label">
                     Mode de paiement
