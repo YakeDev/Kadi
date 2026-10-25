@@ -10,9 +10,9 @@ export const navigationLinks = [
     icon: 'FileText'
   },
   {
-    to: '/entreprise',
-    label: 'Mon entreprise',
-    icon: 'Building2'
+    to: '/clients',
+    label: 'Clients',
+    icon: 'Users'
   },
   {
     to: '/catalogue',
@@ -20,8 +20,8 @@ export const navigationLinks = [
     icon: 'Package'
   },
   {
-    to: '/clients',
-    label: 'Clients',
-    icon: 'Users'
+    to: '/entreprise',
+    label: 'Mon entreprise',
+    icon: 'Building2'
   }
 ]
