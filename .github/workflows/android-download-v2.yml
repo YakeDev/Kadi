@@ -1,0 +1,57 @@
+name: Download Kadi Android 0.2.0
+on:
+  push:
+    branches: [delivery/android-0.2.0-download-20261025]
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: YakeDev/Kadi
+    steps:
+      - name: Check the exact tested source and retrieve the APK
+        run: |
+          python - <<'PY'
+          import json, subprocess
+          run = json.loads(subprocess.check_output(['gh', 'api', 'repos/YakeDev/Kadi/actions/runs/40209726441'], text=True))
+          assert run['head_sha'] == '0845beda319723a68fb14f801db2ccf3e568a144'
+          assert run['conclusion'] == 'success'
+          PY
+          gh run download 40209726441 --repo YakeDev/Kadi --name kadi-android-pilote --dir verified
+      - name: Package the verified binary without test evidence
+        run: |
+          python - <<'PY'
+          import hashlib, shutil, zipfile
+          from pathlib import Path
+          source = Path('verified/Kadi-Android-pilote.apk')
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == '0588e88f7e8a2fcfeaec3666a4f86ca26b19bde58754977d5302dd8229d11101'
+          out = Path('public-download')
+          out.mkdir()
+          apk = out / 'Kadi-Android-0.2.0.apk'
+          shutil.copyfile(source, apk)
+          archive = out / 'Kadi-Android-0.2.0.zip'
+          with zipfile.ZipFile(archive, 'w', zipfile.ZIP_DEFLATED) as package:
+              package.write(apk, apk.name)
+          (out / 'SHA256SUMS.txt').write_text(''.join(hashlib.sha256(p.read_bytes()).hexdigest() + '  ' + p.name + '\n' for p in [apk, archive]))
+          Path('release-notes.md').write_text("""Pilote Android 0.2.0 de Kadi, avec une interface mobile dédiée conservant Capacitor et le même backend.
+          
+          Connexion et inscription simplifiées, accueil avec encaissements et actions rapides, fiches tactiles pour les devis/factures/clients/catalogue, filtres horizontaux, compte en panneau bas et commandes Aperçu/Enregistrer accessibles en bas de l’éditeur.
+          
+          APK exact validé par la CI : compilation et lint Android, tests frontend, lancement sur émulateur, API réelle anonyme, partage PDF natif, Retour système et écrans authentifiés avec des réponses isolées. Aucune donnée de client ni identité de production n’est incluse dans les tests.
+          
+          Installation : télécharger l’APK, ou extraire le ZIP et ouvrir l’APK. Même compte et mêmes données enregistrées en ligne ; connexion Internet nécessaire. La validation sur appareil physique reste à effectuer.
+          
+          Signature de test : si Android refuse le remplacement de l’ancien pilote, enregistrer d’abord les brouillons locaux puis désinstaller l’ancien pilote avant d’installer cette version. La désinstallation efface la session et les brouillons conservés uniquement sur le téléphone. Les devis, factures et versements déjà enregistrés sur le serveur restent disponibles.
+          
+          Les confirmations d’email et la récupération du mot de passe continuent de passer par le navigateur. Aucun compte de boutique ni publication Play Store n’est nécessaire pour cet APK.
+          """)
+          PY
+      - name: Publish a pilot prerelease
+        run: |
+          gh release create android-pilot-0.2.0 public-download/Kadi-Android-0.2.0.apk public-download/Kadi-Android-0.2.0.zip public-download/SHA256SUMS.txt --repo YakeDev/Kadi --target 0845beda319723a68fb14f801db2ccf3e568a144 --title 'Android 0.2.0 — Interface mobile' --notes-file release-notes.md --prerelease --latest=false
