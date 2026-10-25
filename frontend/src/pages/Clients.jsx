@@ -19,6 +19,8 @@ import FormSection from '../components/FormSection.jsx'
 import { showErrorToast } from '../utils/errorToast.js'
 import PageHeader from '../components/PageHeader.jsx'
 import Pagination from '../components/Pagination.jsx'
+import ClientIdentifiers from '../components/ClientIdentifiers.jsx'
+import { clientIdentifierFields } from '../constants/clientIdentifiers.js'
 import { useModalFocus } from '../hooks/useModalFocus.js'
 
 const initialState = {
@@ -26,7 +28,10 @@ const initialState = {
   contact_name: '',
   email: '',
   phone: '',
-  address: ''
+  address: '',
+  nif: '',
+  national_id: '',
+  rccm: ''
 }
 
 const Clients = () => {
@@ -35,9 +40,11 @@ const Clients = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [isFetching, setIsFetching] = useState(true)
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
-  const drawerRef = useModalFocus(isDrawerOpen, () => closeDrawer())
   const [editingClient, setEditingClient] = useState(null)
   const [isUpdatingClient, setIsUpdatingClient] = useState(false)
+  const drawerRef = useModalFocus(isDrawerOpen || Boolean(editingClient), () => {
+    if (!isLoading && !isUpdatingClient) { closeDrawer(); closeEditClient() }
+  })
   const [filters, setFilters] = useState({ search: '', draftSearch: '' })
   const [pagination, setPagination] = useState({ page: 1, pageSize: 10, total: 0, totalPages: 1 })
 
@@ -155,7 +162,10 @@ const Clients = () => {
       contact_name: client.contact_name || '',
       email: client.email || '',
       phone: client.phone || '',
-      address: client.address || ''
+      address: client.address || '',
+      nif: client.nif || '',
+      national_id: client.national_id || '',
+      rccm: client.rccm || ''
     })
   }
 
@@ -179,7 +189,10 @@ const Clients = () => {
         contact_name: editingClient.contact_name,
         email: editingClient.email,
         phone: editingClient.phone,
-        address: editingClient.address
+        address: editingClient.address,
+        nif: editingClient.nif,
+        national_id: editingClient.national_id,
+        rccm: editingClient.rccm
       })
       toast.success('Client mis à jour', { icon: '✏️' })
       closeEditClient()
@@ -262,7 +275,9 @@ const Clients = () => {
       </FormSection>
 
       <FormSection title='Adresse (optionnel)' icon={MapPin}>
+        <label className='label' htmlFor={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-address`}>Adresse</label>
         <textarea
+          id={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client-address`}
           name='address'
           value={values.address}
           onChange={onChangeHandler}
@@ -270,6 +285,7 @@ const Clients = () => {
           className='textarea textarea-compact min-h-[90px]'
         />
       </FormSection>
+      <ClientIdentifiers values={values} onChange={onChangeHandler} idPrefix={`${onChangeHandler === handleChange ? 'new' : 'edit'}-client`} />
     </div>
   )
 
@@ -380,7 +396,12 @@ const Clients = () => {
               ) : (
                 clients.map((client) => (
                   <tr key={client.id} className='transition hover:bg-[rgba(10,132,255,0.08)]'>
-                    <td data-label='Entreprise' className='px-4 py-3 font-semibold text-[var(--text-dark)]'>{client.company_name}</td>
+                    <td data-label='Entreprise' className='max-w-64 break-words px-4 py-3 text-[var(--text-dark)]'>
+                      <p className='font-semibold'>{client.company_name}</p>
+                      <dl className='mt-1 space-y-1 text-xs text-[var(--text-muted)]'>
+                        {clientIdentifierFields.filter(({ name }) => client[name]).map(({ name, label }) => <div key={name}><dt className='inline font-medium'>{label} : </dt><dd className='inline'>{client[name]}</dd></div>)}
+                      </dl>
+                    </td>
                     <td data-label='Contact' className='px-4 py-3 text-[var(--text-muted)]'>{client.contact_name || '—'}</td>
                     <td data-label='Email' className='px-4 py-3 text-[var(--text-muted)]'>{client.email || '—'}</td>
                     <td data-label='Téléphone' className='px-4 py-3 text-[var(--text-muted)]'>{client.phone || '—'}</td>
@@ -422,89 +443,28 @@ const Clients = () => {
         />
       </section>
 
-      {isDrawerOpen ? (
-        <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
-          <div className='flex min-h-full items-stretch justify-end'>
-            <div ref={drawerRef} role='dialog' aria-modal='true' aria-labelledby='client-drawer-title' tabIndex={-1} className='relative flex h-full min-h-full w-full max-w-lg flex-col border border-[var(--border)] bg-white'>
-              <div className='flex items-center justify-between border-b border-[var(--border)] px-6 py-4'>
+      {isDrawerOpen || editingClient ? (
+        <div className='fixed inset-0 z-50 bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
+          <div className='flex h-full justify-end'>
+            <div ref={drawerRef} role='dialog' aria-modal='true' aria-labelledby='client-drawer-title' tabIndex={-1} className='relative flex h-[100dvh] w-full max-w-lg flex-col border-l border-[var(--border)] bg-white'>
+              <div className='flex shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] px-5 py-4'>
                 <div>
-                  <h2 id='client-drawer-title' className='text-lg font-semibold text-[var(--text-dark)]'>Nouveau client</h2>
-                  <p className='text-xs text-[var(--text-muted)]'>
-                    Sauvegardez les informations de vos clients pour les réutiliser instantanément.
-                  </p>
+                  <h2 id='client-drawer-title' className='text-lg font-semibold text-[var(--text-dark)]'>{editingClient ? 'Modifier le client' : 'Nouveau client'}</h2>
+                  <p className='mt-1 text-xs text-[var(--text-muted)]'>Coordonnées et identifiants à réutiliser dans vos documents.</p>
                 </div>
-                <button
-                  type='button'
-                  onClick={closeDrawer}
-                  aria-label='Fermer le formulaire client'
-                  className='rounded-full border border-[var(--border)] bg-white p-2 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
-                >
-                  <X className='h-4 w-4' />
+                <button type='button' onClick={() => { closeDrawer(); closeEditClient() }} disabled={isLoading || isUpdatingClient} aria-label='Fermer le formulaire client' className='btn-ghost min-h-11 min-w-11 shrink-0 justify-center'>
+                  <X aria-hidden='true' className='h-5 w-5' />
                 </button>
               </div>
-
-              <form onSubmit={handleSubmit} className='flex h-full flex-col'>
-                <div className='flex-1 space-y-4 overflow-y-auto px-6 py-6'>
-                  {buildFormSections(form, handleChange)}
+              <form onSubmit={editingClient ? handleUpdateClient : handleSubmit} className='flex min-h-0 flex-1 flex-col'>
+                <div className='min-h-0 flex-1 overflow-y-auto px-5 py-5'>
+                  {buildFormSections(editingClient || form, editingClient ? handleEditChange : handleChange)}
                 </div>
-                <div className='flex items-center justify-between gap-2 border-t border-[var(--border)] px-6 py-4'>
-                  <button
-                    type='button'
-                    onClick={() => setForm(initialState)}
-                    className='btn-ghost h-10 px-4 text-sm font-semibold'
-                    disabled={isLoading}
-                  >
-                    Réinitialiser
-                  </button>
-                  <div className='flex items-center gap-2'>
-                    <button
-                      type='button'
-                      onClick={closeDrawer}
-                      className='btn-ghost h-10 px-4 text-sm font-semibold'
-                      disabled={isLoading}
-                    >
-                      Annuler
-                    </button>
-                    <button type='submit' className='btn-primary h-10 px-4 text-sm font-semibold' disabled={isLoading}>
-                      {isLoading ? <Loader2 className='mr-2 h-4 w-4 animate-spin' /> : <PlusCircle className='mr-2 h-4 w-4' />}
-                      {isLoading ? 'Enregistrement…' : 'Enregistrer'}
-                    </button>
-                  </div>
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      ) : null}
-
-      {editingClient ? (
-        <div className='fixed inset-0 z-50 overflow-y-auto bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
-          <div className='flex min-h-full items-center justify-center px-4 py-6'>
-            <div className='surface relative w-full max-w-xl space-y-6 p-6 max-h-[calc(100vh-3rem)] overflow-y-auto'>
-              <button
-                type='button'
-                onClick={closeEditClient}
-                className='absolute right-4 top-4 text-[var(--text-muted)] transition hover:text-[var(--text-dark)]'
-              >
-                <X className='h-4 w-4' />
-              </button>
-              <div className='space-y-2 pr-6'>
-                <h3 className='text-lg font-semibold text-[var(--text-dark)]'>Modifier le client</h3>
-                <p className='text-xs text-[var(--text-muted)]'>
-                  Mettez à jour les informations du compte pour garder vos factures précises.
-                </p>
-              </div>
-
-              <form onSubmit={handleUpdateClient} className='space-y-4'>
-                {buildFormSections(editingClient, handleEditChange)}
-
-                <div className='flex justify-end gap-2 pt-2'>
-                  <button type='button' onClick={closeEditClient} className='btn-ghost px-4 text-sm font-semibold'>
-                    Annuler
-                  </button>
-                  <button type='submit' className='btn-primary px-4 text-sm font-semibold' disabled={isUpdatingClient}>
-                    {isUpdatingClient ? <Loader2 className='h-4 w-4 animate-spin' /> : <Pencil className='h-4 w-4' />}
-                    <span className='ml-2'>{isUpdatingClient ? 'Enregistrement…' : 'Enregistrer'}</span>
+                <div className='flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-[var(--border)] bg-white px-5 py-4'>
+                  <button type='button' onClick={() => { closeDrawer(); closeEditClient() }} className='btn-ghost min-h-11 px-4 text-sm' disabled={isLoading || isUpdatingClient}>Annuler</button>
+                  <button type='submit' className='btn-primary min-h-11 px-4 text-sm' disabled={isLoading || isUpdatingClient}>
+                    {isLoading || isUpdatingClient ? <Loader2 aria-hidden='true' className='mr-2 h-4 w-4 animate-spin' /> : <PlusCircle aria-hidden='true' className='mr-2 h-4 w-4' />}
+                    {isLoading || isUpdatingClient ? 'Enregistrement…' : 'Enregistrer'}
                   </button>
                 </div>
               </form>

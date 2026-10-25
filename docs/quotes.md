@@ -10,6 +10,14 @@
 
 La réception d’un acompte ne déclenche pas automatiquement la conversion. L’utilisateur peut modifier et enregistrer l’offre avant cette action. Un PO seul ne crée aucun encaissement. La référence PO se renseigne pendant la conversion. Cette première version ne contient pas d’envoi automatique d’e-mail ni de stockage de chaque ancien PDF.
 
+## Identifiants clients et présentation
+
+Dans **Clients**, la création et la modification s’ouvrent dans le même panneau latéral. Le NIF, l’ID national et le RCCM sont facultatifs ; les champs acceptent jusqu’à 160 caractères et conservent les zéros initiaux. Ils sont aussi disponibles lors de la création d’un client depuis un devis ou une facture. Les références renseignées apparaissent sous le nom du client dans le répertoire, dans les aperçus et dans les PDF.
+
+Un devis non converti utilise les coordonnées actuelles du client. À la conversion ou à l’émission d’une facture, les coordonnées et identifiants sont archivés avec le document. Une modification ultérieure de la fiche client ne réécrit pas cet instantané et n’ajoute pas rétroactivement de références aux factures déjà émises.
+
+La liste des devis reprend l’en-tête commun des autres pages, la recherche, les filtres par statut et le choix de taille de page. Son icône de document avec un crayon se distingue de celle des factures, sur ordinateur comme dans la navigation mobile. Le PDF de devis regroupe les coordonnées de l’émetteur et du client en deux colonnes, répète les en-têtes du tableau sur les pages suivantes et affiche les remises et le total dans un récapitulatif compact.
+
 ## Contrats et protections
 
 - `GET/POST /api/quotes`, `GET/PATCH /api/quotes/:id`, `GET /api/quotes/pdf/:id`, `POST /api/quotes/:id/convert` : authentification et filtrage par entreprise sur toutes les routes.
@@ -25,3 +33,5 @@ La réception d’un acompte ne déclenche pas automatiquement la conversion. L�
 Appliquer `20261025074053_quotes_conversion.sql` après sauvegarde, déployer le serveur, vérifier ses routes puis publier le frontend. La migration est additive et laisse les montants, archives et versements des factures existantes inchangés.
 
 Les tests couvrent les PO seuls, acomptes seuls, reprises identiques, changements de requête, révisions avant conversion, versions périmées, rollback sur acompte invalide, deux entreprises, restrictions des rôles navigateur, verrouillage des devis convertis et PDF avec l’historique des versements. La recette navigateur utilise des identités fictives, les vraies routes HTTP et une base PostgreSQL isolée ; aucune facture de test n’est créée dans les comptes de production.
+
+Pour les identifiants clients, appliquer `20261025085402_client_identifiers.sql`, déployer le serveur puis l’interface. Les essais vérifient les champs absents ou vidés, les limites, l’isolation des entreprises, la reprise des références dans les PDF et la conservation des instantanés après une modification du client. Un devis court avec logo, identifiants complets, remises et conditions est contrôlé sur une page.

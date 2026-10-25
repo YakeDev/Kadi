@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
-import { Menu, X, Plus, ChevronDown, LayoutDashboard, FileText, Users, Package, Building2, LogOut } from 'lucide-react'
+import { Menu, X, Plus, ChevronDown, LayoutDashboard, FileText, FilePenLine, Users, Package, Building2, LogOut } from 'lucide-react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
 import AppBrand from './AppBrand.jsx'
 
-const mobileIcons = { LayoutDashboard, FileText, Building2, Package, Users }
+const mobileIcons = { LayoutDashboard, FileText, FilePenLine, Building2, Package, Users }
 
 const Topbar = () => {
   const { user, profile, logout } = useAuth()
