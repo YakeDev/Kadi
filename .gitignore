@@ -36,3 +36,8 @@ frontend/.env.local
 
 # Misc
 supabase/.temp
+
+# Android signing identities must never be committed.
+*.keystore
+*.jks
+frontend/android/local.properties

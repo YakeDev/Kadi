@@ -22,6 +22,7 @@ import Pagination from './Pagination.jsx'
 import PaymentPanel from './PaymentPanel.jsx'
 import { paymentBalance } from '../utils/payments.js'
 import { formatInvoiceMoney } from '../utils/invoiceTotals.js'
+import { downloadDocument } from '../utils/documentDownload.js'
 
 const statusStyles = {
   draft: 'bg-[var(--primary-soft)] text-[var(--primary)]',
@@ -155,17 +156,8 @@ const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
 
   const handleDownloadPdf = async (id, invoiceNumber) => {
     try {
-      const { data } = await api.get(`/invoices/pdf/${id}`, {
-        responseType: 'blob'
-      })
-      const url = window.URL.createObjectURL(new Blob([data]))
-      const link = document.createElement('a')
-      link.href = url
-      link.setAttribute('download', `facture-${invoiceNumber || id}.pdf`)
-      document.body.appendChild(link)
-      link.click()
-      link.remove()
-      toast.success('PDF téléchargé', { icon: '⬇️' })
+      const result = await downloadDocument(`/invoices/pdf/${id}`, `facture-${invoiceNumber || id}.pdf`)
+      if (result.action === 'downloaded') toast.success('PDF téléchargé', { icon: '⬇️' })
     } catch (error) {
       showErrorToast(toast.error, error)
     }

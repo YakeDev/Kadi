@@ -6,11 +6,20 @@
   "scripts": {
     "dev": "vite --host",
     "build": "vite build",
+    "android:sync": "vite build --mode android && cap sync android",
+    "android:open": "cap open android",
+    "android:apk": "npm run android:sync && cd android && ./gradlew assembleDebug",
     "preview": "vite preview",
     "lint": "ESLINT_USE_FLAT_CONFIG=false eslint --max-warnings 0 \"src/**/*.{js,jsx}\"",
     "test": "vitest run"
   },
   "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.5",
+    "@capacitor/network": "8.0.1",
+    "@capacitor/share": "8.0.3",
     "@supabase/supabase-js": "2.118.0",
     "axios": "^1.13.6",
     "clsx": "^2.1.1",
@@ -21,6 +30,7 @@
     "react-router-dom": "^7.18.4"
   },
   "devDependencies": {
+    "@capacitor/cli": "8.5.3",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",

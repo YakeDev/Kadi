@@ -3,11 +3,13 @@ import { X, Search, Loader2, PackagePlus } from 'lucide-react'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import toast from 'react-hot-toast'
+import { useModalFocus } from '../hooks/useModalFocus.js'
 
 const CatalogPickerModal = ({ isOpen, onClose, onSelect }) => {
   const [items, setItems] = useState([])
   const [search, setSearch] = useState('')
   const [isLoading, setIsLoading] = useState(false)
+  const panelRef = useModalFocus(isOpen, onClose)
 
   useEffect(() => {
     if (!isOpen) return
@@ -51,7 +53,7 @@ const CatalogPickerModal = ({ isOpen, onClose, onSelect }) => {
 
   return (
     <div className='fixed inset-0 z-[70] flex items-center justify-center bg-[rgba(15,23,42,0.45)] backdrop-blur-sm px-4'>
-      <div className='w-full max-w-3xl rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white p-6'>
+      <div ref={panelRef} role='dialog' aria-modal='true' aria-label='Choisir dans le catalogue' tabIndex={-1} className='max-h-[85dvh] w-full max-w-3xl overflow-y-auto rounded-[var(--radius-2xl)] border border-[var(--border)] bg-white p-6'>
         <div className='flex items-center justify-between gap-3'>
           <div>
             <h2 className='text-lg font-semibold text-[var(--text-dark)]'>Insérer un article du catalogue</h2>

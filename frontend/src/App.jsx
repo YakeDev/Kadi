@@ -13,6 +13,7 @@ import Company from './pages/Company.jsx'
 import PlatformAdmin from './pages/PlatformAdmin.jsx'
 import { useAuth } from './hooks/useAuth.jsx'
 import ShellLayout from './components/ShellLayout.jsx'
+import NativeRuntime from './components/NativeRuntime.jsx'
 
 const ProtectedLayout = ({ children }) => {
   const { session, isLoading, isPasswordRecovery } = useAuth()
@@ -37,6 +38,7 @@ const ProtectedLayout = ({ children }) => {
 const App = () => {
   return (
     <>
+      <NativeRuntime />
       <Routes>
         <Route path='/login' element={<Login />} />
         <Route path='/reset-password' element={<ResetPassword />} />
