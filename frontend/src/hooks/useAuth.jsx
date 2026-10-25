@@ -2,6 +2,7 @@ import { createContext, useContext, useEffect, useMemo, useState, useCallback, u
 import { supabase, resolveCompanyLogo } from '../services/supabase.js'
 import { api } from '../services/api.js'
 import { getCurrentSession } from '../services/session.js'
+import { isNativeAndroid } from '../native/platform.js'
 
 const AuthContext = createContext()
 const emptyProfile = {
@@ -128,6 +129,10 @@ export const AuthProvider = ({ children }) => {
     setProfile(null)
     setPlatformAccess({ status: 'ready', isSuperAdmin: false })
     setIsPasswordRecovery(false)
+    if (isNativeAndroid()) {
+      const { clearNativeDocuments } = await import('../native/documents.js')
+      await clearNativeDocuments()
+    }
   }, [])
 
   const updateProfile = useCallback(async (payload) => {

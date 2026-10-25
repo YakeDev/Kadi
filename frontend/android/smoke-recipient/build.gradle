@@ -1,0 +1,13 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'com.ericaystudio.kadi.smokerecipient'
+    compileSdk rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId 'com.ericaystudio.kadi.smokerecipient'
+        minSdk rootProject.ext.minSdkVersion
+        targetSdk rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName '1.0'
+    }
+}

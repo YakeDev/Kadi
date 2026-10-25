@@ -1,0 +1,68 @@
+name: Android pilot APK
+on:
+  workflow_dispatch:
+  push:
+    branches: [main, 'feature/android-*']
+    paths: ['frontend/**', '.github/workflows/android.yml', 'scripts/android-smoke.mjs']
+  pull_request:
+    paths: ['frontend/**', '.github/workflows/android.yml', 'scripts/android-smoke.mjs']
+permissions:
+  contents: read
+concurrency:
+  group: android-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Install and verify frontend
+        working-directory: frontend
+        run: |
+          npm ci
+          npm run lint
+          npm test
+          npm audit --omit=dev --audit-level=moderate
+          npm run android:sync
+      - name: Build test APK
+        working-directory: frontend/android
+        run: |
+          ./gradlew --no-daemon -PkadiShareFixture :app:assembleDebug :app:lintDebug :smoke-recipient:assembleDebug
+          mkdir -p ../../android-artifacts
+          cp app/build/outputs/apk/debug/app-debug.apk ../../android-artifacts/Kadi-Android-pilote.apk
+          cd ../../android-artifacts
+          sha256sum Kadi-Android-pilote.apk > SHA256SUMS.txt
+      - name: Enable emulator acceleration
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Check Android launch, network, PDF share and system back
+        uses: reactivecircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2
+        with:
+          api-level: 35
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          script: node scripts/android-smoke.mjs
+      - name: Upload APK and device evidence
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kadi-android-pilote
+          path: android-artifacts/
+          if-no-files-found: error
+          retention-days: 30

@@ -209,7 +209,7 @@ const PaymentPanel = ({ invoice: initialInvoice, onClose, onUpdated }) => {
         aria-modal="true"
         aria-labelledby={`${prefix}-title`}
         tabIndex={-1}
-        className="h-[100dvh] w-full max-w-xl overflow-y-auto bg-white shadow-xl"
+        className="native-edge-panel h-[100dvh] w-full max-w-xl overflow-y-auto bg-white shadow-xl"
       >
         <header className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-[var(--border)] bg-white px-5 py-4">
           <div className="min-w-0">

@@ -446,7 +446,7 @@ const Clients = () => {
       {isDrawerOpen || editingClient ? (
         <div className='fixed inset-0 z-50 bg-[rgba(15,23,42,0.35)] backdrop-blur-sm'>
           <div className='flex h-full justify-end'>
-            <div ref={drawerRef} role='dialog' aria-modal='true' aria-labelledby='client-drawer-title' tabIndex={-1} className='relative flex h-[100dvh] w-full max-w-lg flex-col border-l border-[var(--border)] bg-white'>
+            <div ref={drawerRef} role='dialog' aria-modal='true' aria-labelledby='client-drawer-title' tabIndex={-1} className='native-edge-panel relative flex h-[100dvh] w-full max-w-lg flex-col border-l border-[var(--border)] bg-white'>
               <div className='flex shrink-0 items-center justify-between gap-4 border-b border-[var(--border)] px-5 py-4'>
                 <div>
                   <h2 id='client-drawer-title' className='text-lg font-semibold text-[var(--text-dark)]'>{editingClient ? 'Modifier le client' : 'Nouveau client'}</h2>
