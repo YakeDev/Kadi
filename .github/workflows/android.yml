@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 concurrency:
-  group: android-${{ github.ref }}
+  group: android-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
   apk:

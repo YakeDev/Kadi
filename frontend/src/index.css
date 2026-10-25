@@ -10,6 +10,9 @@ html[data-native-platform='android'] {
 }
 html[data-native-platform='android'] .app-topbar { padding-top: var(--native-top); }
 html[data-native-platform='android'] .app-main { padding-top: 96px; padding-bottom: calc(96px + var(--native-bottom)); }
+html[data-native-platform='android'] .native-edge-panel { margin-top: var(--native-top); height: calc(100dvh - var(--native-top) - var(--native-bottom)); }
+html[data-native-platform='android'] .invoice-editor-toolbar { top: calc(72px + var(--native-top)); }
+html[data-native-platform='android'] .invoice-preview-dialog { max-height: calc(100dvh - var(--native-top) - var(--native-bottom) - 40px); }
 .native-tab-bar { position: fixed; z-index: 40; inset-inline: 0; bottom: 0; display: flex; gap: 4px; padding: 6px 8px calc(6px + var(--native-bottom)); background: white; border-top: 1px solid var(--border); }
 .native-offline { position: fixed; z-index: 100; top: var(--native-top, 0px); inset-inline: 8px; display: flex; align-items: center; gap: 8px; padding: 10px 12px; border: 1px solid #fcd34d; border-radius: 10px; background: #fffbeb; color: #92400e; font-size: 12px; }
 @media (min-width: 1024px) {

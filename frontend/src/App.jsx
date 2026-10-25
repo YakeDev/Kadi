@@ -96,7 +96,7 @@ const App = () => {
         />
         <Route path='*' element={<Navigate to='/' replace />} />
       </Routes>
-      <Toaster position='top-right' />
+      <Toaster position='top-right' containerStyle={{ top: 'calc(16px + var(--native-top, 0px))' }} />
     </>
   )
 }
