@@ -157,31 +157,33 @@ try {
     "500",
   );
   await pause(500);
-  adb("shell", "uiautomator", "dump", "/sdcard/kadi-share.xml");
-  const chooser = adb("shell", "cat", "/sdcard/kadi-share.xml");
-  await writeFile(output + "/android-share.xml", chooser);
-  const receiver = (chooser.match(/<node\b[^>]*>/g) || []).find((node) =>
-    /(?:text|content-desc)="[^"]*Kadi PDF[^"]*"/.test(node),
-  );
-  assert.ok(
-    receiver,
-    "PDF recipient must be visible in the active Android chooser",
-  );
   await screenshot("android-share");
-  const bounds = receiver.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
-  assert.ok(bounds, "PDF recipient must have tappable bounds");
-  adb(
-    "shell",
-    "input",
-    "tap",
-    String(Math.round((Number(bounds[1]) + Number(bounds[3])) / 2)),
-    String(Math.round((Number(bounds[2]) + Number(bounds[4])) / 2)),
-  );
+  const centerOf = node => {
+    const bounds = node?.match(/bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"/);
+    return bounds ? [Math.round((Number(bounds[1]) + Number(bounds[3])) / 2), Math.round((Number(bounds[2]) + Number(bounds[4])) / 2)] : null;
+  };
   let receipt = "";
-  for (let i = 0; i < 20; i++) {
-    receipt = adb("logcat", "-d", "-s", "KadiPdfTest:I", "*:S");
-    if (receipt.includes("PDF_READ_OK")) break;
-    await pause(250);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    adb("shell", "uiautomator", "dump", "/sdcard/kadi-share.xml");
+    const chooser = adb("shell", "cat", "/sdcard/kadi-share.xml");
+    await writeFile(output + "/android-share.xml", chooser);
+    const nodes = chooser.match(/<node\b[^>]*>/g) || [];
+    const receiver = nodes.find(node => /(?:text|content-desc)="[^"]*Kadi PDF[^"]*"/.test(node));
+    const target = centerOf(receiver);
+    if (target) {
+      // Read current coordinates immediately before the tap. Android can
+      // reflow the chooser after accessibility starts or suggestions load.
+      adb("shell", "input", "tap", String(target[0]), String(target[1]));
+      for (let i = 0; i < 20; i++) {
+        receipt = adb("logcat", "-d", "-s", "KadiPdfTest:I", "*:S");
+        if (receipt.includes("PDF_READ_OK")) break;
+        await pause(250);
+      }
+      if (receipt.includes("PDF_READ_OK")) break;
+    }
+    const handle = centerOf(nodes.find(node => /resource-id="android:id\/drag"/.test(node))) || [Math.round(screenWidth / 2), Math.round(screenHeight * .61)];
+    adb("shell", "input", "swipe", String(handle[0]), String(handle[1]), String(handle[0]), "120", "700");
+    await pause(700);
   }
   assert.match(
     receipt,
