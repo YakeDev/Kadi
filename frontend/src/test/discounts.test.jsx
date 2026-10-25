@@ -61,3 +61,13 @@ test('discounts survive leaving and restoring the draft in the same tab', async 
   expect(screen.getByLabelText('Remise de la ligne 1 (%)')).toHaveValue(15)
   expect(screen.getByLabelText('Remise globale (%)')).toHaveValue(10)
 })
+
+test('an AI draft that changes currency also resets the previous fixed document discount', async () => {
+  render(<InvoiceForm invoice={invoice()} />)
+  selectDiscount('Remise globale', 'fixed', 25)
+  mocks.post.mockResolvedValueOnce({ data: { currency: 'CDF', items: [{ description: 'Article CDF', quantity: 1, unitPrice: 1000 }] } })
+  fireEvent.change(screen.getByLabelText('Décrire la facture (facultatif)'), { target: { value: 'Une prestation en CDF' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Générer via IA' }))
+  expect(await screen.findByLabelText('Remise globale (CDF)')).toHaveValue(0)
+  expect(screen.getByLabelText('Prix unitaire (CDF)')).toHaveValue(1000)
+})
