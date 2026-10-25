@@ -8,6 +8,11 @@ const packageId = "com.ericaystudio.kadi.pilot";
 const pause = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 const adb = (...args) =>
   execFileSync("adb", args, { encoding: "utf8", timeout: 30000 }).trim();
+const isKadiResumed = () => {
+  const lines = adb("shell", "dumpsys", "activity", "activities").split("\n").filter(line => /(?:topResumedActivity=|mResumedActivity:)/.test(line));
+  assert.ok(lines.length, "Android must report its resumed activity");
+  return lines.some(line => line.includes(packageId + "/"));
+};
 const screenshot = (name) =>
   writeFile(
     output + "/" + name + ".png",
@@ -304,11 +309,7 @@ try {
   await page
     .getByRole("dialog", { name: "Mon espace" })
     .waitFor({ state: "hidden" });
-  assert.match(
-    adb("shell", "dumpsys", "activity", "activities"),
-    /mResumedActivity:.*com\.ericaystudio\.kadi/,
-    "Back closes the account sheet without minimizing",
-  );
+  assert.equal(isKadiResumed(), true, "Back closes the account sheet without minimizing");
   for (const label of ["Devis", "Catalogue", "Clients", "Factures"]) {
     await page
       .getByRole("navigation", { name: "Navigation Android" })
@@ -341,9 +342,7 @@ try {
   );
   adb("shell", "input", "keyevent", "KEYCODE_BACK");
   await pause(500);
-  const minimized = !/mResumedActivity:.*com\.ericaystudio\.kadi/.test(
-    adb("shell", "dumpsys", "activity", "activities"),
-  );
+  const minimized = !isKadiResumed();
   assert.equal(minimized, true, "Back at login must minimize the app");
   assert.deepEqual(errors, []);
   await writeFile(
