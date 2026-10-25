@@ -84,11 +84,14 @@ const InvoiceEditor = ({
   defaultClientId,
   newClientId,
   variant = 'card',
+  documentType = 'invoice',
   invoice = null
 }) => {
   const isFullPage = variant === 'page'
+  const isQuote = documentType === 'quote'
+  const endpoint = isQuote ? '/quotes' : '/invoices'
   const { profile: companyProfile, user } = useAuth()
-  const draftKey = variant === 'page' ? invoiceDraftKey(user?.id, invoice) : null
+  const draftKey = variant === 'page' ? invoiceDraftKey(user?.id, invoice)?.replace('invoice-draft', isQuote ? 'quote-draft' : 'invoice-draft') : null
   const skipDraftSave = useRef(false)
   const [form, setForm] = useState(() => readInvoiceDraft(draftKey) || normalizeInvoiceForForm(invoice, defaultClientId))
   const savedFormSignature = useRef(JSON.stringify(normalizeInvoiceForForm(invoice, defaultClientId)))
@@ -101,7 +104,7 @@ const InvoiceEditor = ({
   const [isClientPickerOpen, setIsClientPickerOpen] = useState(false)
   const [catalogPicker, setCatalogPicker] = useState({ open: false, index: null })
   const isEditing = Boolean(invoice?.id)
-  const [isAIOpen, setIsAIOpen] = useState(!isFullPage)
+  const [isAIOpen, setIsAIOpen] = useState(!isFullPage && !isQuote)
   const [isNotesOpen, setIsNotesOpen] = useState(Boolean(form.notes))
   const previewRef = useModalFocus(isPreviewOpen, () => setIsPreviewOpen(false))
 
@@ -230,6 +233,11 @@ const InvoiceEditor = ({
     showErrorToast(toast.error, payload)
   }
 
+  const quotePayload = () => {
+    const { due_date, ...payload } = form
+    return { ...payload, valid_until: due_date || null, ...(isEditing ? { version: invoice.version } : {}) }
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (isSubmitting) return
@@ -241,17 +249,17 @@ const InvoiceEditor = ({
     setIsSubmitting(true)
     try {
       if (isEditing) {
-        await api.patch(`/invoices/${invoice.id}`, form)
+        await api.patch(`${endpoint}/${invoice.id}`, isQuote ? quotePayload() : form)
         savedFormSignature.current = JSON.stringify(form)
         skipDraftSave.current = true
         clearInvoiceDraft(draftKey)
-        notifySuccess('Facture mise à jour')
+        notifySuccess(isQuote ? 'Devis mis à jour' : 'Facture mise à jour')
         onUpdated?.()
       } else {
-        await api.post('/invoices', form)
+        await api.post(endpoint, isQuote ? quotePayload() : form)
         skipDraftSave.current = true
         clearInvoiceDraft(draftKey)
-        notifySuccess('Facture enregistrée avec succès')
+        notifySuccess(isQuote ? 'Devis enregistré avec succès' : 'Facture enregistrée avec succès')
         resetForm()
         onCreated?.()
       }
@@ -305,21 +313,21 @@ const InvoiceEditor = ({
       <form onSubmit={handleSubmit} className='invoice-editor'>
         <header className='invoice-editor-toolbar'>
           <div className='invoice-editor-title'>
-            {isFullPage ? <h1>{isEditing ? 'Modifier la facture' : 'Nouvelle facture'}</h1> : <h2>{isEditing ? 'Modifier la facture' : 'Nouvelle facture'}</h2>}
-            <span className='invoice-editor-badge'>{form.status === 'draft' ? 'Brouillon' : 'À émettre'}</span>
+            {isFullPage ? <h1>{isQuote ? (isEditing ? 'Modifier le devis' : 'Nouveau devis') : (isEditing ? 'Modifier la facture' : 'Nouvelle facture')}</h1> : <h2>{isQuote ? (isEditing ? 'Modifier le devis' : 'Nouveau devis') : (isEditing ? 'Modifier la facture' : 'Nouvelle facture')}</h2>}
+            <span className='invoice-editor-badge'>{form.status === 'draft' ? 'Brouillon' : isQuote ? 'Envoyé' : 'À émettre'}</span>
           </div>
           <div className='invoice-editor-actions'>
             <button type='button' className='btn-secondary' aria-haspopup='dialog' onClick={() => setIsPreviewOpen(true)}>
               <Eye aria-hidden='true' className='h-4 w-4' />Aperçu
             </button>
-            <button type='submit' aria-label={isSubmitting ? 'Enregistrement…' : isEditing ? 'Mettre à jour' : 'Enregistrer la facture'} disabled={isSubmitting || isGenerating || Boolean(calculationError)} className='btn-primary'>
+            <button type='submit' aria-label={isSubmitting ? 'Enregistrement…' : isEditing ? 'Mettre à jour' : `Enregistrer ${isQuote ? 'le devis' : 'la facture'}`} disabled={isSubmitting || isGenerating || Boolean(calculationError)} className='btn-primary'>
               {isSubmitting ? <Loader2 aria-hidden='true' className='h-4 w-4 animate-spin' /> : <Save aria-hidden='true' className='h-4 w-4' />}
               {isSubmitting ? 'Enregistrement…' : isEditing ? 'Mettre à jour' : 'Enregistrer'}
             </button>
           </div>
         </header>
 
-        <section className='invoice-editor-meta' aria-label='Client et dates de la facture'>
+        <section className='invoice-editor-meta' aria-label={`Client et dates du document`}>
           <div className='invoice-editor-client'>
             <div className='invoice-editor-client-label'>
               <label htmlFor='invoice-client'>Client</label>
@@ -330,9 +338,9 @@ const InvoiceEditor = ({
               <ChevronDown aria-hidden='true' className='h-4 w-4 shrink-0' />
             </button>
           </div>
-          <div><label htmlFor='issue-date'>Émise le</label><input id='issue-date' type='date' value={form.issue_date} onChange={(event) => updateField('issue_date', event.target.value)} className='input' required /></div>
-          <div><label htmlFor='due-date'>Échéance</label><input id='due-date' type='date' value={form.due_date} onChange={(event) => updateField('due_date', event.target.value)} className='input' /></div>
-          <div><label htmlFor='invoice-currency'>Devise de la facture</label><select id='invoice-currency' value={form.currency} onChange={(event) => updateField('currency', event.target.value)} className='input' aria-describedby='invoice-currency-help'><option value='USD'>USD</option><option value='CDF'>CDF</option></select></div>
+          <div><label htmlFor='issue-date'>{isQuote ? 'Émis le' : 'Émise le'}</label><input id='issue-date' type='date' value={form.issue_date} onChange={(event) => updateField('issue_date', event.target.value)} className='input' required /></div>
+          <div><label htmlFor='due-date'>{isQuote ? 'Valable jusqu’au' : 'Échéance'}</label><input id='due-date' type='date' value={form.due_date} onChange={(event) => updateField('due_date', event.target.value)} className='input' /></div>
+          <div><label htmlFor='invoice-currency'>{isQuote ? 'Devise du devis' : 'Devise de la facture'}</label><select id='invoice-currency' value={form.currency} onChange={(event) => updateField('currency', event.target.value)} className='input' aria-describedby='invoice-currency-help'><option value='USD'>USD</option><option value='CDF'>CDF</option></select></div>
         </section>
         <p id='invoice-currency-help' className='invoice-editor-hint'>Changer de devise remet les prix et les remises fixes à zéro.</p>
 
@@ -341,7 +349,7 @@ const InvoiceEditor = ({
             <section className='invoice-lines-panel' aria-labelledby='invoice-lines-title'>
               <div className='invoice-lines-heading'>
                 <h2 id='invoice-lines-title'>Prestations <span>{form.items.length} ligne{form.items.length > 1 ? 's' : ''}</span></h2>
-                <button type='button' className='invoice-text-action' aria-expanded={isAIOpen} aria-controls='invoice-ai' onClick={() => setIsAIOpen((prev) => !prev)}><Sparkles aria-hidden='true' className='h-4 w-4' />Aide IA</button>
+                <button type='button' hidden={isQuote} className='invoice-text-action' aria-expanded={isAIOpen} aria-controls='invoice-ai' onClick={() => setIsAIOpen((prev) => !prev)}><Sparkles aria-hidden='true' className='h-4 w-4' />Aide IA</button>
               </div>
               <div id='invoice-ai' className='invoice-ai' hidden={!isAIOpen}>
                 <label htmlFor='ia-prompt'>Décrire la facture (facultatif)</label>
@@ -365,11 +373,11 @@ const InvoiceEditor = ({
               <summary>Notes et conditions de paiement</summary>
               <textarea id='notes' aria-label='Notes et conditions de paiement' value={form.notes} onChange={(event) => updateField('notes', event.target.value)} placeholder='Conditions de paiement, message de remerciement…' className='textarea' rows={3} />
             </details>
-            {draftKey ? <p className='invoice-editor-hint' role='status'>{draftSaved ? 'Saisie conservée dans cet onglet. Enregistrez la facture avant de le fermer.' : 'La sauvegarde dans cet onglet est indisponible. Enregistrez la facture avant de quitter cette page.'}</p> : null}
+            {draftKey ? <p className='invoice-editor-hint' role='status'>{draftSaved ? 'Saisie conservée dans cet onglet. Enregistrez le document avant de le fermer.' : 'La sauvegarde dans cet onglet est indisponible. Enregistrez le document avant de quitter cette page.'}</p> : null}
             <button type='button' onClick={resetForm} className='invoice-reset'>Réinitialiser la saisie</button>
           </div>
           <div className='invoice-editor-summary'>
-            <InvoiceSummary form={form} totals={totals} onChange={updateField} onDiscountChange={(discount) => setForm((prev) => ({ ...prev, discount_type: discount.type, discount_value: discount.value }))} />
+            <InvoiceSummary documentType={documentType} form={form} totals={totals} onChange={updateField} onDiscountChange={(discount) => setForm((prev) => ({ ...prev, discount_type: discount.type, discount_value: discount.value }))} />
             {calculationError ? <p role='alert' className='invoice-calculation-error'>{calculationError}</p> : null}
           </div>
         </div>
@@ -377,8 +385,8 @@ const InvoiceEditor = ({
 
       {isPreviewOpen ? <div className='invoice-preview-overlay'>
         <div ref={previewRef} role='dialog' aria-modal='true' aria-labelledby='invoice-preview-title' tabIndex={-1} className='invoice-preview-dialog'>
-          <header><h2 id='invoice-preview-title'>Aperçu de la facture</h2><button type='button' className='btn-secondary' aria-label='Fermer l’aperçu' onClick={() => setIsPreviewOpen(false)}><X aria-hidden='true' className='h-4 w-4' /><span>Fermer</span></button></header>
-          <InvoicePreview company={companyProfile} client={selectedClient} invoice={form} maxItems={Infinity} />
+          <header><h2 id='invoice-preview-title'>Aperçu {isQuote ? 'du devis' : 'de la facture'}</h2><button type='button' className='btn-secondary' aria-label='Fermer l’aperçu' onClick={() => setIsPreviewOpen(false)}><X aria-hidden='true' className='h-4 w-4' /><span>Fermer</span></button></header>
+          <InvoicePreview documentType={documentType} company={companyProfile} client={selectedClient} invoice={isQuote ? { ...form, quote_number: invoice?.quote_number } : form} maxItems={Infinity} />
         </div>
       </div> : null}
       <ClientPickerModal isOpen={isClientPickerOpen} onClose={() => setIsClientPickerOpen(false)} onSelect={(client) => { updateField('client_id', client.id); setIsClientPickerOpen(false) }} />
@@ -389,7 +397,7 @@ const InvoiceEditor = ({
 
 const InvoiceForm = (props) => {
   const { user } = useAuth()
-  const identity = `${user?.id || 'anonymous'}:${props.invoice?.id || 'new'}:${props.invoice?.version ?? props.invoice?.updated_at ?? '0'}`
+  const identity = `${props.documentType || 'invoice'}:${user?.id || 'anonymous'}:${props.invoice?.id || 'new'}:${props.invoice?.version ?? props.invoice?.updated_at ?? '0'}`
   return <InvoiceEditor key={identity} {...props} />
 }
 

@@ -21,7 +21,7 @@ test('application branding is independent of the company and account details ope
   expect(sidebar.queryByText('Entreprise Démo')).not.toBeInTheDocument()
   expect(sidebar.queryByRole('img')).not.toBeInTheDocument()
   const nav = within(sidebar.getByRole('navigation', { name: 'Navigation principale' }))
-  expect(nav.getAllByRole('link').map((link) => link.textContent)).toEqual(['Tableau de bord', 'Factures', 'Clients', 'Catalogue', 'Mon entreprise'])
+  expect(nav.getAllByRole('link').map((link) => link.textContent)).toEqual(['Tableau de bord', 'Devis', 'Factures', 'Clients', 'Catalogue', 'Mon entreprise'])
   expect(screen.queryByText('eric@example.invalid')).not.toBeInTheDocument()
   fireEvent.click(screen.getByRole('button', { name: 'Menu du compte' }))
   const account = within(screen.getByRole('region', { name: 'Compte utilisateur' }))

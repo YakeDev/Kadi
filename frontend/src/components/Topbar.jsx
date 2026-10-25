@@ -90,7 +90,7 @@ const Topbar = () => {
         </div>
 
         <div className='flex shrink-0 items-center gap-3'>
-          {!['/', '/factures', '/factures/nouvelle'].includes(pathname) ? <Link to='/factures/nouvelle' className='btn-primary hidden xl:inline-flex'>
+          {!pathname.startsWith('/devis') && !['/', '/factures', '/factures/nouvelle'].includes(pathname) ? <Link to='/factures/nouvelle' className='btn-primary hidden xl:inline-flex'>
             <Plus aria-hidden='true' className='h-4 w-4' />Nouvelle facture
           </Link> : null}
           <div ref={profileMenuRef} className='relative'
