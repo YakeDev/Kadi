@@ -340,7 +340,7 @@ const InvoiceEditor = ({
           </div>
           <div><label htmlFor='issue-date'>{isQuote ? 'Émis le' : 'Émise le'}</label><input id='issue-date' type='date' value={form.issue_date} onChange={(event) => updateField('issue_date', event.target.value)} className='input' required /></div>
           <div><label htmlFor='due-date'>{isQuote ? 'Valable jusqu’au' : 'Échéance'}</label><input id='due-date' type='date' value={form.due_date} onChange={(event) => updateField('due_date', event.target.value)} className='input' /></div>
-          <div><label htmlFor='invoice-currency'>Devise de la facture</label><select id='invoice-currency' value={form.currency} onChange={(event) => updateField('currency', event.target.value)} className='input' aria-describedby='invoice-currency-help'><option value='USD'>USD</option><option value='CDF'>CDF</option></select></div>
+          <div><label htmlFor='invoice-currency'>{isQuote ? 'Devise du devis' : 'Devise de la facture'}</label><select id='invoice-currency' value={form.currency} onChange={(event) => updateField('currency', event.target.value)} className='input' aria-describedby='invoice-currency-help'><option value='USD'>USD</option><option value='CDF'>CDF</option></select></div>
         </section>
         <p id='invoice-currency-help' className='invoice-editor-hint'>Changer de devise remet les prix et les remises fixes à zéro.</p>
 
