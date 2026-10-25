@@ -16,7 +16,9 @@ const statuses = {
   partially_paid: ['Partiellement payée', '#fff4db', '#92400e']
 }
 
-export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
+export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'invoice' } = {}) => {
+  const isQuote = kind === 'quote'
+  const title = isQuote ? 'DEVIS' : 'FACTURE'
   const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true })
   doc.registerFont('Inter', fileURLToPath(import.meta.resolve('@fontsource/inter/files/inter-latin-400-normal.woff')))
   doc.registerFont('Inter-Semibold', fileURLToPath(import.meta.resolve('@fontsource/inter/files/inter-latin-600-normal.woff')))
@@ -66,7 +68,7 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   const nextPage = (withTable = false) => {
     doc.addPage()
     currentPage += 1
-    text('FACTURE - SUITE', left, 48, 140, 10, true, colors.accent)
+    text(`${title} - SUITE`, left, 48, 140, 10, true, colors.accent)
     fitText(invoice.invoice_number || '-', left + 150, 49, width - 150, 9)
     rule(72)
     y = 88
@@ -85,8 +87,10 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   const metaX = right - metaWidth
   const issuerWidth = width - metaWidth - 32
   doc.rect(left, 32, width, 2).fill(colors.accent)
-  text('FACTURE', metaX, 48, metaWidth, 27, true, colors.ink, 'right')
-  const [status, statusBackground, statusColor] = statuses[invoice.status] || statuses.sent
+  text(title, metaX, 48, metaWidth, 27, true, colors.ink, 'right')
+  const [status, statusBackground, statusColor] = isQuote
+    ? [invoice.status === 'draft' ? 'Brouillon' : 'Envoyé', '#eff6ff', '#1d4ed8']
+    : statuses[invoice.status] || statuses.sent
   font(8, true)
   const badgeWidth = doc.widthOfString(status) + 22
   doc.roundedRect(right - badgeWidth, 87, badgeWidth, 22, 5).fill(statusBackground)
@@ -96,9 +100,9 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   reference.forEach((line, index) => text(line, metaX, 139 + index * 13.5, metaWidth, 9, true, colors.ink, 'right'))
   const datesY = 139 + reference.length * 13.5 + 15
   const dateWidth = (metaWidth - 14) / 2
-  text('ÉMISE LE', metaX, datesY, dateWidth, 7.5, true, colors.muted)
+  text(isQuote ? 'ÉMIS LE' : 'ÉMISE LE', metaX, datesY, dateWidth, 7.5, true, colors.muted)
   text(date(invoice.issue_date), metaX, datesY + 14, dateWidth, 9)
-  text('ÉCHÉANCE', metaX + dateWidth + 14, datesY, dateWidth, 7.5, true, colors.muted, 'right')
+  text(isQuote ? 'VALABLE JUSQU’AU' : 'ÉCHÉANCE', metaX + dateWidth + 14, datesY, dateWidth, 7.5, true, colors.muted, 'right')
   text(date(invoice.due_date), metaX + dateWidth + 14, datesY + 14, dateWidth, 9, false, colors.ink, 'right')
   const metadataBottom = datesY + 30
 
@@ -117,7 +121,7 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
 
   const client = invoice.client || {}
   const clientLines = [
-    { value: 'FACTURÉ À', size: 7.5, bold: true, color: colors.muted, gap: 7 },
+    { value: isQuote ? 'PROPOSÉ À' : 'FACTURÉ À', size: 7.5, bold: true, color: colors.muted, gap: 7 },
     { value: client.company_name || 'Client non défini', size: 12, bold: true, gap: 4 },
     ...[client.contact_name, client.address, client.email, client.phone].filter(Boolean)
       .map((value) => ({ value, size: 9, gap: 2 }))
@@ -204,7 +208,7 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
   if (globalDiscountAmount > 0) summaryRows.push([`Remise globale${invoice.discount_type === 'percent' ? ` (${Number(invoice.discount_value)} %)` : ''}`, -globalDiscountAmount])
   if (hasTax && discountAmount > 0) summaryRows.push(['Net avant taxe', Number(invoice.subtotal_amount) - discountAmount])
   if (hasTax) summaryRows.push([`Taxe (${Number(invoice.tax_rate || 0)} %)`, invoice.tax_amount])
-  const showPayments = invoice.status !== 'draft'
+  const showPayments = !isQuote && invoice.status !== 'draft'
   const settlement = invoicePaymentSummary(invoice)
   const summaryHeight = 78 + (summaryRows.length ? summaryRows.length * 21 + 15 : 0) + (showPayments ? 74 : 0)
   if (y + 22 + summaryHeight > bottom) nextPage()
@@ -255,6 +259,22 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null) => {
     flow('NOTES ET MODALITÉS', left, width, 8, true, colors.muted)
     y += 8
     flow(invoice.notes, left, width, 9, false, colors.muted)
+  }
+  if (!isQuote && (invoice.quote_number || invoice.po_reference)) {
+    if (y + 60 > bottom) nextPage()
+    if (invoice.quote_number) flow(`Devis d’origine : ${invoice.quote_number}`, left, width, 9, true)
+    if (invoice.po_reference) flow(`Référence PO : ${invoice.po_reference}`, left, width, 9, true)
+    y += 14
+  }
+  if (showPayments && invoice.payments?.length) {
+    if (y + 55 > bottom) nextPage()
+    flow('VERSEMENTS REÇUS', left, width, 9, true, colors.accent)
+    y += 8
+    const methods = { cash: 'Espèces', bank_transfer: 'Virement', mobile_money: 'Mobile Money', other: 'Autre', legacy: 'Reprise historique' }
+    for (const payment of invoice.payments) {
+      flow(`${date(payment.paid_on)} · ${money(payment.amount)} · ${methods[payment.method] || payment.method}${payment.reference ? ` · ${payment.reference}` : ''}`, left, width, 8.5)
+      y += 5
+    }
   }
   const pages = doc.bufferedPageRange()
   for (let index = pages.start; index < pages.start + pages.count; index += 1) {

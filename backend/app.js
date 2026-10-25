@@ -4,6 +4,7 @@ import helmet from 'helmet'
 import morgan from 'morgan'
 import dotenv from 'dotenv'
 import invoicesRouter from './routes/invoices.js'
+import quotesRouter from './routes/quotes.js'
 import aiRouter from './routes/ai.js'
 import clientsRouter from './routes/clients.js'
 import productsRouter from './routes/products.js'
@@ -148,6 +149,7 @@ app.get('/api/health', (req, res) => {
 })
 
 app.use('/api/invoices', invoicesRouter)
+app.use('/api/quotes', quotesRouter)
 app.use('/api/ai', aiRouter)
 app.use('/api/clients', clientsRouter)
 app.use('/api/products', productsRouter)
