@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { ArrowLeft, UserPlus, X, Loader2 } from 'lucide-react'
 import toast from 'react-hot-toast'
 import InvoiceForm from '../components/InvoiceForm.jsx'
+import ClientIdentifiers from '../components/ClientIdentifiers.jsx'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import { useModalFocus } from '../hooks/useModalFocus.js'
@@ -22,6 +23,9 @@ const InvoiceCreate = ({ documentType = 'invoice' }) => {
 		company_name: '',
 		contact_name: '',
 		email: '',
+		nif: '',
+		national_id: '',
+		rccm: '',
 	})
 	const [isCreatingClient, setIsCreatingClient] = useState(false)
   const [newClientId, setNewClientId] = useState(null)
@@ -77,9 +81,12 @@ const InvoiceCreate = ({ documentType = 'invoice' }) => {
 				company_name: newClient.company_name.trim(),
 				contact_name: newClient.contact_name.trim() || null,
 				email: newClient.email.trim() || null,
+				nif: newClient.nif.trim() || null,
+				national_id: newClient.national_id.trim() || null,
+				rccm: newClient.rccm.trim() || null,
 			})
 			toast.success('Client ajouté', { icon: '✅' })
-			setNewClient({ company_name: '', contact_name: '', email: '' })
+			setNewClient({ company_name: '', contact_name: '', email: '', nif: '', national_id: '', rccm: '' })
 			setIsClientModalOpen(false)
       setClients((prev) => [createdClient, ...prev.filter((client) => client.id !== createdClient.id)])
       setNewClientId(createdClient.id)
@@ -181,6 +188,7 @@ const InvoiceCreate = ({ documentType = 'invoice' }) => {
 									/>
 								</div>
 							</div>
+							<ClientIdentifiers values={newClient} onChange={handleNewClientChange} idPrefix='invoicecreate-client' />
 							<div className='flex flex-col gap-3 sm:flex-row sm:justify-end'>
 								<button type='button' className='btn-ghost justify-center' onClick={() => setIsClientModalOpen(false)} disabled={isCreatingClient}>
 									Annuler

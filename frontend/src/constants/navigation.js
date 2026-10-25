@@ -7,7 +7,7 @@ export const navigationLinks = [
   {
     to: '/devis',
     label: 'Devis',
-    icon: 'FileText'
+    icon: 'FilePenLine'
   },
   {
     to: '/factures',

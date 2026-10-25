@@ -6,6 +6,7 @@ import InvoiceList from '../components/InvoiceList.jsx'
 import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import PageHeader from '../components/PageHeader.jsx'
+import ClientIdentifiers from '../components/ClientIdentifiers.jsx'
 
 const Facture = () => {
   const [clients, setClients] = useState([])
@@ -13,7 +14,7 @@ const Facture = () => {
   const [refreshKey] = useState(0)
   const [isClientModalOpen, setIsClientModalOpen] = useState(false)
   const [isCreatingClient, setIsCreatingClient] = useState(false)
-  const [newClient, setNewClient] = useState({ company_name: '', contact_name: '', email: '' })
+  const [newClient, setNewClient] = useState({ company_name: '', contact_name: '', email: '', nif: '', national_id: '', rccm: '' })
 
   const hasClients = useMemo(() => clients.length > 0, [clients])
 
@@ -77,10 +78,13 @@ const Facture = () => {
       await api.post('/clients', {
         company_name: newClient.company_name.trim(),
         contact_name: newClient.contact_name.trim() || null,
-        email: newClient.email.trim() || null
+        email: newClient.email.trim() || null,
+        nif: newClient.nif.trim() || null,
+        national_id: newClient.national_id.trim() || null,
+        rccm: newClient.rccm.trim() || null
       })
       toast.success('Client ajouté', { icon: '✅' })
-      setNewClient({ company_name: '', contact_name: '', email: '' })
+      setNewClient({ company_name: '', contact_name: '', email: '', nif: '', national_id: '', rccm: '' })
       setIsClientModalOpen(false)
       await fetchClients()
       if (!hadClients) {
@@ -184,6 +188,7 @@ const Facture = () => {
                     />
                   </div>
                 </div>
+                <ClientIdentifiers values={newClient} onChange={handleNewClientChange} idPrefix='facture-client' />
                 <div className='flex flex-col gap-3 sm:flex-row sm:justify-end'>
                   <button type='button' className='btn-ghost justify-center' onClick={closeClientModal} disabled={isCreatingClient}>
                     Annuler

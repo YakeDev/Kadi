@@ -4,6 +4,7 @@ import { MemoryRouter,Routes,Route } from 'react-router-dom'
 import InvoiceForm from '../components/InvoiceForm.jsx'
 import QuoteConversion from '../components/QuoteConversion.jsx'
 import QuoteDetail from '../pages/QuoteDetail.jsx'
+import Quotes from '../pages/Quotes.jsx'
 const mocks=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),patch:vi.fn()}))
 vi.mock('../services/api.js',()=>({api:mocks}))
 vi.mock('../hooks/useAuth.jsx',()=>({useAuth:()=>({user:{id:'quotes-user'},profile:{company:'Test'}})}))
@@ -53,4 +54,17 @@ test('a failed conversion keeps the entered deposit and retry keys, including th
  await waitFor(()=>expect(mocks.post).toHaveBeenCalledTimes(2))
  expect(mocks.post.mock.calls[1][1]).toEqual(mocks.post.mock.calls[0][1])
  expect(mocks.post.mock.calls[0][1].payment).toMatchObject({amount:150,paid_on:'2026-01-05'})
+})
+
+test('quote list filters and page size are submitted together and converted records stay view only', async () => {
+  mocks.get.mockResolvedValue({ data: { data: [{ ...quote(), status: 'converted', client: { company_name: 'Client Démo' } }], pagination: { total: 1, totalPages: 1 } } })
+  render(<MemoryRouter><Quotes /></MemoryRouter>)
+  expect(await screen.findByRole('link', { name: 'DEV-TEST' })).toBeInTheDocument()
+  expect(screen.queryByRole('link', { name: 'Modifier' })).not.toBeInTheDocument()
+  expect(screen.queryByRole('button', { name: 'Télécharger DEV-TEST' })).not.toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Convertis' }))
+  fireEvent.change(screen.getByLabelText('Rechercher un devis'), { target: { value: 'Client Démo' } })
+  await waitFor(() => expect(mocks.get).toHaveBeenLastCalledWith('/quotes', expect.objectContaining({ params: expect.objectContaining({ status: 'converted', search: 'Client Démo' }) })))
+  fireEvent.change(screen.getByRole('combobox'), { target: { value: '25' } })
+  await waitFor(() => expect(mocks.get).toHaveBeenLastCalledWith('/quotes', expect.objectContaining({ params: { page: 1, pageSize: 25, status: 'converted', search: 'Client Démo' } })))
 })

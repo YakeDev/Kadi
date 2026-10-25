@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import {
 	LayoutDashboard,
 	FileText,
+	FilePenLine,
 	Users,
 	Package,
 	Building2,
@@ -12,6 +13,7 @@ import AppBrand from './AppBrand.jsx'
 const iconMap = {
 	LayoutDashboard,
 	FileText,
+	FilePenLine,
 	Package,
 	Building2,
 	Users,

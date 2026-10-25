@@ -95,6 +95,9 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4,
         {client?.address ? <p className='whitespace-pre-line'>{client.address}</p> : null}
         {client?.email ? <p>{client.email}</p> : null}
         {client?.phone ? <p>{client.phone}</p> : null}
+        {client?.nif ? <p>NIF : {client.nif}</p> : null}
+        {client?.national_id ? <p>ID. Nat. : {client.national_id}</p> : null}
+        {client?.rccm ? <p>RCCM : {client.rccm}</p> : null}
       </div>
 
       <div className='mt-6'>
