@@ -1,0 +1,59 @@
+name: Download Kadi Android pilot
+on:
+  push:
+    branches: [delivery/android-pilot-download-20261025]
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Verify the successful Android build
+        run: |
+          gh api repos/YakeDev/Kadi/actions/runs/40202621695 > run.json
+          python3 - <<'PY'
+          import json
+          run = json.load(open('run.json'))
+          assert run['status'] == 'completed' and run['conclusion'] == 'success'
+          assert run['head_sha'] == '163254c92a37589d14ee22ea71bed7181320ca48'
+          PY
+      - name: Download the exact tested APK
+        run: gh run download 40202621695 --repo YakeDev/Kadi --name kadi-android-pilote --dir verified
+      - name: Prepare clean download files
+        run: |
+          mkdir -p public-download
+          python3 - <<'PY'
+          import hashlib, shutil, zipfile
+          from pathlib import Path
+          source = Path('verified/Kadi-Android-pilote.apk')
+          assert hashlib.sha256(source.read_bytes()).hexdigest() == 'af84e34b266025e62360d4d288c1bfc6a798e62547044d092af0e94659b778d4'
+          output = Path('public-download')
+          apk = output / source.name
+          shutil.copyfile(source, apk)
+          with zipfile.ZipFile(output / 'Kadi-Android-pilote.zip', 'w', zipfile.ZIP_DEFLATED) as archive:
+              archive.write(apk, apk.name)
+          with (output / 'SHA256SUMS.txt').open('w') as sums:
+              for path in [apk, output / 'Kadi-Android-pilote.zip']:
+                  sums.write(hashlib.sha256(path.read_bytes()).hexdigest() + '  ' + path.name + '\n')
+          PY
+      - name: Make the pilot available through direct HTTPS downloads
+        run: |
+          cat > pilot-notes.md <<'NOTES'
+          Première version de test Android de Kadi, utilisant les comptes et les données du site.
+          
+          Télécharger l'APK, ou le ZIP contenant uniquement l'APK, puis installer Kadi Pilote sur le téléphone.
+          
+          Connexion Internet nécessaire. Version pilote signée pour les essais ; recette physique à réaliser avant diffusion publique. Les liens de confirmation et de récupération du mot de passe ouvrent le site dans le navigateur.
+          
+          Fichier identique à l'APK validé du run 40202621695, source 163254c92a37589d14ee22ea71bed7181320ca48. Les captures de vérification et l'application destinataire de test ne sont pas incluses.
+          NOTES
+          gh release create android-pilot-0.1.0 public-download/Kadi-Android-pilote.apk public-download/Kadi-Android-pilote.zip public-download/SHA256SUMS.txt --repo YakeDev/Kadi --target 163254c92a37589d14ee22ea71bed7181320ca48 --prerelease --latest=false --title "Kadi Android — version pilote 0.1.0" --notes-file pilot-notes.md
