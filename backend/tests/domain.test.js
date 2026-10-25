@@ -1,6 +1,25 @@
 import { describe, test, expect } from 'vitest'
-import { sanitizeInvoicePayload, sanitizeProductPayload, validateInvoiceState } from '../utils/validation.js'
+import { sanitizeClientPayload, sanitizeInvoicePayload, sanitizeProductPayload, validateInvoiceState } from '../utils/validation.js'
 import { computeTotals } from '../utils/money.js'
+
+describe('Optional client administrative references', () => {
+  test('preserves text identifiers and leading zeroes, trims whitespace and permits omission', () => {
+    expect(sanitizeClientPayload({ company_name: 'Client', nif: ' 000123 ', national_id: ' 01-ABC ', rccm: ' CD/LSH/RCCM/26-B-123 ' }))
+      .toMatchObject({ nif: '000123', national_id: '01-ABC', rccm: 'CD/LSH/RCCM/26-B-123' })
+    expect(sanitizeClientPayload({ company_name: 'Client' })).toEqual({ company_name: 'Client' })
+  })
+  test('allows clearing one identifier without touching other client fields', () => {
+    expect(sanitizeClientPayload({ nif: '  ', national_id: null }, { partial: true })).toEqual({ nif: null, national_id: null })
+  })
+  test('rejects overlong or nontext identifiers and still rejects ownership changes', () => {
+    for (const field of ['nif', 'national_id', 'rccm']) {
+      for (const value of [123, {}, true, 'x'.repeat(161)]) {
+        expect(() => sanitizeClientPayload({ [field]: value }, { partial: true })).toThrow()
+      }
+    }
+    expect(() => sanitizeClientPayload({ tenant_id: 'forged', nif: '123' }, { partial: true })).toThrow('protégés')
+  })
+})
 
 describe('Exact bounded invoice calculations', () => {
   test('rounds lines half up before adding them', () => {

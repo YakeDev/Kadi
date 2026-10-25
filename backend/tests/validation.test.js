@@ -75,6 +75,31 @@ describe('Validation des payloads métier', () => {
     app = module.default
   })
 
+  test('creates clients with optional text identifiers scoped to the authenticated tenant', async () => {
+    const clients = {
+      insert: jest.fn().mockReturnThis(), select: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: { id: 'client-1', nif: '000123' }, error: null })
+    }
+    supabaseMock.from.mockImplementation(table => table === 'clients' ? clients : profilesQuery)
+    const response = await request(app).post('/api/clients').set('Authorization', 'Bearer token')
+      .send({ company_name: ' Acme ', nif: ' 000123 ', national_id: ' 01-ABC ', rccm: '' })
+    expect(response.status).toBe(201)
+    expect(clients.insert).toHaveBeenCalledWith({ company_name: 'Acme', nif: '000123', national_id: '01-ABC', rccm: null, tenant_id: 'tenant-1' })
+  })
+
+  test('clears an identifier with a tenant-scoped update and leaves omitted fields unchanged', async () => {
+    const clients = {
+      update: jest.fn().mockReturnThis(), eq: jest.fn().mockReturnThis(), select: jest.fn().mockReturnThis(),
+      single: jest.fn().mockResolvedValue({ data: { id: 'client-1', nif: null }, error: null })
+    }
+    supabaseMock.from.mockImplementation(table => table === 'clients' ? clients : profilesQuery)
+    const response = await request(app).patch('/api/clients/client-1').set('Authorization', 'Bearer token').send({ nif: '' })
+    expect(response.status).toBe(200)
+    expect(clients.update).toHaveBeenCalledWith({ nif: null })
+    expect(clients.eq).toHaveBeenCalledWith('id', 'client-1')
+    expect(clients.eq).toHaveBeenCalledWith('tenant_id', 'tenant-1')
+  })
+
   test('rejects protected fields on client update', async () => {
     const response = await request(app)
       .patch('/api/clients/client-1')
