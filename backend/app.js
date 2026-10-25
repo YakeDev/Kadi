@@ -9,6 +9,7 @@ import aiRouter from './routes/ai.js'
 import clientsRouter from './routes/clients.js'
 import productsRouter from './routes/products.js'
 import authRouter from './routes/auth.js'
+import platformRouter from './routes/platform.js'
 
 dotenv.config()
 
@@ -154,6 +155,7 @@ app.use('/api/ai', aiRouter)
 app.use('/api/clients', clientsRouter)
 app.use('/api/products', productsRouter)
 app.use('/api/auth', authRouter)
+app.use('/api/platform', platformRouter)
 
 // eslint-disable-next-line no-unused-vars
 app.use((error, req, res, next) => {
