@@ -1,0 +1,116 @@
+name: KADI - Encrypted Supabase Backup
+
+# Manual on main; isolated one-time test on the non-production operations branch.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ops/secure-supabase-backup]
+    paths:
+      - .github/kadi-backup-run-request.txt
+
+permissions:
+  contents: read
+
+concurrency:
+  group: kadi-production-backup
+  cancel-in-progress: false
+
+jobs:
+  encrypted-backup:
+    if: >-
+      github.repository == 'YakeDev/Kadi' &&
+      ((github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main') ||
+      (github.event_name == 'push' && github.ref == 'refs/heads/ops/secure-supabase-backup' &&
+      github.event.head_commit.message == 'ops(backup): trigger encrypted snapshot'))
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - name: Checkout reviewed main
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+
+      - name: Backup database and Storage to temporary runner directory
+        shell: bash
+        env:
+          KADI_BACKUP_DATABASE_URL: ${{ secrets.KADI_BACKUP_DATABASE_URL }}
+          KADI_BACKUP_SERVICE_ROLE_KEY: ${{ secrets.KADI_BACKUP_SERVICE_ROLE_KEY }}
+          KADI_BACKUP_PASSPHRASE: ${{ secrets.KADI_BACKUP_PASSPHRASE }}
+          KADI_PROJECT_REF: giksqprkorjbgikprksb
+        run: |
+          set -euo pipefail
+          umask 077
+          if [[ -z "${KADI_BACKUP_DATABASE_URL:-}" ]]; then
+            echo "::error::KADI_BACKUP_DATABASE_URL is missing"
+            exit 1
+          fi
+          if [[ -z "${KADI_BACKUP_SERVICE_ROLE_KEY:-}" ]]; then
+            echo "::error::KADI_BACKUP_SERVICE_ROLE_KEY is missing"
+            exit 1
+          fi
+          if [[ ${#KADI_BACKUP_PASSPHRASE} -lt 32 ]]; then
+            echo "::error::KADI_BACKUP_PASSPHRASE must have at least 32 characters"
+            exit 1
+          fi
+          node --input-type=module <<'NODE'
+          const u = new URL(process.env.KADI_BACKUP_DATABASE_URL);
+          const ref = process.env.KADI_PROJECT_REF;
+          const direct = u.hostname === `db.${ref}.supabase.co` && decodeURIComponent(u.username) === 'postgres';
+          const pooled = u.hostname.endsWith('.pooler.supabase.com') && decodeURIComponent(u.username) === `postgres.${ref}`;
+          if (u.protocol !== 'postgresql:' && u.protocol !== 'postgres:') throw Error('Only PostgreSQL URLs are allowed');
+          if (!direct && !pooled) throw Error('Database URL does not target the intended KADI project');
+          if (u.searchParams.get('sslmode') === 'disable') throw Error('SSL cannot be disabled');
+          NODE
+
+          private_dir="$RUNNER_TEMP/kadi-backup"
+          mkdir -p "$private_dir/plain/storage" "$private_dir/encrypted"
+          echo "KADI_BACKUP_DIR=$private_dir" >> "$GITHUB_ENV"
+          # Runner has Docker, even when the owner has no local computer/Docker.
+          # A single pg_dump snapshot covers the public, auth and storage schemas.
+          docker run --rm --network host --user "$(id -u):$(id -g)" \
+            -e KADI_BACKUP_DATABASE_URL -e PGSSLMODE=require \
+            -v "$private_dir/plain:/backup" postgres:17 \
+            sh -euc 'pg_dump --format=custom --no-owner --no-acl --schema=public --schema=auth --schema=storage --file=/backup/database.pgdump --dbname="$KADI_BACKUP_DATABASE_URL"; pg_restore --list /backup/database.pgdump >/dev/null'
+
+          # Metadata count must match downloaded object count (fail closed).
+          count="$(docker run --rm --network host \
+            -e KADI_BACKUP_DATABASE_URL -e PGSSLMODE=require \
+            -e KADI_COUNT_SQL="select count(*) from storage.objects where bucket_id = 'company-logos'" \
+            postgres:17 sh -euc 'psql --no-psqlrc --tuples-only --no-align --set ON_ERROR_STOP=1 --dbname="$KADI_BACKUP_DATABASE_URL" --command="$KADI_COUNT_SQL"')"
+          count="$(echo "$count" | tr -d '[:space:]')"
+          [[ "$count" =~ ^[0-9]+$ ]] || { echo "::error::Invalid storage count"; exit 1; }
+          KADI_EXPECTED_OBJECTS="$count" \
+            KADI_BACKUP_OUTPUT="$private_dir/plain" \
+            KADI_BACKUP_SERVICE_ROLE_KEY="$KADI_BACKUP_SERVICE_ROLE_KEY" \
+            node scripts/kadi-backup-storage.mjs
+          cat > "$private_dir/plain/README.txt" <<'TXT'
+          KADI encrypted backup (public + auth + storage SQL archive and all company-logos files).
+          The SQL snapshot includes Supabase-managed schemas: restoration requires a compatible
+          Supabase environment and a carefully reviewed pg_restore plan; do not blindly restore
+          managed schemas into the live service. This archive is not proof of successful restoration.
+          TXT
+
+          # Only encrypted bytes leave the temporary hosted runner.
+          tar -C "$private_dir/plain" -cf - . | \
+            gpg --batch --yes --pinentry-mode loopback --no-symkey-cache \
+              --symmetric --cipher-algo AES256 --s2k-mode 3 \
+              --s2k-digest-algo SHA512 --s2k-count 65011712 \
+              --passphrase-fd 3 \
+              --output "$private_dir/encrypted/kadi-backup.tar.gpg" \
+              3<<< "$KADI_BACKUP_PASSPHRASE"
+
+          # Verify archive can be decrypted and every TAR member read.
+          gpg --batch --yes --quiet --pinentry-mode loopback --passphrase-fd 3 \
+            --decrypt "$private_dir/encrypted/kadi-backup.tar.gpg" \
+            3<<< "$KADI_BACKUP_PASSPHRASE" | tar -tf - > /dev/null
+
+          echo "Encrypted archive verified; remember to download it off GitHub." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload only ciphertext (30-day retention)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: kadi-encrypted-backup-${{ github.run_id }}
+          path: ${{ env.KADI_BACKUP_DIR }}/encrypted/kadi-backup.tar.gpg
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 30
