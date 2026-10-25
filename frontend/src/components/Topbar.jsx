@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Menu, X, Plus, ChevronDown, LayoutDashboard, FileText, FilePenLine, Users, Package, Building2, LogOut } from 'lucide-react'
+import { Menu, X, Plus, ChevronDown, LayoutDashboard, FileText, FilePenLine, Users, Package, Building2, LogOut, ShieldCheck } from 'lucide-react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
@@ -8,8 +8,9 @@ import AppBrand from './AppBrand.jsx'
 const mobileIcons = { LayoutDashboard, FileText, FilePenLine, Building2, Package, Users }
 
 const Topbar = () => {
-  const { user, profile, logout } = useAuth()
+  const { user, profile, logout, isSuperAdmin } = useAuth()
   const { pathname } = useLocation()
+  const isPlatformPage = pathname.startsWith('/administration') && isSuperAdmin
   const [isMobileNavOpen, setIsMobileNavOpen] = useState(false)
   const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false)
   const mobileNavRef = useRef(null)
@@ -72,10 +73,10 @@ const Topbar = () => {
             className='inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-[var(--radius-md)] border border-[var(--border)] text-[var(--text-muted)] lg:hidden'>
             {isMobileNavOpen ? <X aria-hidden='true' className='h-5 w-5' /> : <Menu aria-hidden='true' className='h-5 w-5' />}
           </button>
-          <div className='min-w-0 lg:hidden'><AppBrand compact subtitle={companyName} /></div>
+          <div className='min-w-0 lg:hidden'><AppBrand compact subtitle={isPlatformPage ? 'Administration' : companyName} /></div>
           <div className='hidden min-w-0 lg:block'>
-            <p className='text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]'>Entreprise</p>
-            <p className='truncate text-sm font-semibold text-[var(--text-dark)]' title={companyName}>{companyName}</p>
+            <p className='text-[11px] font-medium uppercase tracking-wide text-[var(--text-muted)]'>{isPlatformPage ? 'Plateforme' : 'Entreprise'}</p>
+            <p className='truncate text-sm font-semibold text-[var(--text-dark)]' title={isPlatformPage ? 'Kadi' : companyName}>{isPlatformPage ? 'Kadi · Super administrateur' : companyName}</p>
           </div>
           {isMobileNavOpen ? <nav id='mobile-navigation' aria-label='Navigation mobile'
             className='absolute inset-x-4 top-[80px] flex max-h-[calc(100dvh-96px)] flex-col gap-1 overflow-y-auto rounded-[var(--radius-lg)] border border-[var(--border)] bg-white p-2 shadow-lg lg:hidden'>
@@ -86,11 +87,12 @@ const Topbar = () => {
                 <Icon aria-hidden='true' className='h-4 w-4' />{link.label}
               </NavLink>
             })}
+            {isSuperAdmin ? <Link to='/administration' onClick={() => setIsMobileNavOpen(false)} className='flex min-h-11 items-center gap-3 border-t border-[var(--border)] px-3 py-2 text-sm font-medium text-[var(--primary)]'><ShieldCheck aria-hidden='true' className='h-4 w-4' />Administration</Link> : null}
           </nav> : null}
         </div>
 
         <div className='flex shrink-0 items-center gap-3'>
-          {!pathname.startsWith('/devis') && !['/', '/factures', '/factures/nouvelle'].includes(pathname) ? <Link to='/factures/nouvelle' className='btn-primary hidden xl:inline-flex'>
+          {!pathname.startsWith('/devis') && !pathname.startsWith('/administration') && !['/', '/factures', '/factures/nouvelle'].includes(pathname) ? <Link to='/factures/nouvelle' className='btn-primary hidden xl:inline-flex'>
             <Plus aria-hidden='true' className='h-4 w-4' />Nouvelle facture
           </Link> : null}
           <div ref={profileMenuRef} className='relative'
@@ -107,11 +109,13 @@ const Topbar = () => {
               <div className='border-b border-[var(--border)] px-4 py-3'>
                 <p className='break-words text-sm font-semibold text-[var(--text-dark)]'>{accountLabel}</p>
                 <p className='mt-1 break-all text-xs text-[var(--text-muted)]'>{user?.email || 'Mon compte'}</p>
+                {isSuperAdmin ? <p className='mt-2 text-xs font-semibold text-[var(--primary)]'>Super administrateur</p> : null}
               </div>
               <div className='p-2'>
                 <Link to='/entreprise' onClick={() => setIsProfileMenuOpen(false)} className='flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm text-[var(--text-dark)] hover:bg-[var(--bg-base)]'>
                   <Building2 aria-hidden='true' className='h-4 w-4' />Mon entreprise
                 </Link>
+                {isSuperAdmin ? <Link to='/administration' onClick={() => setIsProfileMenuOpen(false)} className='flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm text-[var(--primary)] hover:bg-[var(--bg-base)]'><ShieldCheck aria-hidden='true' className='h-4 w-4' />Administration Kadi</Link> : null}
                 <button type='button' onClick={handleLogout} className='flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm text-[#b42318] hover:bg-red-50'>
                   <LogOut aria-hidden='true' className='h-4 w-4' />Déconnexion
                 </button>

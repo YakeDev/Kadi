@@ -19,6 +19,8 @@ export const AuthProvider = ({ children }) => {
   const [profile, setProfile] = useState(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isPasswordRecovery, setIsPasswordRecovery] = useState(recoveryLocation)
+  const [platformAccess, setPlatformAccess] = useState({ status: 'loading', isSuperAdmin: false })
+  const platformGeneration = useRef(0)
   const activeUser = useRef(null)
   const generation = useRef(0)
 
@@ -29,6 +31,8 @@ export const AuthProvider = ({ children }) => {
       if (!mounted) return
       if (activeUser.current !== newSession?.user?.id) {
         generation.current += 1
+        platformGeneration.current += 1
+        setPlatformAccess({ status: newSession?.user ? 'loading' : 'ready', isSuperAdmin: false })
         setProfile(null)
       }
       activeUser.current = newSession?.user?.id ?? null
@@ -71,6 +75,37 @@ export const AuthProvider = ({ children }) => {
     return () => { generation.current += 1 }
   }, [session, isPasswordRecovery, hydrateProfile])
 
+  const refreshPlatformAccess = useCallback(async () => {
+    const userId = activeUser.current
+    if (!userId || isPasswordRecovery) return
+    const request = ++platformGeneration.current
+    try {
+      const { data } = await api.post('/platform/session')
+      if (typeof data?.is_super_admin !== 'boolean') throw new Error('Réponse invalide')
+      if (platformGeneration.current === request && activeUser.current === userId) {
+        setPlatformAccess({ status: 'ready', isSuperAdmin: data.is_super_admin })
+      }
+    } catch {
+      if (platformGeneration.current === request && activeUser.current === userId) {
+        setPlatformAccess({ status: 'error', isSuperAdmin: false })
+      }
+    }
+  }, [isPasswordRecovery])
+
+  const platformUserId = session?.user?.id
+  useEffect(() => {
+    if (!platformUserId || isPasswordRecovery) return
+    const refreshVisibleSession = () => { if (document.visibilityState !== 'hidden') refreshPlatformAccess() }
+    refreshVisibleSession()
+    const timer = setInterval(refreshVisibleSession, 15 * 60 * 1000)
+    document.addEventListener('visibilitychange', refreshVisibleSession)
+    return () => {
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', refreshVisibleSession)
+      platformGeneration.current += 1
+    }
+  }, [platformUserId, isPasswordRecovery, refreshPlatformAccess])
+
   const login = useCallback(async ({ email, password }) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
@@ -87,9 +122,11 @@ export const AuthProvider = ({ children }) => {
     const { error } = await supabase.auth.signOut()
     if (error) throw error
     generation.current += 1
+    platformGeneration.current += 1
     activeUser.current = null
     setSession(null)
     setProfile(null)
+    setPlatformAccess({ status: 'ready', isSuperAdmin: false })
     setIsPasswordRecovery(false)
   }, [])
 
@@ -118,9 +155,10 @@ export const AuthProvider = ({ children }) => {
   const value = useMemo(() => ({
     session, user: session?.user ?? null, profile: profile ?? fallbackProfile(session?.user),
     isLoading, isPasswordRecovery, login, signup, logout, updateProfile,
+    isSuperAdmin: platformAccess.isSuperAdmin, platformAccessStatus: platformAccess.status, refreshPlatformAccess,
     resendVerificationEmail, requestPasswordReset, resetPassword
   }), [session, profile, isLoading, isPasswordRecovery, login, signup, logout,
-    updateProfile, resendVerificationEmail, requestPasswordReset, resetPassword])
+    updateProfile, resendVerificationEmail, requestPasswordReset, resetPassword, platformAccess, refreshPlatformAccess])
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 export const useAuth = () => {

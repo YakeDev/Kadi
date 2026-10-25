@@ -1,7 +1,7 @@
 import { test, expect, vi, beforeEach } from 'vitest'
 import { render, screen, waitFor, act } from '@testing-library/react'
 import { AuthProvider, useAuth } from '../hooks/useAuth.jsx'
-const mocks = vi.hoisted(() => ({ callback: null, get: vi.fn(), signOut: vi.fn(), unsubscribe: vi.fn() }))
+const mocks = vi.hoisted(() => ({ callback: null, get: vi.fn(), post: vi.fn(), signOut: vi.fn(), unsubscribe: vi.fn() }))
 vi.mock('../services/supabase.js', () => ({
   supabase: { auth: {
     onAuthStateChange: (callback) => { mocks.callback = callback; return { data: { subscription: { unsubscribe: mocks.unsubscribe } } } },
@@ -9,13 +9,13 @@ vi.mock('../services/supabase.js', () => ({
   } }, resolveCompanyLogo: async (value) => value
 }))
 vi.mock('../services/session.js', () => ({ getCurrentSession: async () => null }))
-vi.mock('../services/api.js', () => ({ api: { get: mocks.get } }))
+vi.mock('../services/api.js', () => ({ api: { get: mocks.get, post: mocks.post } }))
 const session = (id) => ({ user: { id, email: `${id}@example.com` }, access_token: 'test' })
 const Probe = () => {
   const auth = useAuth()
-  return <div><span data-testid='company'>{auth.profile.company}</span><span data-testid='recovery'>{String(auth.isPasswordRecovery)}</span></div>
+  return <div><span data-testid='company'>{auth.profile.company}</span><span data-testid='recovery'>{String(auth.isPasswordRecovery)}</span><span data-testid='admin'>{String(auth.isSuperAdmin)}</span></div>
 }
-beforeEach(() => { mocks.get.mockReset(); mocks.unsubscribe.mockReset(); window.history.replaceState({}, '', '/') })
+beforeEach(() => { mocks.get.mockReset(); mocks.post.mockReset().mockResolvedValue({ data: { is_super_admin: false } }); mocks.unsubscribe.mockReset(); window.history.replaceState({}, '', '/') })
 
 test('refresh callback returns synchronously and hydrates outside the Supabase lock', async () => {
   let insideCallback = false
@@ -53,4 +53,20 @@ test('password recovery event opens the recovery flow without fetching a profile
   act(() => mocks.callback('PASSWORD_RECOVERY', session('one')))
   expect(screen.getByTestId('recovery')).toHaveTextContent('true')
   expect(mocks.get).not.toHaveBeenCalled()
+})
+
+test('a delayed admin capability from the previous account cannot promote the next account', async () => {
+  let resolveOld
+  mocks.get.mockResolvedValue({ data: { company: 'Company' } })
+  mocks.post.mockImplementationOnce(() => new Promise(resolve => { resolveOld = resolve }))
+    .mockResolvedValue({ data: { is_super_admin: false } })
+  render(<AuthProvider><Probe /></AuthProvider>)
+  await act(async () => {})
+  act(() => mocks.callback('SIGNED_IN', session('one')))
+  await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(1))
+  act(() => mocks.callback('SIGNED_OUT', null))
+  act(() => mocks.callback('SIGNED_IN', session('two')))
+  await waitFor(() => expect(mocks.post).toHaveBeenCalledTimes(2))
+  await act(async () => resolveOld({ data: { is_super_admin: true } }))
+  expect(screen.getByTestId('admin')).toHaveTextContent('false')
 })

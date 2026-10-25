@@ -6,9 +6,11 @@ import {
 	Users,
 	Package,
 	Building2,
+	ShieldCheck,
 } from 'lucide-react'
 import { navigationLinks } from '../constants/navigation.js'
 import AppBrand from './AppBrand.jsx'
+import { useAuth } from '../hooks/useAuth.jsx'
 
 const iconMap = {
 	LayoutDashboard,
@@ -35,7 +37,9 @@ const SidebarLink = ({ to, label, icon: Icon }) => (
 	</NavLink>
 )
 
-const Sidebar = () => (
+const Sidebar = () => {
+  const { isSuperAdmin } = useAuth()
+  return (
 		<aside aria-label='Barre latérale Kadi' className='fixed inset-y-0 hidden w-64 flex-col overflow-y-auto border-r border-[var(--border)] bg-white lg:flex'>
 			<div className='px-6 py-6'>
 				<AppBrand />
@@ -53,6 +57,7 @@ const Sidebar = () => (
 						/>
 					)
 				})}
+        {isSuperAdmin ? <div className='mt-5 border-t border-[var(--border)] pt-4'><p className='mb-2 px-3 text-[10px] font-semibold uppercase tracking-wider text-[var(--text-muted)]'>Plateforme</p><SidebarLink to='/administration' label='Administration' icon={ShieldCheck} /></div> : null}
 			</nav>
 
 			<div className='px-6 py-6'>
@@ -72,5 +77,6 @@ const Sidebar = () => (
 			</div>
 		</aside>
 )
+}
 
 export default Sidebar
