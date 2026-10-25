@@ -5,6 +5,11 @@ export const navigationLinks = [
     icon: 'LayoutDashboard'
   },
   {
+    to: '/devis',
+    label: 'Devis',
+    icon: 'FileText'
+  },
+  {
     to: '/factures',
     label: 'Factures',
     icon: 'FileText'

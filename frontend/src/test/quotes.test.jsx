@@ -1,0 +1,56 @@
+import { beforeEach,expect,test,vi } from 'vitest'
+import { render,screen,fireEvent,waitFor } from '@testing-library/react'
+import { MemoryRouter,Routes,Route } from 'react-router-dom'
+import InvoiceForm from '../components/InvoiceForm.jsx'
+import QuoteConversion from '../components/QuoteConversion.jsx'
+import QuoteDetail from '../pages/QuoteDetail.jsx'
+const mocks=vi.hoisted(()=>({get:vi.fn(),post:vi.fn(),patch:vi.fn()}))
+vi.mock('../services/api.js',()=>({api:mocks}))
+vi.mock('../hooks/useAuth.jsx',()=>({useAuth:()=>({user:{id:'quotes-user'},profile:{company:'Test'}})}))
+const quote=()=>({id:'quote-one',quote_number:'DEV-TEST',version:2,status:'sent',client_id:'client-one',issue_date:'2026-01-01',valid_until:'2026-02-01',currency:'USD',subtotal_amount:400,total_amount:400,items:[{description:'Devis révisé',quantity:1,unitPrice:400}]})
+beforeEach(()=>{sessionStorage.clear();mocks.get.mockReset();mocks.get.mockResolvedValue({data:quote()});mocks.post.mockReset();mocks.patch.mockReset()})
+test('quote editing preserves sent content, validity and version while using a separate draft namespace',async()=>{
+ mocks.patch.mockResolvedValue({data:quote()})
+ const {container}=render(<InvoiceForm documentType='quote' variant='page' invoice={{...quote(),due_date:quote().valid_until}} />)
+ fireEvent.change(screen.getByLabelText('Description'),{target:{value:'Offre modifiée avant conversion'}})
+ fireEvent.change(screen.getByLabelText('Valable jusqu’au'),{target:{value:'2026-03-01'}})
+ fireEvent.submit(container.querySelector('form'))
+ await waitFor(()=>expect(mocks.patch).toHaveBeenCalled())
+ expect(mocks.patch).toHaveBeenCalledWith('/quotes/quote-one',expect.objectContaining({version:2,valid_until:'2026-03-01',items:[expect.objectContaining({description:'Offre modifiée avant conversion'})]}))
+ expect(mocks.patch.mock.calls[0][1]).not.toHaveProperty('due_date')
+ expect([...Array(sessionStorage.length)].map((_,i)=>sessionStorage.key(i)).every(key=>!key.includes('invoice-draft'))).toBe(true)
+})
+test('a converted quote is consultable with no editing, PDF or conversion controls',async()=>{
+ mocks.get.mockResolvedValue({data:{...quote(),status:'converted',converted_invoice_id:'invoice-one'}})
+ render(<MemoryRouter initialEntries={['/devis/quote-one']}><Routes><Route path='/devis/:id' element={<QuoteDetail />} /></Routes></MemoryRouter>)
+ expect(await screen.findByText('Converti · Consultation uniquement')).toBeInTheDocument()
+ expect(screen.queryByRole('button',{name:'Télécharger le devis'})).not.toBeInTheDocument()
+ expect(screen.queryByRole('button',{name:'Convertir en facture'})).not.toBeInTheDocument()
+ expect(screen.queryByRole('link',{name:'Modifier'})).not.toBeInTheDocument()
+ expect(screen.getByRole('link',{name:'Ouvrir la facture liée'})).toHaveAttribute('href','/factures?invoice=invoice-one')
+})
+test('conversion starts disabled; a PO alone is submitted without a fictitious deposit',async()=>{
+ mocks.post.mockResolvedValue({data:{invoice_id:'invoice-one'}})
+ const onConverted=vi.fn()
+ render(<QuoteConversion quote={quote()} onClose={()=>{}} onConverted={onConverted} />)
+ expect(screen.getByRole('button',{name:'Créer la facture'})).toBeDisabled()
+ fireEvent.click(screen.getByLabelText('PO reçu'))
+ fireEvent.change(screen.getByLabelText('Référence PO'),{target:{value:' PO-9 '}})
+ fireEvent.click(screen.getByRole('button',{name:'Créer la facture'}))
+ await waitFor(()=>expect(onConverted).toHaveBeenCalledWith('invoice-one'))
+ expect(mocks.post.mock.calls[0][1]).toMatchObject({version:2,po_reference:'PO-9',payment:null})
+})
+test('a failed conversion keeps the entered deposit and retry keys, including the real historical date',async()=>{
+ mocks.post.mockRejectedValueOnce(new Error('Réseau interrompu')).mockResolvedValueOnce({data:{invoice_id:'invoice-one'}})
+ const {container}=render(<QuoteConversion quote={quote()} onClose={()=>{}} onConverted={()=>{}} />)
+ fireEvent.click(screen.getByLabelText('Acompte reçu'))
+ fireEvent.change(screen.getByLabelText('Montant reçu (USD)'),{target:{value:'150'}})
+ fireEvent.change(screen.getByLabelText('Date de réception'),{target:{value:'05/01/2026'}})
+ fireEvent.submit(container.querySelector('form'))
+ await screen.findByRole('alert')
+ expect(screen.getByLabelText('Montant reçu (USD)')).toHaveValue(150)
+ fireEvent.submit(container.querySelector('form'))
+ await waitFor(()=>expect(mocks.post).toHaveBeenCalledTimes(2))
+ expect(mocks.post.mock.calls[1][1]).toEqual(mocks.post.mock.calls[0][1])
+ expect(mocks.post.mock.calls[0][1].payment).toMatchObject({amount:150,paid_on:'2026-01-05'})
+})

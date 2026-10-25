@@ -51,9 +51,17 @@ const statusFilters = [
 const InvoiceList = ({ refreshKey, onCreate, onEdit, canCreate = true }) => {
   const [searchParams, setSearchParams] = useSearchParams()
   const requestedStatus = searchParams.get('status')
+  const linkedInvoiceId = searchParams.get('invoice')
   const status = statusFilters.some((filter) => filter.value === requestedStatus) ? requestedStatus : 'all'
   const [invoices, setInvoices] = useState([])
   const [paymentInvoice, setPaymentInvoice] = useState(null)
+  useEffect(() => {
+    if (!linkedInvoiceId) return
+    let active = true
+    api.get(`/invoices/${linkedInvoiceId}`).then(({ data }) => { if (active) setPaymentInvoice(data) })
+      .catch(error => { if (active) showErrorToast(toast.error,error) })
+    return () => { active = false }
+  }, [linkedInvoiceId])
   const [isLoading, setIsLoading] = useState(false)
   const [filters, setFilters] = useState({
     search: '',

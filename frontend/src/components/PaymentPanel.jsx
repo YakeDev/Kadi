@@ -12,6 +12,8 @@ import {
 import Pagination from './Pagination.jsx'
 import PaymentDateField from './PaymentDateField.jsx'
 import { formatPaymentDate, parsePaymentDate } from '../utils/paymentDates.js'
+import { downloadDocument } from '../utils/documentDownload.js'
+import { showErrorToast } from '../utils/errorToast.js'
 
 const dateLabel = (day) =>
   day
@@ -229,6 +231,14 @@ const PaymentPanel = ({ invoice: initialInvoice, onClose, onUpdated }) => {
           </button>
         </header>
         <div className="space-y-6 p-5">
+          {invoice.quote_number || invoice.po_reference ? <div className='space-y-1 break-words text-sm'>
+            {invoice.quote_number ? <p>Devis d’origine : {invoice.quote_number}</p> : null}
+            {invoice.po_reference ? <p>Référence PO : {invoice.po_reference}</p> : null}
+          </div> : null}
+          {invoice.pdf_available !== false ? <button type='button' className='btn-secondary min-h-11' onClick={async () => {
+            try { await downloadDocument(`/invoices/pdf/${invoice.id}`,`facture-${invoice.invoice_number}.pdf`) }
+            catch (error) { showErrorToast(toast.error,error) }
+          }}>Télécharger la facture à jour</button> : null}
           <dl className="grid grid-cols-2 gap-3 rounded-lg bg-[var(--bg-panel)] p-4 text-sm">
             <div>
               <dt className="text-[var(--text-muted)]">

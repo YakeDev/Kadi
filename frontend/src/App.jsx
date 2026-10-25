@@ -5,6 +5,8 @@ import ResetPassword from './pages/ResetPassword.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import Facture from './pages/Facture.jsx'
 import InvoiceCreate from './pages/InvoiceCreate.jsx'
+import Quotes from './pages/Quotes.jsx'
+import QuoteDetail from './pages/QuoteDetail.jsx'
 import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Company from './pages/Company.jsx'
@@ -37,6 +39,9 @@ const App = () => {
       <Routes>
         <Route path='/login' element={<Login />} />
         <Route path='/reset-password' element={<ResetPassword />} />
+        <Route path='/devis' element={<ProtectedLayout><Quotes /></ProtectedLayout>} />
+        <Route path='/devis/nouveau' element={<ProtectedLayout><InvoiceCreate documentType='quote' /></ProtectedLayout>} />
+        <Route path='/devis/:id' element={<ProtectedLayout><QuoteDetail /></ProtectedLayout>} />
         <Route
           path='/'
           element={

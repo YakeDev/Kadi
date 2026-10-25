@@ -7,7 +7,10 @@ import { api } from '../services/api.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import { useModalFocus } from '../hooks/useModalFocus.js'
 
-const InvoiceCreate = () => {
+const InvoiceCreate = ({ documentType = 'invoice' }) => {
+  const isQuote = documentType === 'quote'
+  const listPath = isQuote ? '/devis' : '/factures'
+  const endpoint = isQuote ? '/quotes' : '/invoices'
 	const navigate = useNavigate()
 	const [searchParams] = useSearchParams()
 	const invoiceId = searchParams.get('id')
@@ -32,27 +35,29 @@ const InvoiceCreate = () => {
     setLoadError(false)
     Promise.all([
       api.get('/clients', { params: { pageSize: 100 } }),
-      invoiceId ? api.get(`/invoices/${invoiceId}`) : Promise.resolve({ data: null })
+      invoiceId ? api.get(`${endpoint}/${invoiceId}`) : Promise.resolve({ data: null })
     ]).then(([clientResponse, invoiceResponse]) => {
       if (!active) return
       if (invoiceId && !invoiceResponse.data?.id) throw new Error('Invoice unavailable')
-      setClients(clientResponse.data?.data ?? [])
-      setInvoice(invoiceResponse.data)
+      const loadedClients = clientResponse.data?.data ?? []
+      const documentClient = invoiceResponse.data?.client
+      setClients(documentClient?.id && !loadedClients.some(client => client.id === documentClient.id) ? [documentClient, ...loadedClients] : loadedClients)
+      setInvoice(isQuote && invoiceResponse.data ? { ...invoiceResponse.data, due_date: invoiceResponse.data.valid_until } : invoiceResponse.data)
       setNewClientId(null)
     }).catch(() => { if (active) setLoadError(true) })
       .finally(() => { if (active) setIsLoading(false) })
     return () => { active = false }
-  }, [invoiceId, loadAttempt])
+  }, [invoiceId, loadAttempt, endpoint, isQuote])
   const hasClients = clients.length > 0
 
 	const handleInvoiceCreated = () => {
-		navigate('/factures', { replace: true })
-		toast.success('Facture enregistrée', { icon: '✅' })
+		navigate(listPath, { replace: true })
+		toast.success(isQuote ? 'Devis enregistré' : 'Facture enregistrée', { icon: '✅' })
 	}
 
 	const handleInvoiceUpdated = () => {
-		navigate('/factures', { replace: true })
-		toast.success('Facture mise à jour', { icon: '✅' })
+		navigate(listPath, { replace: true })
+		toast.success(isQuote ? 'Devis mis à jour' : 'Facture mise à jour', { icon: '✅' })
 	}
 
 	const handleNewClientChange = (event) => {
@@ -95,24 +100,25 @@ const InvoiceCreate = () => {
 
   if (loadError) return <section role='alert' className='card space-y-3 p-6'><h1 className='text-lg'>Impossible de charger l’éditeur</h1><p className='text-sm text-[var(--text-muted)]'>Votre saisie conservée dans cet onglet reste disponible. Réessayez le chargement.</p><button type='button' className='btn-primary' onClick={() => setLoadAttempt((prev) => prev + 1)}>Réessayer</button></section>
 
-  if (invoice && invoice.status !== 'draft') return <div className='card space-y-3 p-6'><p>Cette facture est émise et ne peut plus être modifiée.</p><Link to='/factures' className='underline'>Retour aux factures</Link></div>
+  if (invoice && (isQuote ? invoice.status === 'converted' : invoice.status !== 'draft')) return <div className='card space-y-3 p-6'><p>{isQuote ? 'Ce devis est converti et ne peut plus être modifié.' : 'Cette facture est émise et ne peut plus être modifiée.'}</p><Link to={listPath} className='underline'>{isQuote ? 'Retour aux devis' : 'Retour aux factures'}</Link></div>
 
 	return (
 		<div className='space-y-4'>
-      <Link to='/factures' className='inline-flex items-center gap-2 py-2 text-sm text-[var(--text-muted)]'>
-        <ArrowLeft aria-hidden='true' className='h-4 w-4' /> Retour aux factures
+      <Link to={listPath} className='inline-flex items-center gap-2 py-2 text-sm text-[var(--text-muted)]'>
+        <ArrowLeft aria-hidden='true' className='h-4 w-4' /> {isQuote ? 'Retour aux devis' : 'Retour aux factures'}
       </Link>
 
 			{!hasClients ? (
 				<div className='rounded-[var(--radius-xl)] border border-dashed border-[var(--border)] bg-white p-6 text-sm text-[var(--text-muted)]'>
 					<p className='font-semibold text-[var(--text-dark)]'>Aucun client disponible</p>
-					<p className='mt-2'>Ajoutez d’abord un client pour générer une facture.</p>
+					<p className='mt-2'>Ajoutez d’abord un client pour créer un document.</p>
 				</div>
 			) : null}
 
 			<InvoiceForm
         key={`${invoice?.id || 'new'}:${invoice?.version ?? invoice?.updated_at ?? '0'}`}
         newClientId={newClientId}
+        documentType={documentType}
 				clients={clients}
 				defaultClientId={invoice?.client_id ?? clients[0]?.id}
 				invoice={invoice}

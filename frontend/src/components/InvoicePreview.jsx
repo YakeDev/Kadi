@@ -20,7 +20,9 @@ const formatDate = (value) =>
       })
     : '—'
 
-const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4 }) => {
+const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4, documentType = 'invoice' }) => {
+  const isQuote = documentType === 'quote'
+  const previewLabel = isQuote ? 'Aperçu du devis' : 'Aperçu de la facture'
   const items = invoice.items ?? []
   const { subtotal, lineDiscountAmount, globalDiscountAmount, discountAmount, netSubtotal, taxRate, taxAmount, total, currency, calculationError } = getInvoiceTotals(invoice)
   const { paid, remaining } = paymentBalance({ ...invoice, total_amount: total })
@@ -28,9 +30,10 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4 
   const companyLocation = [company?.city, company?.state].filter(Boolean).join(', ')
   const status = {
     draft: ['Brouillon', 'bg-amber-50 text-amber-800'],
-    sent: ['Émise', 'bg-blue-50 text-blue-700'],
+    sent: [isQuote ? 'Envoyé' : 'Émise', 'bg-blue-50 text-blue-700'],
     overdue: ['Échue', 'bg-red-50 text-red-700'],
     paid: ['Payée', 'bg-emerald-50 text-emerald-700'],
+    converted: ['Converti', 'bg-slate-100 text-slate-700'],
     partially_paid: ['Partiellement payée', 'bg-amber-50 text-amber-800']
   }[invoice.status || 'draft']
 
@@ -42,10 +45,10 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4 
         'flex min-w-0 flex-col rounded-[var(--radius-xl)] border border-[var(--border)] bg-white p-5',
         className
       )}
-      aria-label='Aperçu de la facture'
+      aria-label={previewLabel}
     >
       <header className='mb-5 flex items-center justify-between gap-3 text-xs text-[var(--text-muted)]'>
-        <p className='font-semibold'>Aperçu de la facture</p>
+        <p className='font-semibold'>{previewLabel}</p>
         <p>Mise à jour en temps réel</p>
       </header>
 
@@ -72,21 +75,21 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4 
           </div>
         </div>
         <div className='min-w-0 text-right'>
-          <h3 className='text-xl font-semibold tracking-wide text-slate-800'>FACTURE</h3>
+          <h3 className='text-xl font-semibold tracking-wide text-slate-800'>{isQuote ? 'DEVIS' : 'FACTURE'}</h3>
           <span className={clsx('mt-2 inline-block rounded px-2.5 py-1 text-[10px] font-semibold', status?.[1])}>
             {status?.[0] || invoice.status}
           </span>
           <p className='mt-4 text-[9px] font-semibold uppercase tracking-wider text-slate-500'>Référence</p>
-          <p className='mt-1 break-words text-[11px] font-semibold text-slate-800'>{invoice.invoice_number || 'Attribuée à l’enregistrement'}</p>
+          <p className='mt-1 break-words text-[11px] font-semibold text-slate-800'>{(isQuote ? invoice.quote_number : invoice.invoice_number) || 'Attribuée à l’enregistrement'}</p>
           <dl className='mt-4 space-y-2 text-[10px]'>
-            <div><dt className='text-slate-500'>Émise le</dt><dd className='mt-0.5 text-slate-800'>{formatDate(invoice.issue_date)}</dd></div>
-            <div><dt className='text-slate-500'>Échéance</dt><dd className='mt-0.5 text-slate-800'>{formatDate(invoice.due_date)}</dd></div>
+            <div><dt className='text-slate-500'>{isQuote ? 'Émis le' : 'Émise le'}</dt><dd className='mt-0.5 text-slate-800'>{formatDate(invoice.issue_date)}</dd></div>
+            <div><dt className='text-slate-500'>{isQuote ? 'Valable jusqu’au' : 'Échéance'}</dt><dd className='mt-0.5 text-slate-800'>{formatDate(isQuote ? (invoice.valid_until ?? invoice.due_date) : invoice.due_date)}</dd></div>
           </dl>
         </div>
       </div>
 
       <div className='mt-6 space-y-1 break-words border-l-2 border-blue-600 bg-slate-50 px-4 py-3 text-[11px] text-slate-600'>
-        <p className='mb-2 text-[9px] font-semibold uppercase tracking-wider text-slate-500'>Facturé à</p>
+        <p className='mb-2 text-[9px] font-semibold uppercase tracking-wider text-slate-500'>{isQuote ? 'Proposé à' : 'Facturé à'}</p>
         <p className='text-sm font-semibold text-slate-800'>{client?.company_name || 'Client non défini'}</p>
         {client?.contact_name ? <p>{client.contact_name}</p> : null}
         {client?.address ? <p className='whitespace-pre-line'>{client.address}</p> : null}
@@ -144,7 +147,7 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4 
         ) : null}
         <p className='text-[10px] font-semibold text-slate-600'>Total</p>
         <p className='mt-1 break-words text-right text-xl font-semibold'>{formatCurrency(total, currency)}</p>
-        {invoice.status && invoice.status !== 'draft' ? <dl className='mt-3 space-y-2 border-t border-blue-100 pt-3'><div className='flex justify-between gap-3'><dt>Déjà reçu</dt><dd>{formatCurrency(paid, currency)}</dd></div><div className='flex justify-between gap-3 font-semibold'><dt>Reste à payer</dt><dd>{formatCurrency(remaining, currency)}</dd></div></dl> : null}
+        {!isQuote && invoice.status && invoice.status !== 'draft' ? <dl className='mt-3 space-y-2 border-t border-blue-100 pt-3'><div className='flex justify-between gap-3'><dt>Déjà reçu</dt><dd>{formatCurrency(paid, currency)}</dd></div><div className='flex justify-between gap-3 font-semibold'><dt>Reste à payer</dt><dd>{formatCurrency(remaining, currency)}</dd></div></dl> : null}
       </div>}
 
       {invoice.notes ? (

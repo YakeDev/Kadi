@@ -2,7 +2,8 @@ import { useState } from 'react'
 import DiscountFields from './DiscountFields.jsx'
 import { formatInvoiceMoney } from '../utils/invoiceTotals.js'
 
-const InvoiceSummary = ({ form, totals, onChange, onDiscountChange }) => {
+const InvoiceSummary = ({ form, totals, onChange, onDiscountChange, documentType = 'invoice' }) => {
+  const isQuote = documentType === 'quote'
   const [isTaxOpen, setIsTaxOpen] = useState(Number(form.tax_rate) > 0)
   const { subtotal, lineDiscountAmount, globalDiscountAmount, netSubtotal, taxAmount, total, currency, calculationError } = totals
   const money = (value) => calculationError ? '—' : formatInvoiceMoney(value, currency)
@@ -26,7 +27,7 @@ const InvoiceSummary = ({ form, totals, onChange, onDiscountChange }) => {
       </dl> : null}
       <div className='invoice-summary-total'>
         <span>Total</span>
-        <output aria-label='Total de la facture' aria-live='polite'>{calculationError ? 'À vérifier' : formatInvoiceMoney(total, currency)}</output>
+        <output aria-label={isQuote ? 'Total du devis' : 'Total de la facture'} aria-live='polite'>{calculationError ? 'À vérifier' : formatInvoiceMoney(total, currency)}</output>
       </div>
       <details className='invoice-secondary' open={isTaxOpen} onToggle={(event) => setIsTaxOpen(event.currentTarget.open)}>
         <summary>{Number(form.tax_rate) > 0 ? 'Taxe appliquée' : 'Ajouter une taxe'}</summary>
@@ -41,10 +42,10 @@ const InvoiceSummary = ({ form, totals, onChange, onDiscountChange }) => {
         <label htmlFor='status'>Statut à l’enregistrement</label>
         <select id='status' value={form.status} onChange={(event) => onChange('status', event.target.value)} className='input'>
           <option value='draft'>Brouillon</option>
-          <option value='sent'>Envoyée</option>
-          <option value='overdue'>En retard</option>
+          <option value='sent'>{isQuote ? 'Envoyé' : 'Envoyée'}</option>
+          {!isQuote ? <option value='overdue'>En retard</option> : null}
         </select>
-        {form.status !== 'draft' ? <p>Une facture émise est définitive : ses montants et coordonnées ne pourront plus être modifiés.</p> : null}
+        {!isQuote && form.status !== 'draft' ? <p>Une facture émise est définitive : ses montants et coordonnées ne pourront plus être modifiés.</p> : null}
       </div>
     </aside>
   )
