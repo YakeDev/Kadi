@@ -10,6 +10,7 @@ import QuoteDetail from './pages/QuoteDetail.jsx'
 import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Company from './pages/Company.jsx'
+import PlatformAdmin from './pages/PlatformAdmin.jsx'
 import { useAuth } from './hooks/useAuth.jsx'
 import ShellLayout from './components/ShellLayout.jsx'
 
@@ -39,6 +40,7 @@ const App = () => {
       <Routes>
         <Route path='/login' element={<Login />} />
         <Route path='/reset-password' element={<ResetPassword />} />
+        <Route path='/administration' element={<ProtectedLayout><PlatformAdmin /></ProtectedLayout>} />
         <Route path='/devis' element={<ProtectedLayout><Quotes /></ProtectedLayout>} />
         <Route path='/devis/nouveau' element={<ProtectedLayout><InvoiceCreate documentType='quote' /></ProtectedLayout>} />
         <Route path='/devis/:id' element={<ProtectedLayout><QuoteDetail /></ProtectedLayout>} />
