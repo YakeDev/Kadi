@@ -72,6 +72,12 @@ try {
   assert.equal(initial.password, true);
   assert.equal(initial.overflow, false);
   await screenshot("android-login");
+  await page.getByRole("button", { name: "S'inscrire", exact: true }).click();
+  await page.getByRole("heading", { name: "Créons votre accès" }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await screenshot("android-register");
+  await page.getByRole("button", { name: "Retour", exact: true }).click();
+  await page.getByRole("button", { name: "Se connecter", exact: true }).waitFor();
   console.log("Native login screen and safe layout passed; checking HTTPS API");
   // Real HTTPS requests from the packaged app origin; no identity or business writes.
   const network = await page.evaluate(async () => {
@@ -351,6 +357,7 @@ try {
         recipientReadPdf: true,
         localPersistence: true,
         authenticatedUiWithFixtures: true,
+      registrationLayout: true,
         accountBackCloses: true,
         noDuplicateNavigation: true,
         backMinimizes: minimized,

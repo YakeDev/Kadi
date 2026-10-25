@@ -141,7 +141,7 @@ const fileToDataUrl = (file) =>
 	})
 
 const RegistrationStepper = ({ currentStep, steps }) => (
-	<div className='mb-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]'>
+	<div className='auth-steps mb-6 flex items-center gap-3 text-xs font-semibold uppercase tracking-[0.2em] text-[var(--text-muted)]'>
 		{steps.map((step, index) => {
 			const isActive = currentStep === step.id
 			const activeIndex = steps.findIndex((entry) => entry.id === currentStep)
