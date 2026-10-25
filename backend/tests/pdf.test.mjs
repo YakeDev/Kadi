@@ -11,8 +11,8 @@ const invoice = (count, description = '') => ({
   status: 'draft', total_amount: count * 10, client: { company_name: 'Client original' },
   items: Array.from({ length: count }, (_, index) => ({ description: `LIGNE-${String(index + 1).padStart(3, '0')} ${description}`, quantity: 1, unitPrice: 10 }))
 })
-const render = async (data, issuer = { company: 'Entreprise originale' }, logo = null) => {
-  const doc = createInvoicePdf(data, issuer, logo)
+const render = async (data, issuer = { company: 'Entreprise originale' }, logo = null, options = {}) => {
+  const doc = createInvoicePdf(data, issuer, logo, options)
   const chunks = []
   const ready = new Promise((resolve, reject) => {
     doc.on('data', (chunk) => chunks.push(chunk))
@@ -182,4 +182,36 @@ test('corrupt images and oversized dimensions are rejected', async () => {
   await assert.rejects(normalizeLogoImage(Buffer.from('not an image')), /Logo illisible/)
   const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="100000" height="100000"/>')
   await assert.rejects(normalizeLogoImage(svg), /Logo illisible/)
+})
+
+
+test('quote PDF has its own title and validity and never displays invoice receipts', async () => {
+  const pdf = await render({ ...invoice(2), invoice_number: 'DEV-TEST', status: 'sent' }, undefined, null, { kind: 'quote' })
+  try {
+    let text = ''
+    for (let index=1; index<=pdf.numPages; index++) text += (await (await pdf.getPage(index)).getTextContent()).items.map(item=>item.str).join(' ')
+    assert.match(text,/DEVIS/u)
+    assert.match(text,/VALABLE JUSQU/u)
+    assert.doesNotMatch(text,/FACTURE|Déjà reçu|Reste à payer/u)
+  } finally { await pdf.loadingTask.destroy() }
+})
+
+test('current invoice PDF includes PO, source quote and every active receipt without losing pagination', async () => {
+  const payments = Array.from({length:40},(_,index)=>({paid_on:'2026-01-05',amount:1,method:'cash',reference:`Versement-${index+1}`}))
+  const pdf=await render({...invoice(1),status:'partially_paid',total_amount:100,subtotal_amount:100,paid_amount:40,
+    quote_number:'DEV-ORIGINE',po_reference:'PO-CLIENT-123',payments})
+  try {
+    let text=''
+    for(let index=1;index<=pdf.numPages;index++){
+      const page=await pdf.getPage(index),content=await page.getTextContent()
+      text+=content.items.map(item=>item.str).join(' ')+' '
+      for(const item of content.items){
+        if(!item.str.trim()||item.str.includes('Document généré')||/^Page \d+\/\d+$/u.test(item.str))continue
+        assert.ok(item.transform[5]>=80,'receipt history overlaps footer')
+        assert.ok(item.transform[4]+item.width<=548,'receipt history overflows margin')
+      }
+    }
+    assert.match(text,/DEV-ORIGINE/u);assert.match(text,/PO-CLIENT-123/u);assert.match(text,/Versement-40/u)
+    assert.match(text,/60,00 USD/u);assert.match(text,/VERSEMENTS REÇUS/u)
+  }finally{await pdf.loadingTask.destroy()}
 })

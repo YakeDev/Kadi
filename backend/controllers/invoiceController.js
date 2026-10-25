@@ -51,13 +51,13 @@ const getClient = async (clientId, tenantId) => {
   if (!data) throw Object.assign(new Error('Client introuvable pour ce compte.'), { status: 400 })
   return data
 }
-const logoForPdf = async (profile, userId) => {
+export const logoForPdf = async (profile, userId) => {
   if (!profile?.logo_url) return null
   const bytes = await downloadStoredLogoBuffer(supabase, profile.logo_url, { userId })
   if (!bytes) throw Object.assign(new Error('Le logo configuré est indisponible. Vérifiez le bucket et réimportez votre logo dans Entreprise.'), { status: 422 })
   return normalizeLogoImage(bytes)
 }
-const issueSnapshot = async (invoice, req, client) => {
+export const issueSnapshot = async (invoice, req, client) => {
   if (invoice.status === 'draft') return {}
   const logo = await logoForPdf(req.profile, req.user.id)
   const { logo_url, ...issuer } = req.profile || {}
@@ -419,16 +419,25 @@ export const getSummary = async (req, res, next) => {
 
 export const streamInvoicePdf = async (req, res, next) => {
   try {
-    const invoice = await readInvoice(req.params.id, req.tenantId)
+    let invoice = await readInvoice(req.params.id, req.tenantId)
     if (!invoice) return res.status(404).json({ message: 'Facture introuvable.' })
     if (invoice.status !== 'draft' && !hasIssuedArchive(invoice)) {
       throw Object.assign(new Error('Cette ancienne facture ne possède pas d’archive à l’émission. Faites vérifier son original avant de la réexporter.'), { status: 422 })
+    }
+    let payments = []
+    if (invoice.status !== 'draft') {
+      const { data, error } = await supabase.rpc('kadi_invoice_pdf_state', { p_tenant_id: req.tenantId, p_invoice_id: invoice.id })
+      if (error) throw error
+      if (!data?.invoice) return res.status(404).json({ message: 'Facture introuvable.' })
+      invoice = data.invoice
+      payments = data.payments || []
+      if (!hasIssuedArchive(invoice)) throw Object.assign(new Error('Archive de facture indisponible.'), { status: 422 })
     }
     const issuer = invoice.issuer_snapshot || req.profile
     const logoBuffer = invoice.issuer_snapshot
       ? (issuer.logo_base64 ? Buffer.from(issuer.logo_base64, 'base64') : null)
       : await logoForPdf(issuer, req.user.id)
-    const doc = createInvoicePdf(presentInvoice(invoice, req.tenantId), issuer, logoBuffer)
+    const doc = createInvoicePdf({ ...presentInvoice(invoice, req.tenantId), payments }, issuer, logoBuffer)
     res.setHeader('Content-Type', 'application/pdf')
     const safeName = invoice.invoice_number.replace(/[^a-z0-9_-]/gi, '-')
     res.setHeader('Content-Disposition', `attachment; filename="facture-${safeName}.pdf"`)
