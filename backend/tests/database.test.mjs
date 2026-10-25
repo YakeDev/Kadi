@@ -38,6 +38,10 @@ before(async () => {
     create policy old_permissive_policy on invoices for all using (true) with check (true);
   `)
   await db.exec(await migration('production_hardening'))
+  const clientsBefore = (await db.query('select to_jsonb(c) as client from clients c order by id')).rows
+  await db.exec(await migration('client_identifiers'))
+  const clientsAfter = (await db.query("select to_jsonb(c) - 'nif' - 'national_id' - 'rccm' as client from clients c order by id")).rows
+  assert.deepEqual(clientsAfter, clientsBefore, 'adding optional identifiers preserves all existing client values')
 })
 after(async () => { await db?.close() })
 const asRole = async (role, callback, uid = uid1) => {
@@ -69,6 +73,23 @@ test('browser roles cannot change tenants, profiles, clients, catalogue or invoi
       `insert into invoices(tenant_id, invoice_number) values ('${t1}', 'FORGED')`
     ]) await assert.rejects(db.query(query), /permission denied/)
   })
+})
+
+test('client identifiers remain optional, bounded, tenant scoped and writable only through the backend', async () => {
+  const original = (await db.query('select nif,national_id,rccm from clients where id=$1', [c1])).rows[0]
+  assert.deepEqual(original, { nif: null, national_id: null, rccm: null })
+  await asRole('service_role', async () => {
+    await db.query('update clients set nif=$1,national_id=$2,rccm=$3 where id=$4', ['000123', '01-ABC', 'CD/RCCM-001', c1])
+    await assert.rejects(db.query('update clients set nif=$1 where id=$2', ['X'.repeat(161), c1]), /clients_nif_length/)
+  })
+  await asRole('authenticated', async () => {
+    const rows = (await db.query('select nif,national_id,rccm from clients')).rows
+    assert.deepEqual(rows, [{ nif: '000123', national_id: '01-ABC', rccm: 'CD/RCCM-001' }])
+    await assert.rejects(db.query("update clients set nif='changed'"), /permission denied/)
+  })
+  await asRole('authenticated', async () => {
+    assert.equal((await db.query('select nif from clients')).rows[0].nif, null)
+  }, uid2)
 })
 test('even service-role writes cannot link an invoice to another tenant’s client', async () => {
   await asRole('service_role', async () => {

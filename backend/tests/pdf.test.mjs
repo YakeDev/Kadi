@@ -215,3 +215,43 @@ test('current invoice PDF includes PO, source quote and every active receipt wit
     assert.match(text,/60,00 USD/u);assert.match(text,/VERSEMENTS REÇUS/u)
   }finally{await pdf.loadingTask.destroy()}
 })
+
+for (const kind of ['quote', 'invoice']) {
+  test(`${kind} PDF includes optional client identifiers and keeps long references inside printable columns`, async () => {
+    const data = { ...invoice(2), client: { company_name: 'Client identifié', nif: '000123', national_id: '01-ABC', rccm: 'CD/LSH/RCCM/' + 'R'.repeat(145), address: 'Adresse détaillée '.repeat(12) } }
+    const pdf = await render(data, { company: 'Émetteur Démo', nif: 'EM-123', national_id: 'EM-456', rccm: 'EM-789' }, null, { kind })
+    try {
+      let text = ''
+      for (let index = 1; index <= pdf.numPages; index++) {
+        const content = await (await pdf.getPage(index)).getTextContent()
+        text += content.items.map(item => item.str).join(' ') + ' '
+        for (const item of content.items) {
+          if (!item.str.trim() || item.str.includes('Document généré') || /^Page \d+\/\d+$/u.test(item.str)) continue
+          assert.ok(item.transform[5] >= 80, 'client identity overlaps footer')
+          assert.ok(item.transform[4] >= 47 && item.transform[4] + item.width <= 548, 'client identity exceeds page margins')
+        }
+      }
+      assert.match(text, /NIF : 000123/u)
+      assert.match(text, /ID. Nat. : 01-ABC/u)
+      assert.match(text, /RCCM : CD\/LSH\/RCCM\//u)
+      assert.match(text, /NIF : EM-123/u)
+      if (kind === 'quote') assert.doesNotMatch(text, /Déjà reçu|Reste à payer/u)
+    } finally { await pdf.loadingTask.destroy() }
+  })
+}
+
+test('a short quote with logo, full identities, discounts and terms keeps its total on the first page', async () => {
+  const logo = await normalizeLogoImage(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="160" height="60"><rect width="160" height="60" fill="#2563eb"/></svg>'))
+  const items = [{ description: 'Conception et développement du site vitrine. Présentation des services et formulaire de contact.', quantity: 1, unitPrice: 350, discountType: 'percent', discountValue: 10 }, { description: 'Installation, mise en ligne et accompagnement.', quantity: 1, unitPrice: 50 }]
+  const totals = computeTotals(items, 0, { discount_type: 'percent', discount_value: 5 })
+  const identity = { nif: 'A0000001', national_id: '01-000-DEMO', rccm: 'CD/LSH/RCCM/26-B-00001' }
+  const pdf = await render({ ...invoice(2), items, client: { ...identity, company_name: 'Société Exemple SARL', contact_name: 'Service des achats', address: '48, avenue des Entreprises\nLubumbashi', email: 'achats@example.invalid', phone: '+243 000 000 002' },
+    subtotal_amount: totals.subtotal, total_amount: totals.total, discount_amount: totals.discountAmount, line_discount_amount: totals.lineDiscountAmount, discount_type: 'percent', discount_value: 5,
+    notes: 'Délai : 15 jours après réception des contenus. Modalités : 50 % à la commande, solde à la livraison.' },
+    { ...identity, company: 'Atelier Démo', tagline: 'Design et solutions numériques', manager_name: 'Responsable commercial', address: '12, avenue de la Démonstration', city: 'Lubumbashi', state: 'Haut-Katanga', phone: '+243 000 000 001', website: 'atelier.example' }, logo, { kind: 'quote' })
+  try {
+    assert.equal(pdf.numPages, 1)
+    const content = await (await pdf.getPage(1)).getTextContent()
+    assert.match(content.items.map(item => item.str).join(' '), /Total\s+346,75 USD/u)
+  } finally { await pdf.loadingTask.destroy() }
+})

@@ -82,73 +82,156 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
     }
   }
 
-  // The reference and dates have their own column instead of enlarging the title.
-  const metaWidth = 206
-  const metaX = right - metaWidth
-  const issuerWidth = width - metaWidth - 32
-  doc.rect(left, 32, width, 2).fill(colors.accent)
-  text(title, metaX, 48, metaWidth, 27, true, colors.ink, 'right')
-  const [status, statusBackground, statusColor] = isQuote
-    ? [invoice.status === 'draft' ? 'Brouillon' : 'Envoyé', '#eff6ff', '#1d4ed8']
-    : statuses[invoice.status] || statuses.sent
-  font(8, true)
-  const badgeWidth = doc.widthOfString(status) + 22
-  doc.roundedRect(right - badgeWidth, 87, badgeWidth, 22, 5).fill(statusBackground)
-  text(status, right - badgeWidth, 93, badgeWidth, 8, true, statusColor, 'center')
-  text('RÉFÉRENCE', metaX, 125, metaWidth, 7.5, true, colors.muted, 'right')
-  const reference = wrap(invoice.invoice_number || '-', metaWidth, 9, true)
-  reference.forEach((line, index) => text(line, metaX, 139 + index * 13.5, metaWidth, 9, true, colors.ink, 'right'))
-  const datesY = 139 + reference.length * 13.5 + 15
-  const dateWidth = (metaWidth - 14) / 2
-  text(isQuote ? 'ÉMIS LE' : 'ÉMISE LE', metaX, datesY, dateWidth, 7.5, true, colors.muted)
-  text(date(invoice.issue_date), metaX, datesY + 14, dateWidth, 9)
-  text(isQuote ? 'VALABLE JUSQU’AU' : 'ÉCHÉANCE', metaX + dateWidth + 14, datesY, dateWidth, 7.5, true, colors.muted, 'right')
-  text(date(invoice.due_date), metaX + dateWidth + 14, datesY + 14, dateWidth, 9, false, colors.ink, 'right')
-  const metadataBottom = datesY + 30
-
-  if (logo) {
-    doc.image(logo, left, y, { fit: [116, 46], align: 'left', valign: 'center' })
-    y += 61
-  }
-  flow(issuer.company || 'Kadi', left, issuerWidth, 16, true)
-  y += 7
-  const issuerLines = [issuer.tagline, issuer.manager_name && `Responsable : ${issuer.manager_name}`,
-    issuer.address, [issuer.city, issuer.state].filter(Boolean).join(', '), issuer.phone, issuer.website,
-    issuer.national_id && `ID. Nat. : ${issuer.national_id}`,
-    issuer.rccm && `RCCM : ${issuer.rccm}`, issuer.nif && `NIF : ${issuer.nif}`].filter(Boolean)
-  for (const line of issuerLines) { flow(line, left, issuerWidth, 8.5, false, colors.muted); y += 3 }
-  y = Math.max(y, currentPage === 0 ? metadataBottom : 0) + 26
-
-  const client = invoice.client || {}
-  const clientLines = [
-    { value: isQuote ? 'PROPOSÉ À' : 'FACTURÉ À', size: 7.5, bold: true, color: colors.muted, gap: 7 },
-    { value: client.company_name || 'Client non défini', size: 12, bold: true, gap: 4 },
-    ...[client.contact_name, client.address, client.email, client.phone].filter(Boolean)
-      .map((value) => ({ value, size: 9, gap: 2 }))
-  ].flatMap(({ value, ...style }) => wrap(value, width - 32, style.size, style.bold)
-    .map((line, index, lines) => ({ ...style, value: line, gap: index === lines.length - 1 ? style.gap : 0 })))
-  // Shade the client block in page-sized fragments, so long addresses also paginate.
-  let clientIndex = 0
-  while (clientIndex < clientLines.length) {
-    if (y + 70 > bottom) nextPage()
-    let blockHeight = 28
-    let end = clientIndex
-    while (end < clientLines.length) {
-      const line = clientLines[end]
-      const lineHeight = line.size * 1.5 + line.gap
-      if (y + blockHeight + lineHeight > bottom) break
-      blockHeight += lineHeight
-      end += 1
+  if (isQuote) {
+    // A compact document header, followed by two aligned, independently paginated parties.
+    const metaWidth = 220
+    const metaX = right - metaWidth
+    const brandWidth = width - metaWidth - 28
+    doc.rect(left, 32, width, 3).fill(colors.accent)
+    if (logo) {
+      doc.image(logo, left, y, { fit: [120, 48], align: 'left', valign: 'center' })
+      y += 61
     }
-    doc.rect(left, y, width, blockHeight).fill(colors.pale)
-    doc.rect(left, y, 2, blockHeight).fill(colors.accent)
-    let lineY = y + 14
-    for (const line of clientLines.slice(clientIndex, end)) {
-      text(line.value, left + 16, lineY, width - 32, line.size, line.bold, line.color)
-      lineY += line.size * 1.5 + line.gap
+    flow(issuer.company || 'Kadi', left, brandWidth, 18, true)
+    if (issuer.tagline) { y += 7; flow(issuer.tagline, left, brandWidth, 8.5, false, colors.muted) }
+    const brandBottom = y
+    const brandPage = currentPage
+    if (brandPage > 0) doc.switchToPage(0)
+    const reference = wrap(invoice.invoice_number || '-', metaWidth - 32, 9, true)
+    const datesY = 96 + reference.length * 13.5 + 12
+    const metaBottom = datesY + 38
+    doc.roundedRect(metaX, 48, metaWidth, metaBottom - 48, 8).fill(colors.pale)
+    text('DEVIS', metaX + 16, 61, 100, 24, true)
+    const status = invoice.status === 'draft' ? 'Brouillon' : 'Envoyé'
+    font(8, true)
+    const badgeWidth = doc.widthOfString(status) + 18
+    doc.roundedRect(right - badgeWidth - 16, 67, badgeWidth, 22, 5).fill(colors.blue)
+    text(status, right - badgeWidth - 16, 73, badgeWidth, 8, true, colors.accent, 'center')
+    reference.forEach((line, index) => text(line, metaX + 16, 96 + index * 13.5, metaWidth - 32, 9, true))
+    const dateWidth = (metaWidth - 46) / 2
+    text('ÉMIS LE', metaX + 16, datesY, dateWidth, 7, true, colors.muted)
+    text(date(invoice.issue_date), metaX + 16, datesY + 14, dateWidth, 9)
+    text('VALABLE JUSQU’AU', metaX + dateWidth + 30, datesY, dateWidth, 7, true, colors.muted)
+    text(date(invoice.due_date), metaX + dateWidth + 30, datesY + 14, dateWidth, 9)
+    // Extreme names/taglines can span pages; metadata remains on the first page.
+    if (brandPage > 0) doc.switchToPage(brandPage)
+    y = Math.max(brandBottom, currentPage === 0 ? metaBottom : 88) + 22
+    const client = invoice.client || {}
+    const partyWidth = (width - 20) / 2
+    const makeLines = (company, details) => [
+      { value: company, size: 11, bold: true, gap: 7 },
+      ...details.filter(Boolean).map(value => ({ value, size: 8.5, gap: 1.5, color: colors.muted }))
+    ].flatMap(({ value, ...style }) => wrap(value, partyWidth - 28, style.size, style.bold)
+      .map((line, index, lines) => ({ ...style, value: line, gap: index === lines.length - 1 ? style.gap : 0 })))
+    const parties = [
+      { title: 'ÉMETTEUR', x: left, fill: '#ffffff', index: 0, lines: makeLines(issuer.company || 'Kadi', [
+        issuer.manager_name && `Contact : ${issuer.manager_name}`, issuer.address,
+        [issuer.city, issuer.state].filter(Boolean).join(', '), issuer.phone, issuer.website,
+        issuer.nif && `NIF : ${issuer.nif}`, issuer.national_id && `ID. Nat. : ${issuer.national_id}`, issuer.rccm && `RCCM : ${issuer.rccm}`
+      ]) },
+      { title: 'PROPOSÉ À', x: left + partyWidth + 20, fill: colors.pale, index: 0, lines: makeLines(client.company_name || 'Client non défini', [
+        client.contact_name, client.address, client.email, client.phone,
+        client.nif && `NIF : ${client.nif}`, client.national_id && `ID. Nat. : ${client.national_id}`, client.rccm && `RCCM : ${client.rccm}`
+      ]) }
+    ]
+    while (parties.some(party => party.index < party.lines.length)) {
+      if (y + 82 > bottom) nextPage()
+      const fragments = parties.map(party => {
+        let height = 40
+        let end = party.index
+        while (end < party.lines.length) {
+          const line = party.lines[end]
+          const lineHeight = line.size * 1.5 + line.gap
+          if (y + height + lineHeight > bottom) break
+          height += lineHeight
+          end += 1
+        }
+        return { party, end, height }
+      })
+      const blockHeight = Math.max(...fragments.map(fragment => fragment.height))
+      for (const { party, end } of fragments) {
+        if (party.index >= party.lines.length) continue
+        doc.roundedRect(party.x, y, partyWidth, blockHeight, 6).lineWidth(0.6).fillAndStroke(party.fill, colors.line)
+        text(party.title, party.x + 14, y + 13, partyWidth - 28, 7, true, colors.accent)
+        let lineY = y + 31
+        for (const line of party.lines.slice(party.index, end)) {
+          text(line.value, party.x + 14, lineY, partyWidth - 28, line.size, line.bold, line.color)
+          lineY += line.size * 1.5 + line.gap
+        }
+        party.index = end
+      }
+      y += blockHeight + 24
     }
-    y += blockHeight + 24
-    clientIndex = end
+  } else {
+    // The reference and dates have their own column instead of enlarging the title.
+    const metaWidth = 206
+    const metaX = right - metaWidth
+    const issuerWidth = width - metaWidth - 32
+    doc.rect(left, 32, width, 2).fill(colors.accent)
+    text(title, metaX, 48, metaWidth, 27, true, colors.ink, 'right')
+    const [status, statusBackground, statusColor] = isQuote
+      ? [invoice.status === 'draft' ? 'Brouillon' : 'Envoyé', '#eff6ff', '#1d4ed8']
+      : statuses[invoice.status] || statuses.sent
+    font(8, true)
+    const badgeWidth = doc.widthOfString(status) + 22
+    doc.roundedRect(right - badgeWidth, 87, badgeWidth, 22, 5).fill(statusBackground)
+    text(status, right - badgeWidth, 93, badgeWidth, 8, true, statusColor, 'center')
+    text('RÉFÉRENCE', metaX, 125, metaWidth, 7.5, true, colors.muted, 'right')
+    const reference = wrap(invoice.invoice_number || '-', metaWidth, 9, true)
+    reference.forEach((line, index) => text(line, metaX, 139 + index * 13.5, metaWidth, 9, true, colors.ink, 'right'))
+    const datesY = 139 + reference.length * 13.5 + 15
+    const dateWidth = (metaWidth - 14) / 2
+    text(isQuote ? 'ÉMIS LE' : 'ÉMISE LE', metaX, datesY, dateWidth, 7.5, true, colors.muted)
+    text(date(invoice.issue_date), metaX, datesY + 14, dateWidth, 9)
+    text(isQuote ? 'VALABLE JUSQU’AU' : 'ÉCHÉANCE', metaX + dateWidth + 14, datesY, dateWidth, 7.5, true, colors.muted, 'right')
+    text(date(invoice.due_date), metaX + dateWidth + 14, datesY + 14, dateWidth, 9, false, colors.ink, 'right')
+    const metadataBottom = datesY + 30
+
+    if (logo) {
+      doc.image(logo, left, y, { fit: [116, 46], align: 'left', valign: 'center' })
+      y += 61
+    }
+    flow(issuer.company || 'Kadi', left, issuerWidth, 16, true)
+    y += 7
+    const issuerLines = [issuer.tagline, issuer.manager_name && `Responsable : ${issuer.manager_name}`,
+      issuer.address, [issuer.city, issuer.state].filter(Boolean).join(', '), issuer.phone, issuer.website,
+      issuer.national_id && `ID. Nat. : ${issuer.national_id}`,
+      issuer.rccm && `RCCM : ${issuer.rccm}`, issuer.nif && `NIF : ${issuer.nif}`].filter(Boolean)
+    for (const line of issuerLines) { flow(line, left, issuerWidth, 8.5, false, colors.muted); y += 3 }
+    y = Math.max(y, currentPage === 0 ? metadataBottom : 0) + 26
+
+    const client = invoice.client || {}
+    const clientLines = [
+      { value: isQuote ? 'PROPOSÉ À' : 'FACTURÉ À', size: 7.5, bold: true, color: colors.muted, gap: 7 },
+      { value: client.company_name || 'Client non défini', size: 12, bold: true, gap: 4 },
+      ...[client.contact_name, client.address, client.email, client.phone,
+        client.nif && `NIF : ${client.nif}`, client.national_id && `ID. Nat. : ${client.national_id}`, client.rccm && `RCCM : ${client.rccm}`].filter(Boolean)
+        .map((value) => ({ value, size: 9, gap: 2 }))
+    ].flatMap(({ value, ...style }) => wrap(value, width - 32, style.size, style.bold)
+      .map((line, index, lines) => ({ ...style, value: line, gap: index === lines.length - 1 ? style.gap : 0 })))
+    // Shade the client block in page-sized fragments, so long addresses also paginate.
+    let clientIndex = 0
+    while (clientIndex < clientLines.length) {
+      if (y + 70 > bottom) nextPage()
+      let blockHeight = 28
+      let end = clientIndex
+      while (end < clientLines.length) {
+        const line = clientLines[end]
+        const lineHeight = line.size * 1.5 + line.gap
+        if (y + blockHeight + lineHeight > bottom) break
+        blockHeight += lineHeight
+        end += 1
+      }
+      doc.rect(left, y, width, blockHeight).fill(colors.pale)
+      doc.rect(left, y, 2, blockHeight).fill(colors.accent)
+      let lineY = y + 14
+      for (const line of clientLines.slice(clientIndex, end)) {
+        text(line.value, left + 16, lineY, width - 32, line.size, line.bold, line.color)
+        lineY += line.size * 1.5 + line.gap
+      }
+      y += blockHeight + 24
+      clientIndex = end
+    }
   }
 
   const columns = {
@@ -158,11 +241,11 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
     total: { x: left + 385, width: width - 397 }
   }
   const tableHeader = () => {
-    doc.rect(left, y, width, 30).fill(colors.pale)
-    text('Description', columns.description.x, y + 9, columns.description.width, 8.5, true)
+    doc.rect(left, y, width, 30).fill(isQuote ? colors.ink : colors.pale)
+    text('Description', columns.description.x, y + 9, columns.description.width, 8.5, true, isQuote ? '#ffffff' : colors.ink)
     for (const [key, label] of [['quantity', 'Qté'], ['unit', 'Prix unitaire'], ['total', 'Total']]) {
       const column = columns[key]
-      text(label, column.x, y + 9, column.width, 8.5, true, colors.ink, 'right')
+      text(label, column.x, y + 9, column.width, 8.5, true, isQuote ? '#ffffff' : colors.ink, 'right')
     }
     rule(y + 30)
     y += 30
@@ -210,25 +293,27 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
   if (hasTax) summaryRows.push([`Taxe (${Number(invoice.tax_rate || 0)} %)`, invoice.tax_amount])
   const showPayments = !isQuote && invoice.status !== 'draft'
   const settlement = invoicePaymentSummary(invoice)
-  const summaryHeight = 78 + (summaryRows.length ? summaryRows.length * 21 + 15 : 0) + (showPayments ? 74 : 0)
+  const summaryRowGap = isQuote ? 18 : 21
+  const summaryHeight = (isQuote ? 68 : 78) + (summaryRows.length ? summaryRows.length * summaryRowGap + (isQuote ? 10 : 15) : 0) + (showPayments ? 74 : 0)
   if (y + 22 + summaryHeight > bottom) nextPage()
   y += 22
   const summaryTop = y
   const summaryWidth = discountAmount > 0 ? 286 : 240
   const summaryX = right - summaryWidth
-  doc.roundedRect(summaryX, y, summaryWidth, summaryHeight, 6).fill(colors.blue)
+  doc.roundedRect(summaryX, y, summaryWidth, summaryHeight, 6).fill(isQuote ? colors.pale : colors.blue)
+  if (isQuote) doc.rect(summaryX + 16, y, summaryWidth - 32, 2).fill(colors.accent)
   let summaryY = y + 15
   if (summaryRows.length) {
     for (const [label, value] of summaryRows) {
       text(label, summaryX + 16, summaryY, summaryWidth - 160, 8, false, colors.muted)
       fitText(money(value), right - 132, summaryY, 116, 9)
-      summaryY += 21
+      summaryY += summaryRowGap
     }
     rule(summaryY + 1, summaryX + 16, summaryWidth - 32)
     summaryY += 15
   }
   text('Total', summaryX + 16, summaryY, summaryWidth - 32, 8.5, true, colors.muted)
-  fitText(money(invoice.total_amount), summaryX + 16, summaryY + 18, summaryWidth - 32, 22, true, colors.ink)
+  fitText(money(invoice.total_amount), summaryX + 16, summaryY + 18, summaryWidth - 32, 22, true, isQuote ? colors.accent : colors.ink)
   if (showPayments) {
     summaryY += 54
     rule(summaryY, summaryX + 16, summaryWidth - 32)

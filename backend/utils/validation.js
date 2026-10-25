@@ -9,7 +9,7 @@ const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/
 
-const CLIENT_ALLOWED_FIELDS = ['company_name', 'contact_name', 'email', 'phone', 'address']
+const CLIENT_ALLOWED_FIELDS = ['company_name', 'contact_name', 'email', 'phone', 'address', 'nif', 'national_id', 'rccm']
 const CLIENT_BLOCKED_FIELDS = ['id', 'tenant_id', 'created_at', 'updated_at']
 
 const INVOICE_ALLOWED_FIELDS = [
@@ -270,6 +270,15 @@ export const sanitizeClientPayload = (body = {}, { partial = false } = {}) => {
       field: 'address',
       maxLength: 500
     })
+  }
+
+  for (const field of ['nif', 'national_id', 'rccm']) {
+    if (hasOwn(payload, field)) {
+      if (payload[field] != null && typeof payload[field] !== 'string') {
+        throw createValidationError(`Le champ ${field} doit contenir du texte.`)
+      }
+      sanitized[field] = normalizeString(payload[field], { field, maxLength: 160 })
+    }
   }
 
   if (partial && Object.keys(sanitized).length === 0) {
