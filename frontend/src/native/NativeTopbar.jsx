@@ -4,6 +4,7 @@ import {
   Building2,
   ChevronRight,
   FileText,
+  Info,
   LogOut,
   ShieldCheck,
 } from "lucide-react";
@@ -89,6 +90,11 @@ export default function NativeTopbar() {
             <Link to="/entreprise" onClick={() => setOpen(false)}>
               <Building2 aria-hidden="true" />
               <span>Mon entreprise</span>
+              <ChevronRight aria-hidden="true" />
+            </Link>
+            <Link to="/a-propos" onClick={() => setOpen(false)}>
+              <Info aria-hidden="true" />
+              <span>À propos de Kadi</span>
               <ChevronRight aria-hidden="true" />
             </Link>
             {isSuperAdmin ? (
