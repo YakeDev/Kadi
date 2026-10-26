@@ -11,6 +11,8 @@ import Catalogue from './pages/Catalogue.jsx'
 import Clients from './pages/Clients.jsx'
 import Company from './pages/Company.jsx'
 import PlatformAdmin from './pages/PlatformAdmin.jsx'
+import { AboutPage, PrivacyPage, TermsPage } from './pages/InformationPages.jsx'
+import DeletionRequestPage from './pages/DeletionRequestPage.jsx'
 import { useAuth } from './hooks/useAuth.jsx'
 import ShellLayout from './components/ShellLayout.jsx'
 import NativeRuntime from './components/NativeRuntime.jsx'
@@ -41,6 +43,10 @@ const App = () => {
       <NativeRuntime />
       <Routes>
         <Route path='/login' element={<Login />} />
+        <Route path='/a-propos' element={<AboutPage />} />
+        <Route path='/conditions-utilisation' element={<TermsPage />} />
+        <Route path='/confidentialite' element={<PrivacyPage />} />
+        <Route path='/suppression-compte' element={<DeletionRequestPage />} />
         <Route path='/reset-password' element={<ResetPassword />} />
         <Route path='/administration' element={<ProtectedLayout><PlatformAdmin /></ProtectedLayout>} />
         <Route path='/devis' element={<ProtectedLayout><Quotes /></ProtectedLayout>} />

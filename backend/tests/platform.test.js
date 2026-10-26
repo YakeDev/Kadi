@@ -12,8 +12,11 @@ beforeEach(async()=>{
 })
 test('anonymous and ordinary accounts cannot access global statistics, even with forged metadata',async()=>{
   expect((await request(app).get('/api/platform/overview')).status).toBe(401)
+  expect((await request(app).post('/api/platform/deletion-requests/anything/process')).status).toBe(401)
   const response=await request(app).get('/api/platform/overview').set('Authorization','Bearer token')
   expect(response.status).toBe(403)
+  expect((await request(app).get('/api/platform/deletion-requests').set('Authorization','Bearer token')).status).toBe(403)
+  expect((await request(app).post('/api/platform/deletion-requests/anything/process').set('Authorization','Bearer token')).status).toBe(403)
   expect(database.rpc).not.toHaveBeenCalledWith('kadi_platform_overview',expect.anything())
 })
 test('statistics use the authenticated actor and prohibit public caching',async()=>{

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Menu, X, Plus, ChevronDown, LayoutDashboard, FileText, FilePenLine, Users, Package, Building2, LogOut, ShieldCheck } from 'lucide-react'
+import { Menu, X, Plus, ChevronDown, LayoutDashboard, FileText, FilePenLine, Users, Package, Building2, LogOut, ShieldCheck, Info } from 'lucide-react'
 import { Link, NavLink, useLocation } from 'react-router-dom'
 import { navigationLinks } from '../constants/navigation.js'
 import { useAuth } from '../hooks/useAuth.jsx'
@@ -116,6 +116,9 @@ const WebTopbar = () => {
               <div className='p-2'>
                 <Link to='/entreprise' onClick={() => setIsProfileMenuOpen(false)} className='flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm text-[var(--text-dark)] hover:bg-[var(--bg-base)]'>
                   <Building2 aria-hidden='true' className='h-4 w-4' />Mon entreprise
+                </Link>
+                <Link to='/a-propos' onClick={() => setIsProfileMenuOpen(false)} className='flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm text-[var(--text-dark)] hover:bg-[var(--bg-base)]'>
+                  <Info aria-hidden='true' className='h-4 w-4' />À propos de Kadi
                 </Link>
                 {isSuperAdmin ? <Link to='/administration' onClick={() => setIsProfileMenuOpen(false)} className='flex min-h-11 items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm text-[var(--primary)] hover:bg-[var(--bg-base)]'><ShieldCheck aria-hidden='true' className='h-4 w-4' />Administration Kadi</Link> : null}
                 <button type='button' onClick={handleLogout} className='flex min-h-11 w-full items-center gap-2 rounded-[var(--radius-md)] px-3 py-2 text-sm text-[#b42318] hover:bg-red-50'>
