@@ -17,7 +17,7 @@ const ContactLink = ({ subject = 'Question concernant Kadi', children = CONTACT_
   </a>
 )
 
-const InformationLayout = ({ eyebrow, title, introduction, children }) => {
+export const InformationLayout = ({ eyebrow, title, introduction, children }) => {
   const { session } = useAuth()
 
   return (
@@ -158,10 +158,13 @@ export const PrivacyPage = () => (
       </PolicySection>
       <PolicySection title='5. Protection et durée de conservation'>
         <p>L’accès aux données métier passe par un compte et des contrôles liés à l’entreprise. Les communications avec les services sont protégées lors de leur transmission. Aucune plateforme ne peut garantir une sécurité absolue ; signalez-nous rapidement tout accès suspect.</p>
-        <p>Les données du compte et les documents sont conservés pendant l’utilisation de Kadi. Lorsqu’une suppression est demandée, nous examinons les données à effacer et celles qui doivent éventuellement être conservées pour respecter une obligation applicable, notamment pour certains documents commerciaux. Nous précisons au demandeur ce qui est conservé et pourquoi.</p>
+        <p>Les données du compte et les documents sont conservés pendant l’utilisation de Kadi. Une demande vérifiée est examinée avant traitement : si une conservation est nécessaire, notamment pour certains documents commerciaux, le traitement est suspendu et son motif vous est communiqué.</p>
+        <p>Après une suppression acceptée, les données actives de l’entreprise, son logo et son compte de connexion sont retirés. Le journal de demande est clôturé sans adresse email ni identifiants de ce compte. Les copies de PDF que vous avez téléchargées ou partagées et les sauvegardes techniques de nos prestataires ne sont pas retirées instantanément par cette action.</p>
       </PolicySection>
       <PolicySection id='suppression' title='6. Accès, correction et suppression'>
-        <p>Vous pouvez modifier certaines informations dans l’application. Pour demander l’accès, la correction ou la suppression de votre compte et des données associées, écrivez à <ContactLink subject='Demande relative à mes données Kadi' /> en précisant l’adresse liée au compte. Nous pourrons vous demander une vérification afin de protéger vos données avant de traiter la demande.</p>
+        <p>Vous pouvez modifier certaines informations dans l’application et exporter les données de votre entreprise depuis « Mon entreprise ». Vous pouvez aussi télécharger vos devis et factures en PDF avant de demander une suppression.</p>
+        <p>Pour demander la suppression, utilisez la rubrique « Données et suppression du compte » lorsque vous êtes connecté, ou la <Link to='/suppression-compte' className='font-medium text-[var(--primary)] underline underline-offset-4'>page publique de demande</Link> si vous n’avez plus accès à l’application. La demande publique est vérifiée par un lien envoyé à l’adresse du compte. Le traitement est examiné par le super administrateur ; si une conservation est nécessaire, nous vous communiquons les éléments et le motif. Vous pouvez annuler une demande encore en attente depuis votre compte.</p>
+        <p>Pour l’accès ou la correction de données que vous ne pouvez pas modifier vous-même, contactez <ContactLink subject='Demande relative à mes données Kadi' />.</p>
       </PolicySection>
       <PolicySection title='7. Changements'>
         <p>Cette politique sera mise à jour si les fonctions ou les services utilisés par Kadi évoluent. La date affichée en haut de page indique la dernière révision du texte. Pour les règles d’usage de Kadi, consultez les <Link to='/conditions-utilisation' className='font-medium text-[var(--primary)] underline underline-offset-4'>conditions d’utilisation</Link>.</p>

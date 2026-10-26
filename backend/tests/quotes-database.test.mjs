@@ -104,3 +104,18 @@ test('tenant isolation, actor checks and browser-role grants protect quote and P
   await assert.rejects(db.query('select kadi_invoice_pdf_state($1,$2)',[tenant,randomUUID()]),/permission denied/)
  }finally{await db.exec('reset role')}
 })
+test('verified account deletion removes a converted quote, its invoice and receipts in one tenant',async()=>{
+ await db.exec(`insert into kadi_private.platform_admins(user_id,grant_reason)values('${actor}','Deletion test');`)
+ const id=await quote(90,'USD',otherTenant)
+ const invoiceId=await convert(id,{owner:otherTenant,by:otherActor,payment:receipt(30)})
+ await db.exec('set role service_role')
+ try{
+  const requestId=(await db.query(`insert into account_deletion_requests(user_id,tenant_id,email,status,verified_at,export_acknowledged)
+   values($1,$2,'b@example.invalid','pending_review',now(),true) returning id`,[otherActor,otherTenant])).rows[0].id
+  await db.query('select kadi_erase_requested_account($1,$2)',[requestId,actor])
+  assert.equal((await db.query('select count(*)::int as n from quotes where tenant_id=$1',[otherTenant])).rows[0].n,0)
+  assert.equal((await db.query('select count(*)::int as n from invoices where id=$1',[invoiceId])).rows[0].n,0)
+  assert.equal((await db.query('select count(*)::int as n from invoice_payments where tenant_id=$1',[otherTenant])).rows[0].n,0)
+  assert.ok((await db.query('select count(*)::int as n from quotes where tenant_id=$1',[tenant])).rows[0].n>0)
+ }finally{await db.exec('reset role')}
+})

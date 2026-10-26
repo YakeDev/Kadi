@@ -83,3 +83,33 @@ test('aggregated responses contain no customer, user, invoice identifiers or inv
   await assert.rejects(overview(admin,'2024-01-01','2026-01-01'),/période/)
   await assert.rejects(overview(admin,'2099-01-01','2099-01-02'),/période/)
 })
+
+test('deletion requests are server-only and ordinary invoice immutability remains enforced',async()=>{
+  await db.exec(`set role authenticated;set request.jwt.claim.sub='${member}'`)
+  try{
+    await assert.rejects(db.query('select * from public.account_deletion_requests'),/permission denied/)
+    await assert.rejects(db.query('select kadi_erase_requested_account($1,$2)',[member,member]),/permission denied/)
+  }finally{await db.exec('reset role')}
+  await db.exec('set role service_role')
+  try{
+    await assert.rejects(db.query("delete from public.invoices where invoice_number='B-1'"),/immutable/)
+  }finally{await db.exec('reset role')}
+})
+
+test('a verified admin operation deletes only the requested tenant and can be replayed safely',async()=>{
+  await db.exec('set role service_role')
+  try{
+    const {rows:[{id}]}=await db.query(`insert into public.account_deletion_requests(user_id,tenant_id,email,status,verified_at,export_acknowledged)
+      values($1,$2,'member@example.invalid','pending_review',now(),true) returning id`,[member,b])
+    await assert.rejects(db.query('select kadi_erase_requested_account($1,$2)',[id,member]),/Super administrateur/)
+    const result=(await db.query('select kadi_erase_requested_account($1,$2) as data',[id,admin])).rows[0].data
+    assert.deepEqual(result,{user_id:member,stage:'data_erased'})
+    assert.deepEqual((await db.query('select kadi_erase_requested_account($1,$2) as data',[id,admin])).rows[0].data,result)
+    assert.equal((await db.query('select count(*)::int as n from public.invoices where tenant_id=$1',[b])).rows[0].n,0)
+    assert.equal((await db.query('select count(*)::int as n from public.tenants where id=$1',[b])).rows[0].n,0)
+    assert.equal((await db.query('select count(*)::int as n from public.profiles where id=$1',[member])).rows[0].n,0)
+    assert.equal((await db.query('select count(*)::int as n from public.invoices where tenant_id=$1',[a])).rows[0].n,1)
+    assert.equal((await db.query('select status from public.account_deletion_requests where id=$1',[id])).rows[0].status,'data_erased')
+  }finally{await db.exec('reset role')}
+  assert.equal((await db.query('select count(*)::int as n from auth.users where id=$1',[member])).rows[0].n,1,'Auth deletion occurs only after Storage cleanup in the API')
+})

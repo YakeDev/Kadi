@@ -5,6 +5,7 @@ import { useAuth } from '../hooks/useAuth.jsx'
 import { api } from '../services/api.js'
 import PageHeader from '../components/PageHeader.jsx'
 import PlatformActivityChart from '../components/PlatformActivityChart.jsx'
+import DeletionRequests from '../components/DeletionRequests.jsx'
 import { parsePaymentDate } from '../utils/paymentDates.js'
 
 const number = value => Number(value || 0).toLocaleString('fr-FR')
@@ -103,6 +104,7 @@ const PlatformAdmin = () => {
         <p>Les journées sont calculées de minuit à minuit à Lubumbashi. Les dates choisies sur les factures et les versements peuvent être antérieures à leur enregistrement.</p>
       </div>
     </> : null}
+    <DeletionRequests />
   </div>
 }
 export default PlatformAdmin
