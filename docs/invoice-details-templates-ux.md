@@ -18,7 +18,7 @@ Ces deux éléments sont affichés dans l'éditeur, l'aperçu et le PDF pour les
 | Sobre | Pas de bandeau coloré supérieur, palette neutre, tableau simple, fonds gris très discrets. |
 | Minimaliste | Aucun bandeau supérieur, beaucoup de blanc, typographie et alignements privilégiés, séparation fine. |
 
-Le choix est stocké par document (`pdf_template`). Il n'affecte **jamais** les montants. Le modèle choisi sur un devis est repris lors de la conversion via un trigger SQL. Les factures et devis déjà émis ou convertis ne sont pas modifiés ; leur choix de modèle par défaut est « classique ».
+Le choix est stocké par document (`pdf_template`). Il n'affecte **jamais** les montants. Pour les nouveaux documents saisis dans l'interface, le modèle initial est **minimaliste** ; chaque utilisateur peut sélectionner classique ou sobre avant l'enregistrement. Le modèle choisi sur un devis est repris lors de la conversion via un trigger SQL. Les factures et devis historiques restent inchangés et leur modèle est « classique ». Les créations envoyées directement à l'API sans choix explicite restent en modèle classique pour ne pas surprendre les intégrations existantes.
 
 ## Compatibilité et sécurité
 
