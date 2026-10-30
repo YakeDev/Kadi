@@ -20,7 +20,7 @@ const clients = [
   { id: 'client-b', company_name: 'Client B' }
 ]
 const fillInvoice = () => {
-  fireEvent.change(screen.getByLabelText('Description'), {
+  fireEvent.change(screen.getByLabelText('Intitulé de la prestation'), {
     target: { value: 'Prestation à conserver' }
   })
   fireEvent.change(screen.getByLabelText(/Prix unitaire/), {
@@ -51,7 +51,7 @@ test('refreshing the client list and selecting a newly created client preserves 
       variant='page'
     />
   )
-  expect(screen.getByLabelText('Description')).toHaveValue(
+  expect(screen.getByLabelText('Intitulé de la prestation')).toHaveValue(
     'Prestation à conserver'
   )
   expect(screen.getByLabelText(/Prix unitaire/)).toHaveValue(350)
@@ -76,7 +76,7 @@ test('the draft survives unmount and remount, including the selected client and 
   render(
     <InvoiceForm clients={clients} defaultClientId='client-a' variant='page' />
   )
-  expect(screen.getByLabelText('Description')).toHaveValue(
+  expect(screen.getByLabelText('Intitulé de la prestation')).toHaveValue(
     'Prestation à conserver'
   )
   expect(screen.getByLabelText(/Prix unitaire/)).toHaveValue(350)
@@ -95,7 +95,7 @@ test('drafts are isolated per account and per saved invoice version', () => {
   fillInvoice()
   mocks.userId = 'account-b'
   first.rerender(<InvoiceForm clients={clients} variant='page' />)
-  expect(screen.getByLabelText('Description')).toHaveValue('')
+  expect(screen.getByLabelText('Intitulé de la prestation')).toHaveValue('')
   first.unmount()
   mocks.userId = 'account-a'
   render(
@@ -109,7 +109,7 @@ test('drafts are isolated per account and per saved invoice version', () => {
       }}
     />
   )
-  expect(screen.getByLabelText('Description')).toHaveValue('Version serveur')
+  expect(screen.getByLabelText('Intitulé de la prestation')).toHaveValue('Version serveur')
   expect(invoiceDraftKey('account-a', { id: 'saved', version: 1 })).not.toBe(
     invoiceDraftKey('account-a', { id: 'saved', version: 2 })
   )
@@ -148,7 +148,7 @@ const readStored = () =>
 test('malformed local data falls back to an empty form', () => {
   sessionStorage.setItem(invoiceDraftKey('account-a'), '{broken')
   render(<InvoiceForm clients={clients} variant='page' />)
-  expect(screen.getByLabelText('Description')).toHaveValue('')
+  expect(screen.getByLabelText('Intitulé de la prestation')).toHaveValue('')
 })
 
 test('blocked storage displays a warning and warns before a browser reload', async () => {
