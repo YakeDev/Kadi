@@ -45,7 +45,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
       due_date: '',
       status: 'draft',
       notes: '',
-      pdf_template: 'classic',
+      pdf_template: 'minimal',
       currency: 'USD',
       tax_rate: 0,
       discount_type: 'none',
@@ -386,7 +386,7 @@ const InvoiceEditor = ({
             </details>
             <fieldset className='invoice-template-card'>
               <legend>Apparence du document PDF</legend>
-              <p className='invoice-editor-hint'>Trois présentations, mêmes informations et montants. Choisissez puis ouvrez Aperçu.</p>
+              <p className='invoice-editor-hint'>Minimaliste est proposé par défaut pour les nouveaux documents. Vous pouvez choisir l’un des trois modèles pour chaque facture ou devis ; votre choix sera conservé avec le document.</p>
               <div className='invoice-template-options'>
                 {[
                   { id: 'classic', name: 'Classique', subtitle: 'Repères bleus et blocs' },
