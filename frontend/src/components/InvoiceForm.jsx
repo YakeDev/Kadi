@@ -99,7 +99,7 @@ const InvoiceEditor = ({
   const { profile: companyProfile, user } = useAuth()
   const draftKey = variant === 'page' ? invoiceDraftKey(user?.id, invoice)?.replace('invoice-draft', isQuote ? 'quote-draft' : 'invoice-draft') : null
   const skipDraftSave = useRef(false)
-  const [form, setForm] = useState(() => readInvoiceDraft(draftKey) || normalizeInvoiceForForm(invoice, defaultClientId))
+  const [form, setForm] = useState(() => normalizeInvoiceForForm(readInvoiceDraft(draftKey) || invoice, defaultClientId))
   const savedFormSignature = useRef(JSON.stringify(normalizeInvoiceForForm(invoice, defaultClientId)))
   const isDirty = JSON.stringify(form) !== savedFormSignature.current
   const [draftSaved, setDraftSaved] = useState(true)
