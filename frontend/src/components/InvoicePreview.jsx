@@ -24,6 +24,8 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4,
   const isQuote = documentType === 'quote'
   const previewLabel = isQuote ? 'Aperçu du devis' : 'Aperçu de la facture'
   const items = invoice.items ?? []
+  const template = ['classic', 'sober', 'minimal'].includes(invoice.pdf_template) ? invoice.pdf_template : 'classic'
+  const isClassic = template === 'classic'
   const { subtotal, lineDiscountAmount, globalDiscountAmount, discountAmount, netSubtotal, taxRate, taxAmount, total, currency, calculationError } = getInvoiceTotals(invoice)
   const { paid, remaining } = paymentBalance({ ...invoice, total_amount: total })
 
@@ -52,7 +54,7 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4,
         <p>Mise à jour en temps réel</p>
       </header>
 
-      <div className='grid grid-cols-2 gap-5 border-t-2 border-blue-600 pt-5 text-xs'>
+      <div className={clsx('grid grid-cols-2 gap-5 pt-5 text-xs', isClassic && 'border-t-2 border-blue-600', template === 'sober' && 'border-t border-slate-300')}>
         <div>
           {company?.logo_url ? (
             <img
@@ -61,7 +63,7 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4,
               className='mb-4 h-12 w-28 max-w-full object-contain object-left'
             />
           ) : null}
-          <p className='break-words text-base font-semibold text-slate-800'>{company?.company || 'Votre entreprise'}</p>
+          {!company?.logo_url ? <p className='break-words text-base font-semibold text-slate-800'>{company?.company || 'Votre entreprise'}</p> : null}
           <div className='mt-2 space-y-1 break-words text-[11px] text-slate-500'>
             {company?.tagline ? <p>{company.tagline}</p> : null}
             {company?.manager_name ? <p>Responsable : {company.manager_name}</p> : null}
@@ -88,7 +90,7 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4,
         </div>
       </div>
 
-      <div className='mt-6 space-y-1 break-words border-l-2 border-blue-600 bg-slate-50 px-4 py-3 text-[11px] text-slate-600'>
+      <div className={clsx('mt-6 space-y-1 break-words px-4 py-3 text-[11px] text-slate-600', isClassic ? 'border-l-2 border-blue-600 bg-slate-50' : template === 'sober' ? 'bg-slate-50' : 'bg-white')}>
         <p className='mb-2 text-[9px] font-semibold uppercase tracking-wider text-slate-500'>{isQuote ? 'Proposé à' : 'Facturé à'}</p>
         <p className='text-sm font-semibold text-slate-800'>{client?.company_name || 'Client non défini'}</p>
         {client?.contact_name ? <p>{client.contact_name}</p> : null}
@@ -109,9 +111,9 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4,
           <div className='overflow-x-auto'>
             <table className='w-full min-w-[280px] table-fixed border-collapse text-[10px] text-slate-600'>
               <caption className='sr-only'>Lignes de facturation</caption>
-              <thead className='bg-slate-50 text-slate-800'>
+              <thead className={clsx('text-slate-800', template !== 'minimal' && 'bg-slate-50')} >
                 <tr>
-                  <th scope='col' className='w-[40%] px-2 py-2.5 text-left font-semibold'>Description</th>
+                  <th scope='col' className='w-[40%] px-2 py-2.5 text-left font-semibold'>Prestation / périmètre</th>
                   <th scope='col' className='w-[10%] px-1 py-2.5 text-right font-semibold'>Qté</th>
                   <th scope='col' className='w-[25%] px-2 py-2.5 text-right font-semibold'>Prix unitaire</th>
                   <th scope='col' className='w-[25%] px-2 py-2.5 text-right font-semibold'>Total</th>
@@ -122,7 +124,11 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4,
                   const line = getInvoiceLineTotals(item)
                   return (
                   <tr key={index} className='border-b border-slate-200 align-top'>
-                    <td className='break-words px-2 py-3 text-slate-800'>{item.description || 'Article sans titre'}{line.discount > 0 ? <p className='mt-1 text-[9px] text-slate-500'>Remise : {item.discountType === 'percent' ? `${item.discountValue} % · ` : ''}{formatCurrency(line.discount, currency)}</p> : null}</td>
+                    <td className='break-words px-2 py-3 text-slate-800'>
+                      <p className='font-semibold'>{item.title || item.description || 'Prestation sans titre'}</p>
+                      {item.title && item.description ? <p className='mt-1 whitespace-pre-line text-[9px] leading-relaxed text-slate-500'>{item.description}</p> : null}
+                      {line.discount > 0 ? <p className='mt-1 text-[9px] text-slate-500'>Remise : {item.discountType === 'percent' ? `${item.discountValue} % · ` : ''}{formatCurrency(line.discount, currency)}</p> : null}
+                    </td>
                     <td className='break-words px-1 py-3 text-right'>{Number(item.quantity || 0).toLocaleString('fr-FR')}</td>
                     <td className='break-words px-2 py-3 text-right'>{formatCurrency(Number(item.unitPrice || 0), currency)}</td>
                     <td className='break-words px-2 py-3 text-right font-semibold text-slate-800'>
@@ -138,7 +144,7 @@ const InvoicePreview = ({ id, className, company, client, invoice, maxItems = 4,
         {items.length > maxItems ? <p className='mt-2 text-[10px] text-slate-500'>+ {items.length - maxItems} ligne(s) supplémentaire(s) dans le PDF</p> : null}
       </div>
 
-      {calculationError ? <p className='mt-5 text-sm text-red-800'>Total à vérifier : {calculationError}</p> : <div className='ml-auto mt-5 w-full max-w-[260px] rounded-md bg-blue-50 px-4 py-4 text-xs text-slate-800'>
+      {calculationError ? <p className='mt-5 text-sm text-red-800'>Total à vérifier : {calculationError}</p> : <div className={clsx('ml-auto mt-5 w-full max-w-[260px] px-4 py-4 text-xs text-slate-800', isClassic ? 'rounded-md bg-blue-50' : template === 'sober' ? 'rounded-md bg-slate-50' : 'border-t border-b border-slate-300 bg-white')}>
         {taxAmount !== 0 || discountAmount > 0 ? (
           <div className='mb-3 space-y-2 border-b border-blue-100 pb-3'>
             <div className='flex justify-between gap-3'><span>Sous-total</span><span>{formatCurrency(subtotal, currency)}</span></div>
