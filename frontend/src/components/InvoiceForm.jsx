@@ -384,19 +384,36 @@ const InvoiceEditor = ({
               <summary>Notes et conditions de paiement</summary>
               <textarea id='notes' aria-label='Notes et conditions de paiement' value={form.notes} onChange={(event) => updateField('notes', event.target.value)} placeholder='Conditions de paiement, message de remerciement…' className='textarea' rows={3} />
             </details>
+            <fieldset className='invoice-template-card'>
+              <legend>Apparence du document PDF</legend>
+              <p className='invoice-editor-hint'>Trois présentations, mêmes informations et montants. Choisissez puis ouvrez Aperçu.</p>
+              <div className='invoice-template-options'>
+                {[
+                  { id: 'classic', name: 'Classique', subtitle: 'Repères bleus et blocs' },
+                  { id: 'sober', name: 'Sobre', subtitle: 'Neutre, sans bandeau' },
+                  { id: 'minimal', name: 'Minimaliste', subtitle: 'Aéré, sans décor' }
+                ].map((model) => <label key={model.id} className='invoice-template-option'>
+                  <input type='radio' name='pdf_template' value={model.id} checked={(form.pdf_template || 'classic') === model.id}
+                    onChange={() => updateField('pdf_template', model.id)} />
+                  <span className='invoice-template-option-body'>
+                    <span className={`invoice-template-thumbnail invoice-template-thumbnail-${model.id}`} aria-hidden='true'>
+                      <i className='invoice-template-mini-brand' />
+                      <i className='invoice-template-mini-title' />
+                      <i className='invoice-template-mini-text' />
+                      <i className='invoice-template-mini-text short' />
+                      <i className='invoice-template-mini-table' />
+                      <i className='invoice-template-mini-total' />
+                    </span>
+                    <strong>{model.name}</strong>
+                    <small>{model.subtitle}</small>
+                  </span>
+                </label>)}
+              </div>
+            </fieldset>
             {draftKey ? <p className='invoice-editor-hint' role='status'>{draftSaved ? 'Saisie conservée dans cet onglet. Enregistrez le document avant de le fermer.' : 'La sauvegarde dans cet onglet est indisponible. Enregistrez le document avant de quitter cette page.'}</p> : null}
             <button type='button' onClick={resetForm} className='invoice-reset'>Réinitialiser la saisie</button>
           </div>
           <div className='invoice-editor-summary'>
-            <div className='invoice-template-card'>
-              <label htmlFor='invoice-pdf-template'>Présentation du document PDF</label>
-              <select id='invoice-pdf-template' className='input' value={form.pdf_template || 'classic'} onChange={(event) => updateField('pdf_template', event.target.value)}>
-                <option value='classic'>Classique — en-tête bleu, blocs structurés</option>
-                <option value='sober'>Sobre — tons neutres, séparateurs fins</option>
-                <option value='minimal'>Minimaliste — espaces blancs, sans bandeau supérieur</option>
-              </select>
-              <p className='invoice-editor-hint'>Choisissez un modèle puis utilisez Aperçu. Les montants et informations restent identiques.</p>
-            </div>
             <InvoiceSummary documentType={documentType} form={form} totals={totals} onChange={updateField} onDiscountChange={(discount) => setForm((prev) => ({ ...prev, discount_type: discount.type, discount_value: discount.value }))} />
             {calculationError ? <p role='alert' className='invoice-calculation-error'>{calculationError}</p> : null}
           </div>
