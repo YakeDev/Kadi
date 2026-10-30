@@ -4,9 +4,10 @@ import { fileURLToPath } from 'node:url'
 import { lineAmounts } from './money.js'
 import { invoicePaymentSummary, paymentBusinessDate } from './payments.js'
 
-const colors = {
-  ink: '#172b3a', muted: '#64748b', accent: '#2563eb',
-  line: '#e2e8f0', pale: '#f5f8fc', blue: '#eff6ff'
+const palettes = {
+  classic: { ink: '#172b3a', muted: '#64748b', accent: '#2563eb', line: '#e2e8f0', pale: '#f5f8fc', blue: '#eff6ff' },
+  sober: { ink: '#253244', muted: '#626c78', accent: '#414c5d', line: '#dce1e7', pale: '#f7f8fa', blue: '#f7f8fa' },
+  minimal: { ink: '#1f2937', muted: '#6b7280', accent: '#374151', line: '#e5e7eb', pale: '#ffffff', blue: '#ffffff' }
 }
 const statuses = {
   draft: ['Brouillon', '#fff4db', '#92400e'],
@@ -18,6 +19,10 @@ const statuses = {
 
 export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'invoice' } = {}) => {
   const isQuote = kind === 'quote'
+  const template = ['classic', 'sober', 'minimal'].includes(invoice.pdf_template) ? invoice.pdf_template : 'classic'
+  const colors = palettes[template]
+  const isClassic = template === 'classic'
+  const isMinimal = template === 'minimal'
   const title = isQuote ? 'DEVIS' : 'FACTURE'
   const doc = new PDFDocument({ size: 'A4', margin: 48, bufferPages: true })
   doc.registerFont('Inter', fileURLToPath(import.meta.resolve('@fontsource/inter/files/inter-latin-400-normal.woff')))
@@ -87,12 +92,12 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
     const metaWidth = 220
     const metaX = right - metaWidth
     const brandWidth = width - metaWidth - 28
-    doc.rect(left, 32, width, 3).fill(colors.accent)
+    if (isClassic) doc.rect(left, 32, width, 3).fill(colors.accent)
     if (logo) {
       doc.image(logo, left, y, { fit: [120, 48], align: 'left', valign: 'center' })
       y += 61
     }
-    flow(issuer.company || 'Kadi', left, brandWidth, 18, true)
+    if (!logo) flow(issuer.company || 'Kadi', left, brandWidth, 18, true)
     if (issuer.tagline) { y += 7; flow(issuer.tagline, left, brandWidth, 8.5, false, colors.muted) }
     const brandBottom = y
     const brandPage = currentPage
@@ -100,12 +105,12 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
     const reference = wrap(invoice.invoice_number || '-', metaWidth - 32, 9, true)
     const datesY = 96 + reference.length * 13.5 + 12
     const metaBottom = datesY + 38
-    doc.roundedRect(metaX, 48, metaWidth, metaBottom - 48, 8).fill(colors.pale)
+    if (!isMinimal) doc.roundedRect(metaX, 48, metaWidth, metaBottom - 48, 8).fill(colors.pale)
     text('DEVIS', metaX + 16, 61, 100, 24, true)
     const status = invoice.status === 'draft' ? 'Brouillon' : 'Envoyé'
     font(8, true)
     const badgeWidth = doc.widthOfString(status) + 18
-    doc.roundedRect(right - badgeWidth - 16, 67, badgeWidth, 22, 5).fill(colors.blue)
+    if (!isMinimal) doc.roundedRect(right - badgeWidth - 16, 67, badgeWidth, 22, 5).fill(colors.blue)
     text(status, right - badgeWidth - 16, 73, badgeWidth, 8, true, colors.accent, 'center')
     reference.forEach((line, index) => text(line, metaX + 16, 96 + index * 13.5, metaWidth - 32, 9, true))
     const dateWidth = (metaWidth - 46) / 2
@@ -151,7 +156,7 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
       const blockHeight = Math.max(...fragments.map(fragment => fragment.height))
       for (const { party, end } of fragments) {
         if (party.index >= party.lines.length) continue
-        doc.roundedRect(party.x, y, partyWidth, blockHeight, 6).lineWidth(0.6).fillAndStroke(party.fill, colors.line)
+        if (!isMinimal) doc.roundedRect(party.x, y, partyWidth, blockHeight, 6).lineWidth(0.6).fillAndStroke(party.fill, colors.line)
         text(party.title, party.x + 14, y + 13, partyWidth - 28, 7, true, colors.accent)
         let lineY = y + 31
         for (const line of party.lines.slice(party.index, end)) {
@@ -167,14 +172,14 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
     const metaWidth = 206
     const metaX = right - metaWidth
     const issuerWidth = width - metaWidth - 32
-    doc.rect(left, 32, width, 2).fill(colors.accent)
+    if (isClassic) doc.rect(left, 32, width, 2).fill(colors.accent)
     text(title, metaX, 48, metaWidth, 27, true, colors.ink, 'right')
     const [status, statusBackground, statusColor] = isQuote
       ? [invoice.status === 'draft' ? 'Brouillon' : 'Envoyé', '#eff6ff', '#1d4ed8']
       : statuses[invoice.status] || statuses.sent
     font(8, true)
     const badgeWidth = doc.widthOfString(status) + 22
-    doc.roundedRect(right - badgeWidth, 87, badgeWidth, 22, 5).fill(statusBackground)
+    if (!isMinimal) doc.roundedRect(right - badgeWidth, 87, badgeWidth, 22, 5).fill(statusBackground)
     text(status, right - badgeWidth, 93, badgeWidth, 8, true, statusColor, 'center')
     text('RÉFÉRENCE', metaX, 125, metaWidth, 7.5, true, colors.muted, 'right')
     const reference = wrap(invoice.invoice_number || '-', metaWidth, 9, true)
@@ -191,7 +196,7 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
       doc.image(logo, left, y, { fit: [116, 46], align: 'left', valign: 'center' })
       y += 61
     }
-    flow(issuer.company || 'Kadi', left, issuerWidth, 16, true)
+    if (!logo) flow(issuer.company || 'Kadi', left, issuerWidth, 16, true)
     y += 7
     const issuerLines = [issuer.tagline, issuer.manager_name && `Responsable : ${issuer.manager_name}`,
       issuer.address, [issuer.city, issuer.state].filter(Boolean).join(', '), issuer.phone, issuer.website,
@@ -222,8 +227,8 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
         blockHeight += lineHeight
         end += 1
       }
-      doc.rect(left, y, width, blockHeight).fill(colors.pale)
-      doc.rect(left, y, 2, blockHeight).fill(colors.accent)
+      if (!isMinimal) doc.rect(left, y, width, blockHeight).fill(colors.pale)
+      if (isClassic) doc.rect(left, y, 2, blockHeight).fill(colors.accent)
       let lineY = y + 14
       for (const line of clientLines.slice(clientIndex, end)) {
         text(line.value, left + 16, lineY, width - 32, line.size, line.bold, line.color)
@@ -241,11 +246,12 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
     total: { x: left + 385, width: width - 397 }
   }
   const tableHeader = () => {
-    doc.rect(left, y, width, 30).fill(isQuote ? colors.ink : colors.pale)
-    text('Description', columns.description.x, y + 9, columns.description.width, 8.5, true, isQuote ? '#ffffff' : colors.ink)
+    if (isClassic) doc.rect(left, y, width, 30).fill(isQuote ? colors.ink : colors.pale)
+    else if (!isMinimal) doc.rect(left, y, width, 30).fill(colors.pale)
+    text('Description', columns.description.x, y + 9, columns.description.width, 8.5, true, isQuote && isClassic ? '#ffffff' : colors.ink)
     for (const [key, label] of [['quantity', 'Qté'], ['unit', 'Prix unitaire'], ['total', 'Total']]) {
       const column = columns[key]
-      text(label, column.x, y + 9, column.width, 8.5, true, isQuote ? '#ffffff' : colors.ink, 'right')
+      text(label, column.x, y + 9, column.width, 8.5, true, isQuote && isClassic ? '#ffffff' : colors.ink, 'right')
     }
     rule(y + 30)
     y += 30
@@ -255,8 +261,16 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
   for (const [index, item] of (invoice.items || []).entries()) {
     const amounts = lineAmounts(item)
     const discountNote = amounts.discountCents > 0
-      ? `\nRemise${item.discountType === 'percent' ? ` (${item.discountValue} %)` : ''} : ${money(amounts.discountCents / 100)}` : ''
-    const lines = wrap(`${item.description || '-'}${discountNote}`, columns.description.width, 9)
+      ? `Remise${item.discountType === 'percent' ? ` (${item.discountValue} %)` : ''} : ${money(amounts.discountCents / 100)}` : ''
+    // Legacy lines carry their entire label in description. New lines separate
+    // a readable heading from the detailed list of included deliverables.
+    const parts = [
+      { value: item.title || item.description || '-', size: 9, bold: true, color: colors.ink },
+      ...(item.title && item.description ? [{ value: item.description, size: 8.5, bold: false, color: colors.muted }] : []),
+      ...(discountNote ? [{ value: discountNote, size: 8.5, bold: false, color: colors.muted }] : [])
+    ]
+    const lines = parts.flatMap(part => wrap(part.value, columns.description.width, part.size, part.bold)
+      .map(value => ({ value, size: part.size, bold: part.bold, color: part.color })))
     const rowHeight = Math.max(40, lines.length * 13.5 + 20)
     // Keep ordinary rows intact; split unusually tall descriptions across pages.
     if (y + rowHeight > bottom && rowHeight <= bottom - 118) nextPage(true)
@@ -265,9 +279,9 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
       if (y + 40 > bottom) nextPage(true)
       const count = Math.min(lines.length - offset, Math.floor((bottom - y - 20) / 13.5))
       const height = Math.max(40, count * 13.5 + 20)
-      if (index % 2 === 1) doc.rect(left, y, width, height).fill('#fbfcfe')
+      if (isClassic && index % 2 === 1) doc.rect(left, y, width, height).fill('#fbfcfe')
       lines.slice(offset, offset + count).forEach((line, lineIndex) => {
-        text(line, columns.description.x, y + 10 + lineIndex * 13.5, columns.description.width)
+        text(line.value, columns.description.x, y + 10 + lineIndex * 13.5, columns.description.width, line.size, line.bold, line.color)
       })
       if (offset === 0) {
         fitText(quantity.format(Number(item.quantity || 0)).replace(/\s/gu, ' '), columns.quantity.x, y + 10, columns.quantity.width)
@@ -300,8 +314,9 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
   const summaryTop = y
   const summaryWidth = discountAmount > 0 ? 286 : 240
   const summaryX = right - summaryWidth
-  doc.roundedRect(summaryX, y, summaryWidth, summaryHeight, 6).fill(isQuote ? colors.pale : colors.blue)
-  if (isQuote) doc.rect(summaryX + 16, y, summaryWidth - 32, 2).fill(colors.accent)
+  if (!isMinimal) doc.roundedRect(summaryX, y, summaryWidth, summaryHeight, 6).fill(isQuote ? colors.pale : colors.blue)
+  else rule(y, summaryX, summaryWidth)
+  if (isQuote && isClassic) doc.rect(summaryX + 16, y, summaryWidth - 32, 2).fill(colors.accent)
   let summaryY = y + 15
   if (summaryRows.length) {
     for (const [label, value] of summaryRows) {

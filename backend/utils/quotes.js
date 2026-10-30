@@ -15,7 +15,7 @@ const date = (value, name, required = false) => {
   return value
 }
 export const sanitizeQuote = (body, { partial = false } = {}) => {
-  const payload = object(body, ['client_id','issue_date','valid_until','status','currency','notes','items','tax_rate','discount_type','discount_value','version'])
+  const payload = object(body, ['client_id','issue_date','valid_until','status','currency','notes','pdf_template','items','tax_rate','discount_type','discount_value','version'])
   if (payload.status != null && !['draft','sent'].includes(payload.status)) throw invalid('Le devis doit être brouillon ou envoyé.')
   const { valid_until, version, ...fields } = payload
   const invoice = sanitizeInvoicePayload({ ...fields, ...(Object.hasOwn(payload,'valid_until') ? { due_date: valid_until } : {}) }, { partial })
