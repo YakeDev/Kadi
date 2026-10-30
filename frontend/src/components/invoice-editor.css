@@ -96,3 +96,18 @@
   .invoice-preview-dialog { max-height: calc(100dvh - 16px); }
   .invoice-preview-dialog > header, .invoice-preview-dialog > aside { padding: 12px; }
 }
+
+/* Proximity: a line's title and optional scope read as one coherent service. */
+.invoice-line-description .invoice-line-field-label { display: block; margin: 0 0 5px; font-size: 11px; color: var(--text-muted); }
+.invoice-line-description .invoice-line-detail-label { margin-top: 10px; }
+.invoice-line-description .invoice-line-title-input { font-weight: 600; }
+.invoice-line-description .invoice-line-detail-input { font-weight: 400; line-height: 1.5; }
+.invoice-line-help { margin: 0 0 4px; max-width: 68ch; }
+.invoice-template-card { padding: 16px; margin-bottom: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-panel); }
+.invoice-template-card label { font-size: 13px; font-weight: 600; color: var(--text-dark); }
+.invoice-template-card select { width: 100%; }
+.invoice-template-card .invoice-editor-hint { line-height: 1.45; }
+.invoice-editor :is(button, select, input, textarea, summary):focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+@media (prefers-reduced-motion: reduce) {
+  .invoice-editor *, .invoice-editor *::before, .invoice-editor *::after { scroll-behavior: auto; transition: none; }
+}
