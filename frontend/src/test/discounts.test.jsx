@@ -138,3 +138,12 @@ test('the three PDF designs are selectable and a line title stays separate from 
     })])
   })))
 })
+
+test('new invoices start with minimalist PDF template while retaining all three choices', async () => {
+  render(<InvoiceForm variant='page' />)
+  const templates = screen.getAllByRole('radio')
+  expect(templates).toHaveLength(3)
+  expect(screen.getByRole('radio', { name: /Minimaliste/ })).toBeChecked()
+  fireEvent.click(screen.getByRole('radio', { name: /Sobre/ }))
+  expect(screen.getByRole('radio', { name: /Sobre/ })).toBeChecked()
+})
