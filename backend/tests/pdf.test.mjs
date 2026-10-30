@@ -255,3 +255,38 @@ test('a short quote with logo, full identities, discounts and terms keeps its to
     assert.match(content.items.map(item => item.str).join(' '), /Total\s+346,75 USD/u)
   } finally { await pdf.loadingTask.destroy() }
 })
+
+test('all document models keep line headings, detailed scope and monetary totals', async () => {
+  const items = [{ title: 'LOT 01 - Identite de marque',
+    description: 'Recherche et direction artistique ; conception du logo ; mini-charte et fichiers PNG, SVG, PDF.',
+    quantity: 1, unitPrice: 420 }]
+  for (const pdf_template of ['classic', 'sober', 'minimal']) {
+    const pdf = await render({ ...invoice(1), items, pdf_template, total_amount: 420 })
+    try {
+      assert.equal(pdf.numPages, 1)
+      const content = (await (await pdf.getPage(1)).getTextContent()).items.map(item => item.str).join(' ')
+      assert.match(content, /LOT 01 - Identite de marque/u)
+      assert.match(content, /Recherche et direction artistique/u)
+      assert.match(content, /mini-charte et fichiers PNG/u)
+      assert.match(content, /420,00 USD/u)
+    } finally { await pdf.loadingTask.destroy() }
+  }
+})
+
+test('issuer name is a fallback only when no logo is provided', async () => {
+  const company = 'ENTREPRISE UNIQUE'
+  const noLogo = await render(invoice(1), { company })
+  try {
+    const content = (await (await noLogo.getPage(1)).getTextContent()).items.map(item => item.str).join(' ')
+    assert.match(content, /ENTREPRISE UNIQUE/u)
+  } finally { await noLogo.loadingTask.destroy() }
+  const input = await sharp({ create: { width: 64, height: 64, channels: 3, background: '#334455' } }).png().toBuffer()
+  const logo = await normalizeLogoImage(input)
+  const withLogo = await render(invoice(1), { company }, logo, { kind: 'invoice' })
+  try {
+    const content = (await (await withLogo.getPage(1)).getTextContent()).items.map(item => item.str).join(' ')
+    assert.doesNotMatch(content, /ENTREPRISE UNIQUE/u)
+    const ops = await (await withLogo.getPage(1)).getOperatorList()
+    assert.ok(ops.fnArray.includes(OPS.paintImageXObject))
+  } finally { await withLogo.loadingTask.destroy() }
+})
