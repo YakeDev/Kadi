@@ -28,6 +28,7 @@ import { clearInvoiceDraft, invoiceDraftKey, readInvoiceDraft, writeInvoiceDraft
 
 const createEmptyItem = (currency = 'USD') => ({
   catalogItemId: null,
+  title: '',
   description: '',
   quantity: 1,
   unitPrice: 0,
@@ -44,6 +45,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
       due_date: '',
       status: 'draft',
       notes: '',
+      pdf_template: 'classic',
       currency: 'USD',
       tax_rate: 0,
       discount_type: 'none',
@@ -55,7 +57,8 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
   const items = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items.map((line) => ({
         catalogItemId: line.catalogItemId ?? line.catalog_item_id ?? null,
-        description: line.description ?? '',
+        title: line.title ?? line.description ?? line.name ?? '',
+        description: line.title != null ? (line.description ?? '') : '',
         quantity: Number(line.quantity ?? 1),
         unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
         discountType: line.discountType || 'none',
@@ -70,6 +73,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
     due_date: invoice.due_date ?? '',
     status: invoice.status ?? 'draft',
     notes: invoice.notes ?? '',
+    pdf_template: invoice.pdf_template ?? 'classic',
     currency: invoice.currency === '$' ? 'USD' : invoice.currency || 'USD',
     tax_rate: Number(invoice.tax_rate || 0),
     discount_type: invoice.discount_type || 'none',
@@ -168,13 +172,11 @@ const InvoiceEditor = ({
           return { ...item, catalogItemId: null }
         }
 
-        const autoDescription =
-          item.description?.trim().length > 0 ? item.description : selected.description || selected.name
-
         return {
           ...item,
           catalogItemId: selected.id,
-          description: autoDescription,
+          title: item.title?.trim() ? item.title : selected.name,
+          description: item.description?.trim() ? item.description : selected.description || '',
           unitPrice: Number(selected.unit_price || 0),
           currency: selected.currency || item.currency || prev.currency || 'USD'
         }
@@ -188,7 +190,7 @@ const InvoiceEditor = ({
       toast.error('Cet article utilise une autre devise. Choisissez un article dans la devise de la facture.')
       return
     }
-    const emptyIndex = form.items.findIndex((item) => !item.catalogItemId && !item.description.trim() && !Number(item.unitPrice))
+    const emptyIndex = form.items.findIndex((item) => !item.catalogItemId && !item.title?.trim() && !item.description?.trim() && !Number(item.unitPrice))
     const targetIndex = catalogPicker.index ?? (emptyIndex >= 0 ? emptyIndex : null)
     if (targetIndex != null) {
       applyCatalogSelection(targetIndex, catalogItem)
@@ -196,7 +198,8 @@ const InvoiceEditor = ({
       setForm((prev) => ({ ...prev, items: [...prev.items, {
         ...createEmptyItem(prev.currency),
         catalogItemId: catalogItem.id,
-        description: catalogItem.description || catalogItem.name,
+        title: catalogItem.name,
+        description: catalogItem.description || '',
         unitPrice: Number(catalogItem.unit_price || 0)
       }] }))
     }
@@ -292,7 +295,8 @@ const InvoiceEditor = ({
         items: data.items?.length
           ? data.items.map((line) => ({
               catalogItemId: line.catalogItemId ?? line.catalog_item_id ?? null,
-              description: line.description ?? '',
+              title: line.title ?? line.name ?? line.description ?? '',
+              description: line.title || line.name ? (line.description ?? '') : '',
               quantity: Number(line.quantity ?? 1),
               unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
               currency: data.currency ?? prev.currency ?? 'USD'
@@ -365,7 +369,8 @@ const InvoiceEditor = ({
                   {isGenerating ? 'Génération…' : 'Générer via IA'}
                 </button>
               </div>
-              <div className='invoice-line-columns' aria-hidden='true'><span>Description</span><span>Qté</span><span>Prix unitaire</span><span>Remise</span><span>Montant net</span><span /></div>
+              <p className='invoice-editor-hint invoice-line-help'>Donnez un titre court à chaque prestation, puis précisez son contenu si nécessaire. Le titre et la description apparaîtront ensemble sur le PDF.</p>
+              <div className='invoice-line-columns' aria-hidden='true'><span>Prestation / périmètre</span><span>Qté</span><span>Prix unitaire</span><span>Remise</span><span>Montant net</span><span /></div>
               {form.items.map((item, index) => <InvoiceLineEditor key={`invoice-item-${index}`} item={item} index={index} currency={form.currency}
                 canRemove={form.items.length > 1} onChange={(field, value) => updateItem(index, field, value)}
                 onDiscountChange={(discount) => setForm((prev) => ({ ...prev, items: prev.items.map((entry, idx) => idx === index ? { ...entry, discountType: discount.type, discountValue: discount.value } : entry) }))}
@@ -383,6 +388,15 @@ const InvoiceEditor = ({
             <button type='button' onClick={resetForm} className='invoice-reset'>Réinitialiser la saisie</button>
           </div>
           <div className='invoice-editor-summary'>
+            <div className='invoice-template-card'>
+              <label htmlFor='invoice-pdf-template'>Présentation du document PDF</label>
+              <select id='invoice-pdf-template' className='input' value={form.pdf_template || 'classic'} onChange={(event) => updateField('pdf_template', event.target.value)}>
+                <option value='classic'>Classique — en-tête bleu, blocs structurés</option>
+                <option value='sober'>Sobre — tons neutres, séparateurs fins</option>
+                <option value='minimal'>Minimaliste — espaces blancs, sans bandeau supérieur</option>
+              </select>
+              <p className='invoice-editor-hint'>Choisissez un modèle puis utilisez Aperçu. Les montants et informations restent identiques.</p>
+            </div>
             <InvoiceSummary documentType={documentType} form={form} totals={totals} onChange={updateField} onDiscountChange={(discount) => setForm((prev) => ({ ...prev, discount_type: discount.type, discount_value: discount.value }))} />
             {calculationError ? <p role='alert' className='invoice-calculation-error'>{calculationError}</p> : null}
           </div>
