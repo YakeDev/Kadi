@@ -116,3 +116,25 @@ test('removing a line preserves the remaining line discount and zero quantities 
   expect(screen.getByRole('button', { name: 'Enregistrer la facture' })).toBeDisabled()
   expect(mocks.post).not.toHaveBeenCalled()
 })
+
+test('the three PDF designs are selectable and a line title stays separate from its scope', async () => {
+  const { container } = render(<InvoiceForm invoice={invoice()} />)
+  expect(screen.getAllByRole('radio')).toHaveLength(3)
+  fireEvent.click(screen.getByRole('radio', { name: /Minimaliste/ }))
+  fireEvent.change(screen.getAllByLabelText('Intitulé de la prestation')[0], { target: { value: 'LOT 01 - Identité de marque' } })
+  fireEvent.change(screen.getAllByLabelText('Description détaillée (facultative)')[0],
+    { target: { value: '2 pistes créatives ; palette et typographies ; 8 à 12 pages.' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Aperçu', exact: true }))
+  const preview = within(screen.getByRole('complementary', { name: 'Aperçu de la facture' }))
+  expect(preview.getByText('LOT 01 - Identité de marque')).toBeInTheDocument()
+  expect(preview.getByText(/2 pistes créatives/)).toBeInTheDocument()
+  fireEvent.click(screen.getByRole('button', { name: 'Fermer l’aperçu' }))
+  fireEvent.submit(container.querySelector('form'))
+  await waitFor(() => expect(mocks.post).toHaveBeenCalledWith('/invoices', expect.objectContaining({
+    pdf_template: 'minimal',
+    items: expect.arrayContaining([expect.objectContaining({
+      title: 'LOT 01 - Identité de marque',
+      description: '2 pistes créatives ; palette et typographies ; 8 à 12 pages.'
+    })])
+  })))
+})
