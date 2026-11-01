@@ -27,6 +27,15 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm audit --omit=dev --audit-level=moderate
+      - name: Export 12 real PDF layouts for visual release QA
+        run: node scripts/export-pdf-qa.mjs
+      - name: Upload PDF review samples
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: kadi-pdf-qa
+          path: backend/artifacts/pdf-qa/
+          if-no-files-found: error
+          retention-days: 30
   frontend:
     runs-on: ubuntu-latest
     timeout-minutes: 10
