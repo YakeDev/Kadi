@@ -18,6 +18,7 @@ const INVOICE_ALLOWED_FIELDS = [
   'due_date',
   'status',
   'notes',
+  'pdf_template',
   'items',
   'currency',
   'tax_rate',
@@ -40,6 +41,7 @@ const INVOICE_ITEM_ALLOWED_FIELDS = [
   'catalogItemId',
   'catalog_item_id',
   'description',
+  'title',
   'name',
   'quantity',
   'qty',
@@ -189,9 +191,15 @@ const sanitizeInvoiceItem = (value, index) => {
   const payload = assertPlainObject(value)
   rejectUnexpectedFields(payload, INVOICE_ITEM_ALLOWED_FIELDS)
 
+  // Old documents only have description; new documents separate the title from
+  // optional scope details. Both representations remain readable and editable.
+  const hasTitle = payload.title != null && String(payload.title).trim() !== ''
+  const title = hasTitle ? normalizeString(payload.title, {
+    field: `items[${index}].title`, required: true, maxLength: 160, allowNull: false
+  }) : null
   const description = normalizeString(payload.description ?? payload.name, {
     field: `items[${index}].description`,
-    required: true,
+    required: !hasTitle,
     maxLength: 500,
     allowNull: false
   })
@@ -213,6 +221,7 @@ const sanitizeInvoiceItem = (value, index) => {
   )
 
   const sanitized = {
+    ...(title ? { title } : {}),
     description,
     quantity,
     unitPrice
@@ -321,6 +330,14 @@ export const sanitizeInvoicePayload = (body = {}, { partial = false } = {}) => {
       field: 'notes',
       maxLength: 5000
     })
+  }
+
+  if (!partial || hasOwn(payload, 'pdf_template')) {
+    const template = payload.pdf_template ?? 'classic'
+    if (!['classic', 'sober', 'minimal'].includes(template)) {
+      throw createValidationError('Modèle de PDF invalide.')
+    }
+    sanitized.pdf_template = template
   }
 
   if (!partial || hasOwn(payload, 'currency')) {

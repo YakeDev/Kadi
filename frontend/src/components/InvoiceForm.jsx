@@ -28,6 +28,7 @@ import { clearInvoiceDraft, invoiceDraftKey, readInvoiceDraft, writeInvoiceDraft
 
 const createEmptyItem = (currency = 'USD') => ({
   catalogItemId: null,
+  title: '',
   description: '',
   quantity: 1,
   unitPrice: 0,
@@ -44,6 +45,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
       due_date: '',
       status: 'draft',
       notes: '',
+      pdf_template: 'minimal',
       currency: 'USD',
       tax_rate: 0,
       discount_type: 'none',
@@ -55,7 +57,8 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
   const items = Array.isArray(invoice.items) && invoice.items.length > 0
     ? invoice.items.map((line) => ({
         catalogItemId: line.catalogItemId ?? line.catalog_item_id ?? null,
-        description: line.description ?? '',
+        title: line.title ?? line.description ?? line.name ?? '',
+        description: line.title != null ? (line.description ?? '') : '',
         quantity: Number(line.quantity ?? 1),
         unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
         discountType: line.discountType || 'none',
@@ -70,6 +73,7 @@ const normalizeInvoiceForForm = (invoice, fallbackClientId) => {
     due_date: invoice.due_date ?? '',
     status: invoice.status ?? 'draft',
     notes: invoice.notes ?? '',
+    pdf_template: invoice.pdf_template ?? 'classic',
     currency: invoice.currency === '$' ? 'USD' : invoice.currency || 'USD',
     tax_rate: Number(invoice.tax_rate || 0),
     discount_type: invoice.discount_type || 'none',
@@ -95,7 +99,7 @@ const InvoiceEditor = ({
   const { profile: companyProfile, user } = useAuth()
   const draftKey = variant === 'page' ? invoiceDraftKey(user?.id, invoice)?.replace('invoice-draft', isQuote ? 'quote-draft' : 'invoice-draft') : null
   const skipDraftSave = useRef(false)
-  const [form, setForm] = useState(() => readInvoiceDraft(draftKey) || normalizeInvoiceForForm(invoice, defaultClientId))
+  const [form, setForm] = useState(() => normalizeInvoiceForForm(readInvoiceDraft(draftKey) || invoice, defaultClientId))
   const savedFormSignature = useRef(JSON.stringify(normalizeInvoiceForForm(invoice, defaultClientId)))
   const isDirty = JSON.stringify(form) !== savedFormSignature.current
   const [draftSaved, setDraftSaved] = useState(true)
@@ -168,13 +172,11 @@ const InvoiceEditor = ({
           return { ...item, catalogItemId: null }
         }
 
-        const autoDescription =
-          item.description?.trim().length > 0 ? item.description : selected.description || selected.name
-
         return {
           ...item,
           catalogItemId: selected.id,
-          description: autoDescription,
+          title: item.title?.trim() ? item.title : selected.name,
+          description: item.description?.trim() ? item.description : selected.description || '',
           unitPrice: Number(selected.unit_price || 0),
           currency: selected.currency || item.currency || prev.currency || 'USD'
         }
@@ -188,7 +190,7 @@ const InvoiceEditor = ({
       toast.error('Cet article utilise une autre devise. Choisissez un article dans la devise de la facture.')
       return
     }
-    const emptyIndex = form.items.findIndex((item) => !item.catalogItemId && !item.description.trim() && !Number(item.unitPrice))
+    const emptyIndex = form.items.findIndex((item) => !item.catalogItemId && !item.title?.trim() && !item.description?.trim() && !Number(item.unitPrice))
     const targetIndex = catalogPicker.index ?? (emptyIndex >= 0 ? emptyIndex : null)
     if (targetIndex != null) {
       applyCatalogSelection(targetIndex, catalogItem)
@@ -196,7 +198,8 @@ const InvoiceEditor = ({
       setForm((prev) => ({ ...prev, items: [...prev.items, {
         ...createEmptyItem(prev.currency),
         catalogItemId: catalogItem.id,
-        description: catalogItem.description || catalogItem.name,
+        title: catalogItem.name,
+        description: catalogItem.description || '',
         unitPrice: Number(catalogItem.unit_price || 0)
       }] }))
     }
@@ -292,7 +295,8 @@ const InvoiceEditor = ({
         items: data.items?.length
           ? data.items.map((line) => ({
               catalogItemId: line.catalogItemId ?? line.catalog_item_id ?? null,
-              description: line.description ?? '',
+              title: line.title ?? line.name ?? line.description ?? '',
+              description: line.title || line.name ? (line.description ?? '') : '',
               quantity: Number(line.quantity ?? 1),
               unitPrice: Number(line.unitPrice ?? line.unit_price ?? 0),
               currency: data.currency ?? prev.currency ?? 'USD'
@@ -365,7 +369,8 @@ const InvoiceEditor = ({
                   {isGenerating ? 'Génération…' : 'Générer via IA'}
                 </button>
               </div>
-              <div className='invoice-line-columns' aria-hidden='true'><span>Description</span><span>Qté</span><span>Prix unitaire</span><span>Remise</span><span>Montant net</span><span /></div>
+              <p className='invoice-editor-hint invoice-line-help'>Donnez un titre court à chaque prestation, puis précisez son contenu si nécessaire. Le titre et la description apparaîtront ensemble sur le PDF.</p>
+              <div className='invoice-line-columns' aria-hidden='true'><span>Prestation / périmètre</span><span>Qté</span><span>Prix unitaire</span><span>Remise</span><span>Montant net</span><span /></div>
               {form.items.map((item, index) => <InvoiceLineEditor key={`invoice-item-${index}`} item={item} index={index} currency={form.currency}
                 canRemove={form.items.length > 1} onChange={(field, value) => updateItem(index, field, value)}
                 onDiscountChange={(discount) => setForm((prev) => ({ ...prev, items: prev.items.map((entry, idx) => idx === index ? { ...entry, discountType: discount.type, discountValue: discount.value } : entry) }))}
@@ -379,6 +384,32 @@ const InvoiceEditor = ({
               <summary>Notes et conditions de paiement</summary>
               <textarea id='notes' aria-label='Notes et conditions de paiement' value={form.notes} onChange={(event) => updateField('notes', event.target.value)} placeholder='Conditions de paiement, message de remerciement…' className='textarea' rows={3} />
             </details>
+            <fieldset className='invoice-template-card'>
+              <legend>Apparence du document PDF</legend>
+              <p className='invoice-editor-hint'>Minimaliste est proposé par défaut pour les nouveaux documents. Vous pouvez choisir l’un des trois modèles pour chaque facture ou devis ; votre choix sera conservé avec le document.</p>
+              <div className='invoice-template-options'>
+                {[
+                  { id: 'classic', name: 'Classique', subtitle: 'Repères bleus et blocs' },
+                  { id: 'sober', name: 'Sobre', subtitle: 'Neutre, sans bandeau' },
+                  { id: 'minimal', name: 'Minimaliste', subtitle: 'Aéré, sans décor' }
+                ].map((model) => <label key={model.id} className='invoice-template-option'>
+                  <input type='radio' name='pdf_template' value={model.id} checked={(form.pdf_template || 'classic') === model.id}
+                    onChange={() => updateField('pdf_template', model.id)} />
+                  <span className='invoice-template-option-body'>
+                    <span className={`invoice-template-thumbnail invoice-template-thumbnail-${model.id}`} aria-hidden='true'>
+                      <i className='invoice-template-mini-brand' />
+                      <i className='invoice-template-mini-title' />
+                      <i className='invoice-template-mini-text' />
+                      <i className='invoice-template-mini-text short' />
+                      <i className='invoice-template-mini-table' />
+                      <i className='invoice-template-mini-total' />
+                    </span>
+                    <strong>{model.name}</strong>
+                    <small>{model.subtitle}</small>
+                  </span>
+                </label>)}
+              </div>
+            </fieldset>
             {draftKey ? <p className='invoice-editor-hint' role='status'>{draftSaved ? 'Saisie conservée dans cet onglet. Enregistrez le document avant de le fermer.' : 'La sauvegarde dans cet onglet est indisponible. Enregistrez le document avant de quitter cette page.'}</p> : null}
             <button type='button' onClick={resetForm} className='invoice-reset'>Réinitialiser la saisie</button>
           </div>

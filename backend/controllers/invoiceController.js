@@ -285,7 +285,7 @@ const rankProducts = (invoices) => {
 			const quantity = Number(item.quantity || 0)
 			const unitPrice = Number(item.unitPrice || item.unit_price || 0)
 			const total = netAmounts ? netAmounts[index] / 100 : quantity * unitPrice
-			const label = item.description || item.name || 'Article sans nom'
+			const label = item.title || item.description || item.name || 'Article sans nom'
 
 			if (!products.has(label)) {
 				products.set(label, {

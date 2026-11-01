@@ -9,15 +9,26 @@ const InvoiceLineEditor = ({ item, index, currency, canRemove, onChange, onDisco
   return (
     <div className='invoice-line' role='group' aria-label={`Ligne ${number}`}>
       <div className='invoice-line-description'>
-        <label htmlFor={`line-description-${index}`} className='invoice-mobile-label'>Description</label>
+        <label htmlFor={`line-title-${index}`} className='invoice-line-field-label'>Intitulé de la prestation</label>
+        <input
+          id={`line-title-${index}`}
+          type='text'
+          maxLength={160}
+          value={item.title ?? ''}
+          onChange={(event) => onChange('title', event.target.value)}
+          placeholder='Ex. : Identité de marque'
+          className='input invoice-line-title-input'
+          required
+        />
+        <label htmlFor={`line-description-${index}`} className='invoice-line-field-label invoice-line-detail-label'>Description détaillée (facultative)</label>
         <textarea
           id={`line-description-${index}`}
-          value={item.description}
+          maxLength={500}
+          value={item.description ?? ''}
           onChange={(event) => onChange('description', event.target.value)}
-          placeholder='Prestation, produit, service…'
-          className='input'
-          rows={1}
-          required
+          placeholder='Ce qui est compris : livrables, périmètre, prestations…'
+          className='input invoice-line-detail-input'
+          rows={2}
         />
         <button type='button' className='invoice-text-action' aria-label={`Choisir un article pour la ligne ${number}`} onClick={onCatalog}>
           <PackageSearch aria-hidden='true' className='h-3.5 w-3.5' />

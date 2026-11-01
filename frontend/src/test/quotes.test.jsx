@@ -13,7 +13,7 @@ beforeEach(()=>{sessionStorage.clear();mocks.get.mockReset();mocks.get.mockResol
 test('quote editing preserves sent content, validity and version while using a separate draft namespace',async()=>{
  mocks.patch.mockResolvedValue({data:quote()})
  const {container}=render(<InvoiceForm documentType='quote' variant='page' invoice={{...quote(),due_date:quote().valid_until}} />)
- fireEvent.change(screen.getByLabelText('Description'),{target:{value:'Offre modifiée avant conversion'}})
+ fireEvent.change(screen.getByLabelText('Description détaillée (facultative)'),{target:{value:'Offre modifiée avant conversion'}})
  fireEvent.change(screen.getByLabelText('Valable jusqu’au'),{target:{value:'2026-03-01'}})
  fireEvent.submit(container.querySelector('form'))
  await waitFor(()=>expect(mocks.patch).toHaveBeenCalled())
