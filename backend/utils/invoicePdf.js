@@ -202,16 +202,16 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
       issuer.address, [issuer.city, issuer.state].filter(Boolean).join(', '), issuer.phone, issuer.website,
       issuer.national_id && `ID. Nat. : ${issuer.national_id}`,
       issuer.rccm && `RCCM : ${issuer.rccm}`, issuer.nif && `NIF : ${issuer.nif}`].filter(Boolean)
-    for (const line of issuerLines) { flow(line, left, issuerWidth, 8.5, false, colors.muted); y += 3 }
+    for (const line of issuerLines) { flow(line, left, issuerWidth, 8.5, false, colors.muted) }
     y = Math.max(y, currentPage === 0 ? metadataBottom : 0) + 26
 
     const client = invoice.client || {}
     const clientLines = [
-      { value: isQuote ? 'PROPOSÉ À' : 'FACTURÉ À', size: 7.5, bold: true, color: colors.muted, gap: 7 },
+      { value: isQuote ? 'PROPOSÉ À' : 'FACTURÉ À', size: 7.5, bold: true, color: colors.muted, gap: 4 },
       { value: client.company_name || 'Client non défini', size: 12, bold: true, gap: 4 },
       ...[client.contact_name, client.address, client.email, client.phone,
         client.nif && `NIF : ${client.nif}`, client.national_id && `ID. Nat. : ${client.national_id}`, client.rccm && `RCCM : ${client.rccm}`].filter(Boolean)
-        .map((value) => ({ value, size: 9, gap: 2 }))
+        .map((value) => ({ value, size: 9, gap: 0 }))
     ].flatMap(({ value, ...style }) => wrap(value, width - 32, style.size, style.bold)
       .map((line, index, lines) => ({ ...style, value: line, gap: index === lines.length - 1 ? style.gap : 0 })))
     // Shade the client block in page-sized fragments, so long addresses also paginate.
@@ -234,7 +234,7 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
         text(line.value, left + 16, lineY, width - 32, line.size, line.bold, line.color)
         lineY += line.size * 1.5 + line.gap
       }
-      y += blockHeight + 24
+      y += blockHeight + 12
       clientIndex = end
     }
   }
@@ -352,6 +352,23 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
     y += 8
     flow(invoice.notes, left, sideWidth, 9, false, colors.muted)
   }
+  // Put a short receipt history beside the totals when it fits. This avoids
+  // turning an otherwise standard two-line invoice into two mostly blank pages.
+  const methods = { cash: 'Espèces', bank_transfer: 'Virement', mobile_money: 'Mobile Money', other: 'Autre', legacy: 'Reprise historique' }
+  const receiptTexts = (showPayments ? invoice.payments || [] : [])
+    .map(payment => `${date(payment.paid_on)} · ${money(payment.amount)} · ${methods[payment.method] || payment.method}${payment.reference ? ` · ${payment.reference}` : ''}`)
+  const receiptHeight = 24 + receiptTexts.reduce((height, value) => height + wrap(value, sideWidth, 8).length * 12 + 4, 0)
+  const receiptsBeside = receiptTexts.length > 0 && receiptTexts.length <= 2
+    && y - summaryTop + receiptHeight <= summaryHeight
+  if (receiptsBeside) {
+    y += 7
+    flow('VERSEMENTS REÇUS', left, sideWidth, 8, true, colors.accent)
+    y += 5
+    for (const receipt of receiptTexts) {
+      flow(receipt, left, sideWidth, 8)
+      y += 4
+    }
+  }
   y = summaryEnd
 
   if (invoice.notes && !notesBeside) {
@@ -366,11 +383,10 @@ export const createInvoicePdf = (invoice, issuer = {}, logo = null, { kind = 'in
     if (invoice.po_reference) flow(`Référence PO : ${invoice.po_reference}`, left, width, 9, true)
     y += 14
   }
-  if (showPayments && invoice.payments?.length) {
+  if (showPayments && invoice.payments?.length && !receiptsBeside) {
     if (y + 55 > bottom) nextPage()
     flow('VERSEMENTS REÇUS', left, width, 9, true, colors.accent)
     y += 8
-    const methods = { cash: 'Espèces', bank_transfer: 'Virement', mobile_money: 'Mobile Money', other: 'Autre', legacy: 'Reprise historique' }
     for (const payment of invoice.payments) {
       flow(`${date(payment.paid_on)} · ${money(payment.amount)} · ${methods[payment.method] || payment.method}${payment.reference ? ` · ${payment.reference}` : ''}`, left, width, 8.5)
       y += 5
