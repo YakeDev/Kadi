@@ -7,6 +7,7 @@ import {
 	Package,
 	Building2,
 	ShieldCheck,
+	Info,
 } from 'lucide-react'
 import { navigationLinks } from '../constants/navigation.js'
 import AppBrand from './AppBrand.jsx'
@@ -61,6 +62,7 @@ const Sidebar = () => {
 			</nav>
 
 			<div className='px-6 py-6'>
+				<SidebarLink to='/a-propos' label='À propos de Kadi' icon={Info} />
 				<div className='surface p-4'>
 					<p className='text-sm font-semibold text-[var(--text-dark)]'>
 						Besoin d&apos;aide ?

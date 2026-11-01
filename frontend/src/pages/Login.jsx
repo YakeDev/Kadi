@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Link, Navigate } from 'react-router-dom'
 import toast from 'react-hot-toast'
 import {
 	ArrowLeft,
@@ -1147,6 +1147,11 @@ const Login = () => {
 				{view === Steps.COMPANY_DETAILS && renderCompanyDetailsStep()}
 				{view === Steps.SUCCESS && renderSuccessStep()}
 			</div>
+			<nav aria-label='Informations et conditions Kadi' className='mx-auto mt-5 flex max-w-[720px] flex-wrap justify-center gap-x-5 gap-y-2 text-center text-xs text-[var(--text-muted)]'>
+				<Link className='min-h-8 hover:text-[var(--primary)]' to='/a-propos'>À propos</Link>
+				<Link className='min-h-8 hover:text-[var(--primary)]' to='/conditions-utilisation'>Conditions d’utilisation</Link>
+				<Link className='min-h-8 hover:text-[var(--primary)]' to='/confidentialite'>Confidentialité</Link>
+			</nav>
 		</div>
 	)
 }

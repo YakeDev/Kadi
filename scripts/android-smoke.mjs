@@ -80,6 +80,16 @@ try {
   assert.equal(initial.password, true);
   assert.equal(initial.overflow, false);
   await screenshot("android-login");
+  await page.getByRole("link", { name: "À propos", exact: true }).click();
+  await page.getByRole("heading", { name: "À propos de Kadi" }).waitFor();
+  await page.getByRole("link", { name: "Confidentialité", exact: true }).click();
+  await page.getByRole("heading", { name: "Politique de confidentialité" }).waitFor();
+  await page.getByRole("link", { name: "page publique de demande" }).click();
+  await page.getByRole("heading", { name: "Demander la suppression du compte" }).waitFor();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+  await screenshot("android-account-deletion");
+  await page.getByRole("link", { name: "Retour à l’application" }).click();
+  await page.locator('input[type="password"]').waitFor({ state: "visible" });
   await page.getByRole("button", { name: "S'inscrire", exact: true }).click();
   await page.getByRole("heading", { name: "Créons votre accès" }).waitFor();
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);

@@ -13,6 +13,7 @@ const asBase64 = (blob) => new Promise((resolve, reject) => {
 export const clearNativeDocuments = async () => {
   // Only this app's temporary PDF folder; never user-selected shared copies.
   try { await Filesystem.rmdir({ path: documentFolder, directory: Directory.Cache, recursive: true }) } catch { /* Folder may not exist. */ }
+  try { await Filesystem.rmdir({ path: 'kadi-export', directory: Directory.Cache, recursive: true }) } catch { /* Folder may not exist. */ }
 }
 
 export const shareNativePdf = async (blob, filename) => {

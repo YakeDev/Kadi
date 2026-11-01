@@ -7,6 +7,7 @@ import { changePassword } from '../services/auth.js'
 import { showErrorToast } from '../utils/errorToast.js'
 import FormSection from '../components/FormSection.jsx'
 import PageHeader from '../components/PageHeader.jsx'
+import AccountLifecycle from '../components/AccountLifecycle.jsx'
 
 const initialState = {
   company: '',
@@ -439,6 +440,7 @@ const Company = () => {
           </div>
         </form>
       </FormSection>
+      <AccountLifecycle />
     </div>
   )
 }

@@ -9,7 +9,7 @@ const overview=()=>({range:{from:'2026-01-01',to:'2026-01-03',time_zone:'Africa/
  period:{companies_registered:2,users_registered:3,invoices_created:5,invoices_issued:2,quotes_created:3,quotes_converted:1,users_active:2,companies_active:1,receipts_recorded:2},
  daily:[{date:'2026-01-01',invoices_created:0,invoices_issued:0},{date:'2026-01-02',invoices_created:5,invoices_issued:2},{date:'2026-01-03',invoices_created:0,invoices_issued:0}],
  invoice_statuses:{draft:2,sent:10,paid:8,partially_paid:3},activity_tracking_started_at:'2026-01-01T08:00:00Z',historical_issued_without_timestamp:20})
-beforeEach(()=>{mocks.get.mockReset().mockResolvedValue({data:overview()});mocks.access.isSuperAdmin=true;mocks.access.platformAccessStatus='ready';mocks.access.refreshPlatformAccess.mockReset()})
+beforeEach(()=>{mocks.get.mockReset().mockImplementation(path=>Promise.resolve({data:path==='/platform/deletion-requests'?{requests:[]}:overview()}));mocks.access.isSuperAdmin=true;mocks.access.platformAccessStatus='ready';mocks.access.refreshPlatformAccess.mockReset()})
 const show=()=>render(<MemoryRouter><PlatformAdmin /></MemoryRouter>)
 test('ordinary accounts cannot fetch or display global statistics',()=>{
  mocks.access.isSuperAdmin=false;show()
