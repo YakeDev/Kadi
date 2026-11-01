@@ -290,3 +290,48 @@ test('issuer name is a fallback only when no logo is provided', async () => {
     assert.ok(ops.fnArray.includes(OPS.paintImageXObject))
   } finally { await withLogo.loadingTask.destroy() }
 })
+
+
+test('a standard two-service partially paid invoice fits on one A4 page in all models', async () => {
+  const issuer = {
+    company: 'ATELIER DE DÉMONSTRATION SARL',
+    tagline: 'Identité visuelle et solutions numériques',
+    manager_name: 'Responsable commercial',
+    address: '12, avenue de la Démonstration',
+    city: 'Lubumbashi', state: 'Haut-Katanga',
+    phone: '+243 000 000 001',
+    national_id: 'ID-DEMO', rccm: 'RCCM-DEMO', nif: 'NIF-DEMO',
+  }
+  const logo = await normalizeLogoImage(Buffer.from(
+    '<svg xmlns="http://www.w3.org/2000/svg" width="140" height="55"><rect width="140" height="55" fill="navy"/></svg>'))
+  const details = {
+    ...invoice(2),
+    status: 'partially_paid',
+    subtotal_amount: 600, total_amount: 600, paid_amount: 200,
+    notes: 'Validité : 30 jours. Conditions : 50 % à la commande, solde à la livraison. Aucun compte ni client réel utilisé.',
+    payments: [{ paid_on: '2026-11-01', amount: 200, method: 'bank_transfer', reference: 'QA-TEST' }],
+    client: { company_name: 'CLIENT FICTIF SARL', contact_name: 'Service achats',
+      address: '48, avenue des Clients, Lubumbashi', email: 'test@example.invalid', nif: 'NIF-CLIENT-DEMO' },
+    items: [
+      { title: 'LOT 01 — Identité de marque',
+        description: 'Recherche et direction artistique (2 pistes), conception du logo et variantes, palette de couleurs, typographies, mini-charte graphique de 8 à 12 pages et fichiers livrables PNG, SVG et PDF.',
+        quantity: 1, unitPrice: 420 },
+      { title: 'LOT 02 — Présentation du programme',
+        description: 'Conception éditoriale, mise en page et préparation d’une présentation professionnelle du programme en français, avec deux séries de corrections.',
+        quantity: 1, unitPrice: 180 },
+    ]
+  }
+  for (const pdf_template of ['classic', 'sober', 'minimal']) {
+    for (const useLogo of [true, false]) {
+      const pdf = await render({ ...details, pdf_template }, issuer, useLogo ? logo : null)
+      try {
+        assert.equal(pdf.numPages, 1, `${pdf_template} / logo=${useLogo}: standard 2-service invoice unexpectedly splits`)
+        const content = (await (await pdf.getPage(1)).getTextContent()).items.map(item => item.str).join(' ')
+        assert.match(content, /LOT 01/u)
+        assert.match(content, /VERSEMENTS REÇUS/u)
+        assert.match(content, /Reste à payer/u)
+        assert.match(content, /Total\\s+600,00 USD/u)
+      } finally { await pdf.loadingTask.destroy() }
+    }
+  }
+})
