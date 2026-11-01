@@ -330,7 +330,7 @@ test('a standard two-service partially paid invoice fits on one A4 page in all m
         assert.match(content, /LOT 01/u)
         assert.match(content, /VERSEMENTS REÇUS/u)
         assert.match(content, /Reste à payer/u)
-        assert.match(content, /Total\\s+600,00 USD/u)
+        assert.match(content, /Total\s+600,00 USD/u)
       } finally { await pdf.loadingTask.destroy() }
     }
   }
